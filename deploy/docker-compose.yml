@@ -14,8 +14,10 @@ services:
     volumes:
       - api-data:/data
     # ローカルにだけ開ける。外から届く経路は手前のリバースプロキシだけにする。
+    # ホスト側のポートは他のサービスとぶつかるので API_PORT で変えられるようにしてある。
+    # 変えたら apache/ の vhost の ProxyPass も合わせること。
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:${API_PORT:-8090}:8080"
     restart: unless-stopped
 
   # 80/443 が空いているホストに置く場合だけ使う:
