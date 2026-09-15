@@ -10,7 +10,7 @@ MAC はこの層から外に出ない。
 ```sh
 npm install
 npm run dev          # http://localhost:8080
-npm test             # 17件
+npm test             # 19件
 npm run typecheck
 ```
 
