@@ -66,7 +66,9 @@ tools/render.sh
 | `deploy/` | Caddyfile と docker-compose |
 | `tools/` | 共有用PNGの書き出し |
 
-本番は `cokoyo.lazyta-toru.net` の1オリジンで、Caddy が振り分ける。
+本番は `cokoyo.lazyta-toru.net` の1オリジンで、手前のリバースプロキシが振り分ける。
+既存の Apache が他のサイトを配信しているので、そこに vhost を1枚足す形
+（`deploy/apache/`）。80/443 が空いているホスト向けに Caddy 版も置いてある。
 
 | パス | 行き先 |
 |---|---|

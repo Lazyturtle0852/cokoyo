@@ -1,23 +1,6 @@
 name: cokoyo
 
 services:
-  caddy:
-    image: caddy:2-alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      # 仮フロント。同僚のビルド成果物ができたら、その出力先に差し替える。
-      - ../frontend:/srv/frontend:ro
-      # GitHub Pages から引っ越すドキュメント。
-      - ../docs:/srv/documents:ro
-      - caddy-data:/data
-      - caddy-config:/config
-    depends_on:
-      - api
-    restart: unless-stopped
-
   api:
     build:
       context: ..
@@ -30,7 +13,28 @@ services:
       REGISTER_RATE_LIMIT: "20"
     volumes:
       - api-data:/data
-    # ports は開けない。外から届く経路は Caddy だけにする。
+    # ローカルにだけ開ける。外から届く経路は手前のリバースプロキシだけにする。
+    ports:
+      - "127.0.0.1:8080:8080"
+    restart: unless-stopped
+
+  # 80/443 が空いているホストに置く場合だけ使う:
+  #   docker compose --profile caddy up -d
+  # 既存の Apache / nginx が居るホストでは使わない（apache/ の vhost を参照）。
+  caddy:
+    profiles: ["caddy"]
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../frontend:/srv/frontend:ro
+      - ../docs:/srv/documents:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - api
     restart: unless-stopped
 
 volumes:

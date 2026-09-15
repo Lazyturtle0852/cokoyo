@@ -67,8 +67,17 @@ UI はこのフラグを見て「いない」ではなく「確認できませ�
 
 ## デプロイ
 
-`deploy/docker-compose.yml` を参照。`api` はホストにポートを開かず、Caddy 経由だけで届く。
+`api` は `127.0.0.1:8080` にだけ開く。外から届く経路は手前のリバースプロキシだけにする。
 
 ```sh
 cd deploy && docker compose up -d --build
 ```
+
+手前は環境によって2通り。
+
+| ホストの状態 | 使うもの |
+|---|---|
+| **既に Apache / nginx が居る**（本番の lazyta-toru.net はこちら） | `deploy/apache/cokoyo.lazyta-toru.net.conf` |
+| 80/443 が空いている | `docker compose --profile caddy up -d`（`deploy/Caddyfile`） |
+
+どちらもパスの振り分けは同じ。`/api/*` がバックエンド、`/documents/*` が `docs/`、残りがフロント。
