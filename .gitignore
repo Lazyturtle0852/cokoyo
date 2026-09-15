@@ -4,3 +4,12 @@ share/
 .DS_Store
 __pycache__/
 *.pyc
+
+# backend
+node_modules/
+dist/
+backend/data/
+.env
+
+# フロントのビルド成果物（Caddy がマウントする先）
+frontend-dist/

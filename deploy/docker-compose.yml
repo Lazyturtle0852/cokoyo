@@ -1,0 +1,39 @@
+name: cokoyo
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # 仮フロント。同僚のビルド成果物ができたら、その出力先に差し替える。
+      - ../frontend:/srv/frontend:ro
+      # GitHub Pages から引っ越すドキュメント。
+      - ../docs:/srv/documents:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    environment:
+      # 0 で実APIを叩く。1 にするとMACから決定的に在校を組み立てるモックになる。
+      MOCK_DTC: "0"
+      DTC_BASE_URL: "https://api.dtc.wide.ad.jp"
+      TIMING_FLOOR_MS: "250"
+      REGISTER_RATE_LIMIT: "20"
+    volumes:
+      - api-data:/data
+    # ports は開けない。外から届く経路は Caddy だけにする。
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
+  caddy-config:
+  api-data:

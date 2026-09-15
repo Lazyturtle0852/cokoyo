@@ -1,0 +1,35 @@
+# cokoyo.lazyta-toru.net を1オリジンで運用する。
+#
+#   /api/*        → バックエンド（ホストには公開せず、ここ経由だけ）
+#   /documents/*  → docs/*.html（GitHub Pages からの引っ越し先）
+#   /*            → フロントのビルド成果物
+#
+# フロントとAPIが同一オリジンになるので CORS は一切不要。
+# 開発時は Vite の dev proxy が同じ役割を果たす。
+
+cokoyo.lazyta-toru.net {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy api:8080
+	}
+
+	redir /documents /documents/
+
+	handle_path /documents/* {
+		root * /srv/documents
+		file_server
+	}
+
+	handle {
+		root * /srv/frontend
+		try_files {path} /index.html # SPAのクライアントルーティング
+		file_server
+	}
+
+	header {
+		-Server
+		Referrer-Policy "same-origin"
+		X-Content-Type-Options "nosniff"
+	}
+}
