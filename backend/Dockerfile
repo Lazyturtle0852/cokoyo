@@ -8,6 +8,11 @@ RUN cd backend && npm install
 COPY shared ./shared
 COPY backend ./backend
 RUN cd backend && npm run build
+# shared/ は backend/package.json の外にあるので、モジュール形式がずれると
+# 実行時まで気づけない。ビルド直後に読み込めることを確かめる。
+RUN node --input-type=module -e "\
+  const m = await import('/app/backend/dist/shared/app-types.js'); \
+  if (!m.BUILDING_LABELS) { console.error('shared module did not load as ESM'); process.exit(1); }"
 
 FROM node:24-alpine AS runtime
 ENV NODE_ENV=production

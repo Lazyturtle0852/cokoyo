@@ -1,0 +1,6 @@
+{
+  "name": "cokoyo-shared",
+  "private": true,
+  "type": "module",
+  "//": "backend/package.json の外にあるため、これが無いと tsc が CommonJS で出力してしまう（backend は ESM）。"
+}
