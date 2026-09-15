@@ -1,6 +1,6 @@
 // はじめての登録（ようこそ → 表示名 → MACアドレス → 完了）と、MACアドレスの登録し直し
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useApp } from '../app/AppContext';
 import { api, callLog, device, type ApiError } from '../api/client';
 import { useMockBackend } from '../config';
@@ -40,6 +40,12 @@ export function Onboarding() {
   const [busy, setBusy] = useState(false);
   // 登録しようとしたMACがすでに使われていたとき、引き継ぎに進めるようにする
   const [taken, setTaken] = useState(false);
+  const takenRef = useRef<HTMLButtonElement>(null);
+
+  // スマホ枠の表示範囲より下に出ると気づけないので、出たら見える位置まで送る
+  useEffect(() => {
+    if (taken) takenRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [taken]);
 
   const restoring = step === 'restore';
 
@@ -196,7 +202,7 @@ export function Onboarding() {
         </div>
         <p className="field-err" id="obMacErr" role="alert">{error}</p>
         {taken && (
-          <button className="btn btn-quiet" onClick={() => void restore(normalizeMac(mac))} disabled={busy}>
+          <button ref={takenRef} className="btn btn-quiet" onClick={() => void restore(normalizeMac(mac))} disabled={busy}>
             このMACアドレスをこの端末に引き継ぐ
           </button>
         )}
