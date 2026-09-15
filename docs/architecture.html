@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>COKOYO — 層 / 端末の役割 / MACの到達範囲</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #16211d;
+    --muted: #55655e;
+    --faint: #8b9a93;
+    --line: #ccd8d2;
+    --paper: #f4f7f5;
+    --card: #ffffff;
+
+    --me: #0d6f5e;
+    --me-bg: #e3f2ee;
+    --me-br: #9ed0c4;
+
+    --fr: #9a5a1f;
+    --fr-bg: #fbeadb;
+    --fr-br: #e2b98f;
+
+    --be: #6d6a58;
+    --be-bg: #eff0ea;
+    --be-br: #c9c9b8;
+
+    --api: #2f5a8c;
+    --api-bg: #e2ecf6;
+    --api-br: #a8c4de;
+
+    --wifi: #3c5f38;
+    --wifi-bg: #e5eee2;
+    --wifi-br: #adc6a6;
+
+    --mac: #b03a3a;
+    --mac-bg: #fae3e1;
+    --mac-br: #e3aaa4;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: "IBM Plex Sans JP", system-ui, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    line-height: 1.5;
+    padding: 44px 22px 72px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1140px; margin: 0 auto; }
+
+  header { margin-bottom: 38px; }
+
+  .brand {
+    font-family: Syne, sans-serif;
+    font-weight: 800;
+    font-size: 3rem;
+    letter-spacing: -0.03em;
+    color: #0a4f43;
+    line-height: 1;
+  }
+
+  .tag {
+    display: inline-block;
+    margin-top: 10px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    color: var(--mac);
+  }
+
+  .lede { margin-top: 14px; max-width: 46em; font-size: 0.97rem; color: var(--muted); }
+
+  section { margin-bottom: 50px; }
+
+  h2 {
+    font-family: Syne, sans-serif;
+    font-weight: 700;
+    font-size: 1.28rem;
+    margin-bottom: 6px;
+  }
+
+  h2 .n { font-size: 0.72rem; color: var(--me); letter-spacing: 0.08em; margin-right: 8px; }
+
+  .note { font-size: 0.86rem; color: var(--muted); margin-bottom: 18px; max-width: 52em; }
+
+  /* ── legend ── */
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 8px 14px;
+    margin-bottom: 18px; font-size: 0.76rem; color: var(--muted); align-items: center;
+  }
+  .lg { display: flex; align-items: center; gap: 6px; }
+  .sw { width: 26px; height: 12px; border-radius: 3px; display: inline-block; }
+  .sw.mac { background: var(--mac-bg); border: 1.5px solid var(--mac-br); }
+  .sw.pass { background: var(--fr-bg); border: 1.5px solid var(--fr-br); }
+  .sw.own { background: var(--me-bg); border: 1.5px solid var(--me-br); }
+  .sw.wall { background: repeating-linear-gradient(90deg, var(--mac) 0 4px, transparent 4px 8px); height: 3px; border-radius: 0; }
+  .sw.future { background: #fff; border: 1.5px dashed var(--be-br); }
+
+  /* ── relation (pass vs MAC) ── */
+  .defs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+
+  .def {
+    border-radius: 14px; padding: 16px 18px; border: 1.5px solid;
+  }
+  .def.mac-def { background: var(--mac-bg); border-color: var(--mac-br); }
+  .def.pass-def { background: var(--fr-bg); border-color: var(--fr-br); }
+  .def h3 { font-size: 0.95rem; margin-bottom: 6px; }
+  .def.mac-def h3 { color: var(--mac); }
+  .def.pass-def h3 { color: var(--fr); }
+  .def p { font-size: 0.84rem; color: var(--muted); }
+  .def p b { color: var(--ink); }
+
+  .relation {
+    display: grid;
+    grid-template-columns: 1fr 42px 1.45fr 42px 0.92fr;
+    gap: 0 6px;
+    align-items: stretch;
+    background: var(--card);
+    border: 1.5px solid var(--line);
+    border-radius: 14px;
+    padding: 16px 18px 18px;
+  }
+
+  .rcol { display: flex; flex-direction: column; gap: 7px; }
+
+  .rhead {
+    font-size: 0.73rem; font-weight: 700; text-align: center;
+    padding: 5px 4px; border-radius: 7px; margin-bottom: 2px;
+  }
+  .rhead.fr { background: var(--fr-bg); color: var(--fr); }
+  .rhead.api { background: var(--api-bg); color: var(--api); }
+  .rhead.wifi { background: var(--wifi-bg); color: var(--wifi); }
+
+  .pcard {
+    border: 1.5px solid var(--fr-br); background: #fff;
+    border-radius: 9px; padding: 8px 10px; font-size: 0.76rem;
+  }
+  .pcard .holder { font-size: 0.71rem; color: var(--muted); }
+  .pcard .code {
+    font-family: ui-monospace, monospace; font-weight: 700;
+    color: var(--fr); font-size: 0.8rem;
+  }
+  .pcard.dead { border-style: dashed; border-color: #d8ddda; background: #f7f8f7; }
+  .pcard.dead .code { color: #b0bab5; text-decoration: line-through; }
+  .pcard.dead .holder { color: #b0bab5; }
+
+  .spacer { height: 14px; flex: 0 0 auto; }
+
+  .rarrow {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: var(--faint); font-size: 0.95rem; font-weight: 700; gap: 2px;
+    padding-top: 26px;
+  }
+  .rarrow small { font-size: 0.62rem; font-weight: 600; }
+
+  .lrow {
+    display: grid; grid-template-columns: 1fr 1fr 1.05fr 0.75fr;
+    gap: 5px; align-items: center;
+  }
+  .lrow .lc {
+    font-size: 0.72rem; padding: 7px 5px; border-radius: 7px; text-align: center;
+    background: var(--api-bg); border: 1.5px solid var(--api-br); color: var(--api);
+    font-weight: 600;
+  }
+  .lrow .lc.code { font-family: ui-monospace, monospace; }
+  .lrow .lc.state-ok { background: var(--me-bg); border-color: var(--me-br); color: var(--me); }
+  .lrow .lc.state-no { background: #f3eeee; border-color: #ddd0d0; color: #a89a9a; }
+  .lrow.head .lc {
+    background: transparent; border: none; color: var(--faint);
+    font-size: 0.66rem; padding: 0 0 1px; font-weight: 700;
+  }
+  .lrow.dead .lc { background: #f5f6f5; border-color: #dde2df; color: #aab3ae; }
+
+  .entity {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 7px; text-align: center;
+    border: 1.5px solid var(--mac-br); background: var(--mac-bg);
+    border-radius: 10px; padding: 12px 10px;
+  }
+  .entity .who { font-size: 0.82rem; font-weight: 700; }
+  .entity .mono {
+    font-family: ui-monospace, monospace; font-size: 0.74rem;
+    background: #fff; border: 1.5px solid var(--mac-br); color: var(--mac);
+    border-radius: 6px; padding: 4px 8px;
+  }
+  .entity .down { color: var(--mac); font-size: 0.8rem; }
+  .entity .wf {
+    font-size: 0.72rem; background: var(--wifi-bg); border: 1.5px solid var(--wifi-br);
+    color: var(--wifi); border-radius: 6px; padding: 4px 8px; font-weight: 600;
+  }
+
+  .punch {
+    margin-top: 14px; border-radius: 12px; padding: 13px 16px;
+    background: #fff; border: 1.5px dashed var(--fr-br);
+    font-size: 0.86rem; color: var(--muted);
+  }
+  .punch b { color: var(--ink); }
+
+  .cmp { width: 100%; border-collapse: separate; border-spacing: 5px; font-size: 0.8rem; margin-top: 18px; }
+  .cmp th {
+    font-size: 0.76rem; font-weight: 700; padding: 8px 10px; border-radius: 8px; text-align: left;
+  }
+  .cmp th.blank { background: transparent; width: 168px; }
+  .cmp th.old { background: var(--mac-bg); color: var(--mac); }
+  .cmp th.new { background: var(--fr-bg); color: var(--fr); }
+  .cmp td { padding: 9px 11px; border-radius: 8px; font-size: 0.79rem; }
+  .cmp td.q { font-weight: 600; color: var(--ink); background: transparent; padding-left: 0; }
+  .cmp td.old { background: #fdf3f2; color: var(--muted); border: 1.5px solid #f0dad7; }
+  .cmp td.new { background: #fdf6ef; color: var(--muted); border: 1.5px solid #f0ddc8; }
+
+  /* ── role callout ── */
+  .roles {
+    display: grid;
+    grid-template-columns: 1fr 46px 1fr;
+    align-items: stretch;
+    gap: 0;
+    margin-bottom: 16px;
+  }
+
+  .role-card {
+    border-radius: 14px;
+    padding: 16px 18px;
+    border: 1.5px solid;
+  }
+
+  .role-card.me { background: var(--me-bg); border-color: var(--me-br); }
+  .role-card.fr { background: var(--fr-bg); border-color: var(--fr-br); }
+
+  .role-card h3 { font-size: 0.95rem; margin-bottom: 2px; }
+  .role-card.me h3 { color: var(--me); }
+  .role-card.fr h3 { color: var(--fr); }
+  .role-card .who { font-size: 0.74rem; color: var(--muted); margin-bottom: 10px; }
+  .role-card ul { list-style: none; display: flex; flex-direction: column; gap: 5px; }
+  .role-card li { font-size: 0.8rem; color: var(--muted); padding-left: 15px; position: relative; }
+  .role-card li::before { content: "·"; position: absolute; left: 3px; font-weight: 700; }
+
+  .key {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 5px;
+    margin-bottom: 8px;
+  }
+  .key.own { background: var(--me); color: #fff; }
+  .key.pass { background: var(--fr); color: #fff; }
+
+  .swap {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.72rem; font-weight: 700; color: var(--faint); text-align: center;
+  }
+
+  .symmetry {
+    border: 1.5px dashed var(--line);
+    background: #fff;
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-size: 0.84rem;
+    color: var(--muted);
+  }
+  .symmetry b { color: var(--ink); }
+
+  /* ── layer stack ── */
+  .stack { display: flex; flex-direction: column; }
+
+  .layer {
+    display: grid;
+    grid-template-columns: 198px 1fr 130px;
+    border: 1.5px solid var(--line);
+    border-radius: 12px;
+    background: var(--card);
+    overflow: hidden;
+  }
+
+  .lname {
+    padding: 15px 14px;
+    display: flex; flex-direction: column; justify-content: center; gap: 4px;
+    border-right: 1.5px solid var(--line);
+  }
+  .lname b { font-size: 0.92rem; font-weight: 700; line-height: 1.3; }
+  .lname span { font-size: 0.72rem; color: var(--muted); }
+
+  .lbody { padding: 13px 16px; display: flex; flex-direction: column; gap: 9px; }
+  .lbody .role { font-size: 0.84rem; color: var(--muted); }
+  .lbody .role b { color: var(--ink); font-weight: 600; }
+
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .duo > div {
+    border-radius: 9px; padding: 9px 11px; font-size: 0.79rem;
+  }
+  .duo .d-me { background: var(--me-bg); border: 1.5px solid var(--me-br); }
+  .duo .d-fr { background: var(--fr-bg); border: 1.5px solid var(--fr-br); }
+  .duo strong { display: block; font-size: 0.8rem; margin-bottom: 3px; }
+  .duo .d-me strong { color: var(--me); }
+  .duo .d-fr strong { color: var(--fr); }
+  .duo em { font-style: normal; color: var(--muted); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip {
+    font-size: 0.74rem; padding: 4px 9px; border-radius: 7px;
+    background: #f4f7f5; border: 1px solid var(--line); color: var(--muted);
+  }
+
+  .lmac {
+    border-left: 1.5px solid var(--line);
+    padding: 12px 10px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 5px; text-align: center;
+  }
+  .lmac .verdict { font-size: 0.79rem; font-weight: 700; }
+  .lmac .why { font-size: 0.67rem; color: var(--faint); line-height: 1.35; }
+  .has-mac { background: var(--mac-bg); }
+  .has-mac .verdict { color: var(--mac); }
+  .no-mac .verdict { color: var(--faint); }
+
+  .L-app { border-color: var(--me-br); }
+  .L-app .lname { background: linear-gradient(135deg, var(--me-bg), var(--fr-bg)); border-right-color: var(--me-br); }
+  .L-app .lname b { color: var(--me); }
+
+  .L-be { border-color: var(--be-br); border-style: dashed; }
+  .L-be .lname { background: var(--be-bg); border-right-color: var(--be-br); }
+  .L-be .lname b { color: var(--be); }
+
+  .L-api { border-color: var(--api-br); }
+  .L-api .lname { background: var(--api-bg); border-right-color: var(--api-br); }
+  .L-api .lname b { color: var(--api); }
+
+  .L-wifi { border-color: var(--wifi-br); }
+  .L-wifi .lname { background: var(--wifi-bg); border-right-color: var(--wifi-br); }
+  .L-wifi .lname b { color: var(--wifi); }
+
+  .hop {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 0 7px 210px; font-size: 0.76rem; color: var(--muted);
+  }
+  .hop .ar { color: var(--faint); font-weight: 700; }
+
+  .wall {
+    margin: 10px 0; position: relative;
+    border-top: 2.5px dashed var(--mac);
+    display: flex; justify-content: center;
+  }
+  .wall span {
+    position: relative; top: -11px; background: var(--paper);
+    padding: 0 12px; font-size: 0.78rem; font-weight: 700; color: var(--mac);
+  }
+
+  /* ── matrix ── */
+  .matrix { width: 100%; border-collapse: separate; border-spacing: 4px; font-size: 0.78rem; }
+  .matrix th {
+    font-size: 0.74rem; font-weight: 700; padding: 8px 5px; border-radius: 8px; text-align: center;
+  }
+  .matrix th.rowh { text-align: left; width: 200px; background: transparent; }
+  .matrix th.c-me { background: var(--me-bg); color: var(--me); }
+  .matrix th.c-fr { background: var(--fr-bg); color: var(--fr); }
+  .matrix th.c-be { background: var(--be-bg); color: var(--be); }
+  .matrix th.c-api { background: var(--api-bg); color: var(--api); }
+  .matrix th.c-wifi { background: var(--wifi-bg); color: var(--wifi); }
+
+  .matrix td.name {
+    text-align: left; font-weight: 600; background: var(--card);
+    border: 1.5px solid var(--line); border-radius: 8px; padding: 9px 11px;
+  }
+  .matrix td.name small { display: block; font-weight: 400; color: var(--faint); font-size: 0.69rem; }
+
+  .matrix td.cell {
+    text-align: center; padding: 9px 4px; border-radius: 8px;
+    font-size: 0.72rem; font-weight: 600; border: 1.5px solid transparent;
+  }
+  .cell.yes-mac { background: var(--mac-bg); border-color: var(--mac-br); color: var(--mac); }
+  .cell.yes-me { background: var(--me-bg); border-color: var(--me-br); color: var(--me); }
+  .cell.yes-fr { background: var(--fr-bg); border-color: var(--fr-br); color: var(--fr); }
+  .cell.yes-api { background: var(--api-bg); border-color: var(--api-br); color: var(--api); }
+  .cell.yes-wifi { background: var(--wifi-bg); border-color: var(--wifi-br); color: var(--wifi); }
+  .cell.later { background: #fff; border-color: var(--be-br); border-style: dashed; color: var(--be); }
+  .cell.no { background: #eef1ef; color: #b3bdb8; }
+
+  /* ── sequence ── */
+  .flow {
+    background: var(--card); border: 1.5px solid var(--line);
+    border-radius: 14px; padding: 18px 20px 20px; margin-bottom: 16px;
+  }
+  .flow h3 { font-size: 0.97rem; margin-bottom: 3px; }
+  .flow .sub { font-size: 0.78rem; color: var(--muted); margin-bottom: 12px; }
+
+  .seq {
+    position: relative; display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 7px 7px; align-items: center; padding-top: 24px;
+  }
+
+  .guides { position: absolute; inset: 58px 0 0 0; pointer-events: none; z-index: 0; }
+  .guides i { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1.5px dotted #cfdad4; }
+  .g1 { left: 10%; } .g2 { left: 30%; } .g3 { left: 50%; } .g4 { left: 70%; } .g5 { left: 90%; }
+
+  .macwall {
+    position: absolute; left: 60%; top: 22px; bottom: -4px;
+    border-left: 2.5px dashed var(--mac); z-index: 2; pointer-events: none;
+  }
+  .macwall b {
+    position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
+    white-space: nowrap; font-size: 0.68rem; font-weight: 700;
+    color: var(--mac); background: var(--card); padding: 0 6px;
+  }
+
+  .devwall {
+    position: absolute; left: 20%; top: 22px; bottom: -4px;
+    border-left: 2px solid #d7ded9; z-index: 0; pointer-events: none;
+  }
+
+  .lane {
+    grid-row: 1; text-align: center; font-size: 0.73rem; font-weight: 700;
+    padding: 6px 3px; border-radius: 8px; position: relative; z-index: 1; line-height: 1.25;
+  }
+  .lane.me { grid-column: 1; background: var(--me-bg); color: var(--me); }
+  .lane.fr { grid-column: 2; background: var(--fr-bg); color: var(--fr); }
+  .lane.be { grid-column: 3; background: var(--be-bg); color: var(--be); border: 1.5px dashed var(--be-br); }
+  .lane.api { grid-column: 4; background: var(--api-bg); color: var(--api); }
+  .lane.wifi { grid-column: 5; background: var(--wifi-bg); color: var(--wifi); }
+
+  .msg {
+    position: relative; z-index: 1; background: #fff;
+    border: 1.5px solid var(--line); border-radius: 9px;
+    padding: 7px 10px; font-size: 0.77rem;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .msg .no {
+    flex: 0 0 auto; width: 17px; height: 17px; border-radius: 50%;
+    background: #eef2f0; color: var(--muted); font-size: 0.64rem; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .msg .txt { flex: 1; }
+  .msg .dir { color: var(--faint); font-weight: 700; font-size: 0.85rem; }
+
+  .msg.mac { background: var(--mac-bg); border-color: var(--mac-br); }
+  .msg.mac .no { background: #f0cac5; color: var(--mac); }
+  .msg.own { background: var(--me-bg); border-color: var(--me-br); }
+  .msg.own .no { background: #c6e3da; color: var(--me); }
+  .msg.pass { background: var(--fr-bg); border-color: var(--fr-br); }
+  .msg.pass .no { background: #eed3b6; color: var(--fr); }
+  .msg.self { background: #f6f8f7; }
+  .msg.future { border-style: dashed; border-color: var(--be-br); background: #fbfbf7; color: var(--be); }
+  .msg.stop { background: #f1eef7; border-color: #c3b8dd; }
+  .msg.idle {
+    background: transparent; border-style: dashed; border-color: #dde4e0;
+    color: var(--faint); font-size: 0.72rem; justify-content: center;
+  }
+
+  .mtag, .ptag, .otag {
+    flex: 0 0 auto; font-size: 0.62rem; font-weight: 700;
+    padding: 2px 6px; border-radius: 5px; color: #fff; white-space: nowrap;
+  }
+  .mtag { background: var(--mac); }
+  .ptag { background: var(--fr); }
+  .otag { background: var(--me); }
+
+  .c1 { grid-column: 1 / 2; } .c2 { grid-column: 2 / 3; } .c3 { grid-column: 3 / 4; }
+  .c4 { grid-column: 4 / 5; } .c5 { grid-column: 5 / 6; }
+  .c1_2 { grid-column: 1 / 3; } .c1_3 { grid-column: 1 / 4; } .c1_4 { grid-column: 1 / 5; }
+  .c1_5 { grid-column: 1 / 6; } .c2_4 { grid-column: 2 / 5; } .c2_5 { grid-column: 2 / 6; }
+  .c3_4 { grid-column: 3 / 5; } .c4_5 { grid-column: 4 / 6; }
+
+  .r1 { grid-row: 2; } .r2 { grid-row: 3; } .r3 { grid-row: 4; } .r4 { grid-row: 5; }
+  .r5 { grid-row: 6; } .r6 { grid-row: 7; } .r7 { grid-row: 8; } .r8 { grid-row: 9; }
+
+  /* ── misc ── */
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .card { background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+  .card h3 { font-size: 0.94rem; margin-bottom: 4px; }
+  .card p.k { font-size: 0.78rem; color: var(--muted); margin-bottom: 12px; }
+
+  .bar {
+    height: 34px; border-radius: 8px; display: flex; align-items: center;
+    justify-content: center; font-size: 0.78rem; font-weight: 600; margin-bottom: 7px;
+  }
+  .bar.on-c { background: var(--me-bg); color: var(--me); border: 1.5px solid var(--me-br); }
+  .bar.on-b { background: var(--api-bg); color: var(--api); border: 1.5px solid var(--api-br); }
+  .bar.off { background: #f0f2f1; color: #a7b2ac; border: 1.5px dashed var(--line); }
+
+  ul.plain { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+  ul.plain li { font-size: 0.82rem; color: var(--muted); padding-left: 16px; position: relative; }
+  ul.plain li::before { content: "—"; position: absolute; left: 0; color: var(--faint); }
+
+  .api-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .api-item { background: var(--card); border: 1.5px solid var(--line); border-radius: 12px; padding: 13px 15px; }
+  .api-item .num { font-family: Syne, sans-serif; font-weight: 700; font-size: 0.72rem; color: var(--api); }
+  .api-item h3 { font-size: 0.87rem; margin: 2px 0 3px; }
+  .api-item p { font-size: 0.77rem; color: var(--muted); }
+
+  .fallback {
+    margin-top: 12px; padding: 11px 15px; border-radius: 10px;
+    border: 1.5px dashed var(--line); background: #fff; font-size: 0.82rem; color: var(--muted);
+  }
+
+  footer { font-size: 0.75rem; color: var(--faint); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">COKOYO</div>
+    <div class="tag">層 ／ 自分の端末と相手の端末 ／ MACの到達範囲</div>
+    <p class="lede">
+      フレンドが今キャンパスにいるかを知れるアプリ。<b>MACアドレスは大学の内側から出さず</b>、
+      フレンド1人ごとに発行した「通行証」だけが相手の端末に渡る。
+    </p>
+  </header>
+
+  <!-- 00 RELATION -->
+  <section>
+    <h2><span class="n">00</span>通行証とMACの関係</h2>
+    <p class="note">
+      通行証はMACの別名でも、MACを暗号化したものでもない。
+      <b>ただの番号</b>で、意味を持つのは大学APIの台帳の中だけ。
+      台帳が「その番号 → 誰の / どの範囲 / 有効か」を覚えていて、そこから先で初めてMACに行き着く。
+    </p>
+
+    <div class="defs">
+      <div class="def mac-def">
+        <h3>MACアドレス</h3>
+        <p><b>端末そのものの名前。</b>1台に1つしかなく、誰が持っても同じ意味を持ち、範囲も期限もなく、渡したら取り消せない。だから配らない。</p>
+      </div>
+      <div class="def pass-def">
+        <h3>通行証</h3>
+        <p><b>「この人に、この範囲だけ、取り消すまで聞いてよい」という許可。</b>相手ごとに何枚でも作れて、1枚ずつ範囲を変えられ、1枚ずつ捨てられる。</p>
+      </div>
+    </div>
+
+    <div class="relation">
+      <div class="rcol">
+        <div class="rhead fr">相手の端末にあるもの</div>
+        <div class="spacer"></div>
+        <div class="pcard">
+          <div class="holder">ふれんどA の端末</div>
+          <div class="code">pass_7f3a…</div>
+        </div>
+        <div class="pcard">
+          <div class="holder">ふれんどB の端末（ベスト）</div>
+          <div class="code">pass_91c2…</div>
+        </div>
+        <div class="pcard dead">
+          <div class="holder">ふれんどC の端末（解除した）</div>
+          <div class="code">pass_5d80…</div>
+        </div>
+      </div>
+
+      <div class="rarrow">▶<small>提示</small></div>
+
+      <div class="rcol">
+        <div class="rhead api">大学APIの台帳（外に出ない）</div>
+        <div class="lrow head">
+          <span class="lc">通行証</span><span class="lc">誰の在校か</span><span class="lc">見せる範囲</span><span class="lc">状態</span>
+        </div>
+        <div class="lrow">
+          <span class="lc code">7f3a…</span><span class="lc">あなた</span><span class="lc">キャンパスのみ</span><span class="lc state-ok">有効</span>
+        </div>
+        <div class="lrow">
+          <span class="lc code">91c2…</span><span class="lc">あなた</span><span class="lc">建物まで</span><span class="lc state-ok">有効</span>
+        </div>
+        <div class="lrow dead">
+          <span class="lc code">5d80…</span><span class="lc">あなた</span><span class="lc">キャンパスのみ</span><span class="lc state-no">無効</span>
+        </div>
+      </div>
+
+      <div class="rarrow">▶<small>引く</small></div>
+
+      <div class="rcol">
+        <div class="rhead wifi">大学の内側だけ</div>
+        <div class="spacer"></div>
+        <div class="entity">
+          <div class="who">あなた 1人</div>
+          <div class="mono">aa:bb:cc:…</div>
+          <div class="down">↓</div>
+          <div class="wf">学内Wi‑Fiの在校状態</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="punch">
+      <b>台帳が3行あってもMACは1つ。</b>
+      だから「1人だけ解除」は3行目を無効にするだけで済み、「範囲を変える」は行を書き換えるだけで済む。
+      通行証が漏れてもその1行を消せば終わり。そして<b>どの行を通っても、MACが左（アプリ側）に出ていくことはない</b>。
+    </div>
+
+    <table class="cmp">
+      <tr>
+        <th class="blank"></th>
+        <th class="old">MACを配る（旧案）</th>
+        <th class="new">通行証を配る（新案）</th>
+      </tr>
+      <tr>
+        <td class="q">相手に渡すもの</td>
+        <td class="old">端末そのものの名前</td>
+        <td class="new">台帳を引くための番号（MACは入っていない）</td>
+      </tr>
+      <tr>
+        <td class="q">枚数</td>
+        <td class="old">1つを全員にコピー</td>
+        <td class="new">相手ごとに1枚</td>
+      </tr>
+      <tr>
+        <td class="q">見せる範囲</td>
+        <td class="old">分けられない</td>
+        <td class="new">1枚ごとに キャンパス / 建物</td>
+      </tr>
+      <tr>
+        <td class="q">1人だけ解除</td>
+        <td class="old">できない（MACを変えると全員切れる）</td>
+        <td class="new">その1枚を無効化するだけ</td>
+      </tr>
+      <tr>
+        <td class="q">かくれんぼ</td>
+        <td class="old">効かない（アプリを通さず直接引ける）</td>
+        <td class="new">APIが答えを止めるので効く</td>
+      </tr>
+      <tr>
+        <td class="q">漏れたとき</td>
+        <td class="old">誰でも永久に追跡できる</td>
+        <td class="new">1枚分だけ。無効化すれば止まる</td>
+      </tr>
+    </table>
+  </section>
+
+  <!-- 01 ROLES -->
+  <section>
+    <h2><span class="n">01</span>端末は2種類ある</h2>
+    <p class="note">
+      同じ①アプリ層でも、<b>持っている鍵が違う端末は別物として扱う</b>。
+      自分の端末は「本人トークン」で自分の設定を変えられ、相手の端末は「通行証」で見るだけ。
+      この2つを1本のレーンにまとめると、何が誰にできるのかが読めなくなる。
+    </p>
+
+    <div class="roles">
+      <div class="role-card me">
+        <h3>自分のスマホ</h3>
+        <div class="who">見られる側 — 在校情報の持ち主</div>
+        <span class="key own">本人トークン</span>
+        <ul>
+          <li>本人登録（自分のMACを紐付ける）</li>
+          <li>通行証を発行する・1枚だけ無効化する</li>
+          <li>見せる範囲を決める（キャンパス / 建物）</li>
+          <li>かくれんぼをオン / オフ</li>
+          <li>自分のMACはアプリからは取れない（本人はOS設定で読めるが、アプリに渡す必要はない）</li>
+        </ul>
+      </div>
+      <div class="swap">⇄</div>
+      <div class="role-card fr">
+        <h3>フレンドのスマホ</h3>
+        <div class="who">見る側 — 通行証をもらった相手</div>
+        <span class="key pass">通行証</span>
+        <ul>
+          <li>もらった通行証を保存しておく</li>
+          <li>アプリを開いたときに在校を問い合わせる</li>
+          <li>返るのは許された範囲だけ</li>
+          <li>相手のMACは一生わからない</li>
+          <li>無効化されたら何も取れなくなる</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="symmetry">
+      <b>ただし同じ端末が両方をやる。</b>
+      自分の在校については「見られる側」、フレンドの在校については「見る側」。
+      役割が2つあるだけで、配るアプリは1種類。以下の図では、話を追いやすいように左2レーンに分けて描いている。
+    </div>
+  </section>
+
+  <!-- 01 LAYERS -->
+  <section>
+    <h2><span class="n">02</span>層とMACの境界</h2>
+    <p class="note">
+      層は上から アプリ / アプリバックエンド / 大学API / 学内Wi‑Fi。
+      MACは④で発生して③までで止まり、赤い破線より上には一切出ない。
+    </p>
+
+    <div class="legend">
+      <span class="lg"><i class="sw wall"></i>MACの壁</span>
+      <span class="lg"><i class="sw mac"></i>MACを扱う</span>
+      <span class="lg"><i class="sw own"></i>本人トークンで動く</span>
+      <span class="lg"><i class="sw pass"></i>通行証で動く</span>
+      <span class="lg"><i class="sw future"></i>将来つくる（今はない）</span>
+    </div>
+
+    <div class="stack">
+
+      <div class="layer L-app">
+        <div class="lname">
+          <b>① アプリ</b>
+          <span>スマホ端末の中 / 2つの役割</span>
+        </div>
+        <div class="lbody">
+          <div class="duo">
+            <div class="d-me">
+              <strong>自分のスマホ（本人トークン）</strong>
+              <em>フレンドリスト、通行証の発行・無効化、かくれんぼ、ポイント残高</em>
+            </div>
+            <div class="d-fr">
+              <strong>フレンドのスマホ（通行証）</strong>
+              <em>もらった通行証を保管し、開いたときに在否を問い合わせる</em>
+            </div>
+          </div>
+          <div class="role"><b>共通:</b> アプリ側のサーバーを持たず、端末と大学APIだけで成立する。</div>
+        </div>
+        <div class="lmac no-mac">
+          <div class="verdict">MAC 取れない</div>
+          <div class="why">OSが渡さない<br />（本人が設定画面で読めるだけ）</div>
+        </div>
+      </div>
+
+      <div class="hop"><span class="ar">↕</span><span>本人トークン または 通行証 だけが往復（MACは通らない）</span></div>
+
+      <div class="layer L-be">
+        <div class="lname">
+          <b>② アプリバックエンド</b>
+          <span>現状 <b style="color:var(--mac)">なし</b></span>
+        </div>
+        <div class="lbody">
+          <div class="role"><b>今:</b> 置かない。アプリと大学APIだけで動く。</div>
+          <div class="role"><b>将来:</b> 割引で実際にポイントを使う段階で、改ざん対策としてポイント残高だけをここで管理。<b>その場合もMACは持たない。</b></div>
+        </div>
+        <div class="lmac no-mac">
+          <div class="verdict">MAC 持たない</div>
+          <div class="why">将来つくっても方針は同じ</div>
+        </div>
+      </div>
+
+      <div class="wall"><span>▲ ここから上に MAC は出ない ▲</span></div>
+
+      <div class="layer L-api">
+        <div class="lname">
+          <b>③ 大学API</b>
+          <span>大学側・新規に依頼</span>
+        </div>
+        <div class="lbody">
+          <div class="role"><b>2種類の相手を見分ける:</b> 本人トークンで来たら設定を変えられる。通行証で来たら、その1枚に許された範囲の答えだけを返す。</div>
+          <div class="role"><b>知らないこと:</b> 誰と誰がフレンドか。通行証が有効かどうかだけを見る。</div>
+          <div class="chips">
+            <span class="chip">MAC ↔ 本人</span>
+            <span class="chip">通行証の台帳</span>
+            <span class="chip">キャンパス / 建物の判定</span>
+            <span class="chip">隠すフラグ</span>
+          </div>
+        </div>
+        <div class="lmac has-mac">
+          <div class="verdict">MAC 扱う</div>
+          <div class="why">保持するが外へ返さない</div>
+        </div>
+      </div>
+
+      <div class="hop"><span class="ar">↕</span><span>本人のMACで在校状態を参照（大学の内側だけ）</span></div>
+
+      <div class="layer L-wifi">
+        <div class="lname">
+          <b>④ 学内Wi‑Fi</b>
+          <span>既存インフラ</span>
+        </div>
+        <div class="lbody">
+          <div class="role"><b>事実源:</b> 学内Wi‑Fiに接続中の端末のMACと接続状態。建物粒度の位置もここから取れる。</div>
+          <div class="chips">
+            <span class="chip">キャンパス在否</span>
+            <span class="chip">建物レベル（任意）</span>
+            <span class="chip">MACの発生源</span>
+          </div>
+        </div>
+        <div class="lmac has-mac">
+          <div class="verdict">MAC 発生</div>
+          <div class="why">接続端末の識別子そのもの</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- 02 MATRIX -->
+  <section>
+    <h2><span class="n">03</span>どのデータがどこまで届くか</h2>
+    <p class="note">
+      列を「自分のスマホ」と「フレンドのスマホ」に分けると、鍵の持ち分がはっきりする。
+      MACの行だけが右2列（大学の内側）で止まっている。
+    </p>
+
+    <table class="matrix">
+      <tr>
+        <th class="rowh"></th>
+        <th class="c-me">自分のスマホ</th>
+        <th class="c-fr">フレンドのスマホ</th>
+        <th class="c-be">② アプリBE</th>
+        <th class="c-api">③ 大学API</th>
+        <th class="c-wifi">④ 学内Wi‑Fi</th>
+      </tr>
+      <tr>
+        <td class="name">MACアドレス<small>端末の識別子</small></td>
+        <td class="cell no">OSが渡さない</td>
+        <td class="cell no">届かない</td>
+        <td class="cell no">届かない</td>
+        <td class="cell yes-mac">保持</td>
+        <td class="cell yes-mac">発生</td>
+      </tr>
+      <tr>
+        <td class="name">MAC ↔ 本人の紐付け<small>本人登録でできる対応表</small></td>
+        <td class="cell no">—</td>
+        <td class="cell no">—</td>
+        <td class="cell no">—</td>
+        <td class="cell yes-mac">ここだけ</td>
+        <td class="cell no">—</td>
+      </tr>
+      <tr>
+        <td class="name">本人トークン<small>自分の設定を変える鍵</small></td>
+        <td class="cell yes-me">持つ</td>
+        <td class="cell no">持てない</td>
+        <td class="cell no">—</td>
+        <td class="cell yes-api">検証する</td>
+        <td class="cell no">—</td>
+      </tr>
+      <tr>
+        <td class="name">通行証<small>相手に渡す鍵・1人1枚</small></td>
+        <td class="cell yes-me">発行させる</td>
+        <td class="cell yes-fr">保管・提示</td>
+        <td class="cell no">—</td>
+        <td class="cell yes-api">発行・検証・無効化</td>
+        <td class="cell no">—</td>
+      </tr>
+      <tr>
+        <td class="name">在否の答え<small>いる/いない（+建物）</small></td>
+        <td class="cell no">—</td>
+        <td class="cell yes-fr">表示</td>
+        <td class="cell no">—</td>
+        <td class="cell yes-api">整形して返す</td>
+        <td class="cell yes-wifi">元データ</td>
+      </tr>
+      <tr>
+        <td class="name">フレンド関係<small>誰と誰が友達か</small></td>
+        <td class="cell yes-me">端末の中だけ</td>
+        <td class="cell yes-fr">端末の中だけ</td>
+        <td class="cell no">—</td>
+        <td class="cell no">知らない</td>
+        <td class="cell no">—</td>
+      </tr>
+      <tr>
+        <td class="name">ポイント残高<small>初期は端末内で計算</small></td>
+        <td class="cell yes-me">今ここ</td>
+        <td class="cell no">—</td>
+        <td class="cell later">将来ここ</td>
+        <td class="cell no">—</td>
+        <td class="cell no">—</td>
+      </tr>
+    </table>
+  </section>
+
+  <!-- 03 FLOWS -->
+  <section>
+    <h2><span class="n">04</span>層をまたぐやり取り</h2>
+    <p class="note">
+      レーンは左から 自分のスマホ / フレンドのスマホ / アプリBE / 大学API / 学内Wi‑Fi。
+      左の2本はどちらも①アプリ層だが、持つ鍵が違うので分けている。
+      赤いMACタグの矢印は、必ず赤い壁の右側（大学の内側）だけに現れる。
+    </p>
+
+    <!-- A -->
+    <div class="flow">
+      <h3>A. 本人登録 — 自分のスマホだけ</h3>
+      <div class="sub">他人のMACで登録されないよう、学内Wi‑Fiに繋いだ状態のアクセスに限定する</div>
+      <div class="seq">
+        <div class="guides"><i class="g1"></i><i class="g2"></i><i class="g3"></i><i class="g4"></i><i class="g5"></i></div>
+        <div class="devwall"></div>
+        <div class="macwall"><b>MACの壁</b></div>
+        <div class="lane me">自分のスマホ</div>
+        <div class="lane fr">フレンドのスマホ</div>
+        <div class="lane be">アプリBE</div>
+        <div class="lane api">大学API</div>
+        <div class="lane wifi">学内Wi‑Fi</div>
+
+        <div class="msg own c1_4 r1"><span class="no">1</span><span class="txt">学内Wi‑Fiに繋いだ状態で「登録」を実行</span><span class="dir">▶</span></div>
+        <div class="msg mac c4_5 r2"><span class="no">2</span><span class="txt">この接続元の端末は誰か照会</span><span class="mtag">MAC</span><span class="dir">▶</span></div>
+        <div class="msg mac c4_5 r3"><span class="dir">◀</span><span class="no">3</span><span class="txt">接続中の端末のMACを返す</span><span class="mtag">MAC</span></div>
+        <div class="msg mac c4 r4"><span class="no">4</span><span class="txt">MAC ↔ 本人を保存</span><span class="mtag">MAC</span></div>
+        <div class="msg own c1_4 r5"><span class="dir">◀</span><span class="no">5</span><span class="txt">登録完了・本人トークンを発行（MACは返さない）</span></div>
+        <div class="msg idle c2 r6"><span class="txt">フレンドのスマホは関与しない</span></div>
+      </div>
+    </div>
+
+    <!-- B -->
+    <div class="flow">
+      <h3>B. 通行証を渡す / 1人だけ解除する</h3>
+      <div class="sub">ここが2端末の橋渡し。通行証はAPIが作り、自分のスマホを経由して相手のスマホに入る</div>
+      <div class="seq">
+        <div class="guides"><i class="g1"></i><i class="g2"></i><i class="g3"></i><i class="g4"></i><i class="g5"></i></div>
+        <div class="devwall"></div>
+        <div class="macwall"><b>MACの壁</b></div>
+        <div class="lane me">自分のスマホ</div>
+        <div class="lane fr">フレンドのスマホ</div>
+        <div class="lane be">アプリBE</div>
+        <div class="lane api">大学API</div>
+        <div class="lane wifi">学内Wi‑Fi</div>
+
+        <div class="msg own c1_4 r1"><span class="no">1</span><span class="txt">この相手用に1枚発行して（範囲: キャンパス / 建物）</span><span class="otag">本人</span><span class="dir">▶</span></div>
+        <div class="msg pass c4 r2"><span class="no">2</span><span class="txt">通行証を生成</span><span class="ptag">通行証</span></div>
+        <div class="msg pass c1_4 r3"><span class="dir">◀</span><span class="no">3</span><span class="txt">通行証1枚を返す</span><span class="ptag">通行証</span></div>
+        <div class="msg pass c1_2 r4"><span class="no">4</span><span class="txt">相手に渡す（QR・共有など）</span><span class="dir">▶</span></div>
+        <div class="msg self c2 r5"><span class="no">5</span><span class="txt">端末に保存</span></div>
+        <div class="msg own c1_4 r6"><span class="no">6</span><span class="txt">解除するときは、その1枚だけ無効化</span><span class="otag">本人</span><span class="dir">▶</span></div>
+      </div>
+    </div>
+
+    <!-- C -->
+    <div class="flow">
+      <h3>C. 在校の問い合わせ — 動くのはフレンドのスマホだけ</h3>
+      <div class="sub">自分のスマホは一切関与しない。アプリが動いていなくても、電源が落ちていても結果は返る</div>
+      <div class="seq">
+        <div class="guides"><i class="g1"></i><i class="g2"></i><i class="g3"></i><i class="g4"></i><i class="g5"></i></div>
+        <div class="devwall"></div>
+        <div class="macwall"><b>MACの壁</b></div>
+        <div class="lane me">自分のスマホ</div>
+        <div class="lane fr">フレンドのスマホ</div>
+        <div class="lane be">アプリBE</div>
+        <div class="lane api">大学API</div>
+        <div class="lane wifi">学内Wi‑Fi</div>
+
+        <div class="msg idle c1 r1"><span class="txt">関与しない（アプリ不要）</span></div>
+        <div class="msg pass c2_4 r1"><span class="no">1</span><span class="txt">アプリを開いたので通行証を提示</span><span class="ptag">通行証</span><span class="dir">▶</span></div>
+        <div class="msg c4 r2"><span class="no">2</span><span class="txt">有効性と範囲を確認</span></div>
+        <div class="msg stop c4 r3"><span class="no">3</span><span class="txt">かくれんぼONなら「いない」</span></div>
+        <div class="msg mac c4_5 r4"><span class="no">4</span><span class="txt">本人のMACの在否・建物を参照</span><span class="mtag">MAC</span><span class="dir">▶</span></div>
+        <div class="msg mac c4_5 r5"><span class="dir">◀</span><span class="no">5</span><span class="txt">在否・建物を返す</span><span class="mtag">MAC</span></div>
+        <div class="msg c2_4 r6"><span class="dir">◀</span><span class="no">6</span><span class="txt">いる / いない（ベストフレンドには建物も）</span></div>
+      </div>
+    </div>
+
+    <!-- D -->
+    <div class="flow">
+      <h3>D. かくれんぼ — 設定は自分、効くのは相手側</h3>
+      <div class="sub">APIが答えを止めるので、フレンドがアプリを通さず直接APIを叩いても効く</div>
+      <div class="seq">
+        <div class="guides"><i class="g1"></i><i class="g2"></i><i class="g3"></i><i class="g4"></i><i class="g5"></i></div>
+        <div class="devwall"></div>
+        <div class="macwall"><b>MACの壁</b></div>
+        <div class="lane me">自分のスマホ</div>
+        <div class="lane fr">フレンドのスマホ</div>
+        <div class="lane be">アプリBE</div>
+        <div class="lane api">大学API</div>
+        <div class="lane wifi">学内Wi‑Fi</div>
+
+        <div class="msg own c1_4 r1"><span class="no">1</span><span class="txt">かくれんぼ ON</span><span class="otag">本人</span><span class="dir">▶</span></div>
+        <div class="msg stop c4 r2"><span class="no">2</span><span class="txt">隠すフラグを保存</span></div>
+        <div class="msg pass c2_4 r3"><span class="no">3</span><span class="txt">その後、通行証で問い合わせ</span><span class="ptag">通行証</span><span class="dir">▶</span></div>
+        <div class="msg stop c2_4 r4"><span class="dir">◀</span><span class="no">4</span><span class="txt">誰に対しても「いない」</span></div>
+      </div>
+    </div>
+
+    <!-- E -->
+    <div class="flow">
+      <h3>E. ポイント獲得（仮） — 自分のスマホが両方の役をやる</h3>
+      <div class="sub">自分の在校は本人トークンで、フレンドの在否はフレンドからもらった通行証で確認する</div>
+      <div class="seq">
+        <div class="guides"><i class="g1"></i><i class="g2"></i><i class="g3"></i><i class="g4"></i><i class="g5"></i></div>
+        <div class="devwall"></div>
+        <div class="macwall"><b>MACの壁</b></div>
+        <div class="lane me">自分のスマホ</div>
+        <div class="lane fr">フレンドのスマホ</div>
+        <div class="lane be">アプリBE</div>
+        <div class="lane api">大学API</div>
+        <div class="lane wifi">学内Wi‑Fi</div>
+
+        <div class="msg self c1 r1"><span class="no">1</span><span class="txt">「ポイントを獲得」を押す</span></div>
+        <div class="msg own c1_4 r2"><span class="no">2</span><span class="txt">自分が今キャンパスにいるか確認</span><span class="otag">本人</span><span class="dir">▶</span></div>
+        <div class="msg pass c1_4 r3"><span class="no">3</span><span class="txt">もらってある通行証でフレンドの在否を取得</span><span class="ptag">通行証</span><span class="dir">▶</span></div>
+        <div class="msg self c1 r4"><span class="no">4</span><span class="txt">当日未獲得なら加算（端末内）</span></div>
+        <div class="msg future c1_4 r5"><span class="no">5</span><span class="txt">将来: 割引で使う段階で残高をアプリBEへ</span><span class="dir">▶</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 -->
+  <section>
+    <h2><span class="n">05</span>見せる範囲とポイント</h2>
+    <div class="two">
+      <div class="card">
+        <h3>見せる範囲は2段階</h3>
+        <p class="k">通行証1枚ごとに、どちらを許すかを決める</p>
+        <div style="font-size:0.78rem;color:var(--muted);margin-bottom:5px">フレンド</div>
+        <div class="bar on-c">キャンパスにいる / いない</div>
+        <div class="bar off">建物は見せない</div>
+        <div style="font-size:0.78rem;color:var(--muted);margin:12px 0 5px">ベストフレンド</div>
+        <div class="bar on-c">キャンパスにいる / いない</div>
+        <div class="bar on-b">どの建物にいるか</div>
+      </div>
+      <div class="card">
+        <h3>ポイント設計（仮）</h3>
+        <p class="k">目安 100pt = 1円 / 月16日来る人で 75〜125円ほど</p>
+        <ul class="plain">
+          <li>「ポイントを獲得」を押したときだけ入る</li>
+          <li>押した時点で本人がキャンパスにいることをAPIで確認</li>
+          <li>そのとき居るフレンドとのマッチを計算</li>
+          <li>同じ日に同じポイントは二重に入らない</li>
+          <li>初期はフレンド内利用なので端末内で計算</li>
+          <li>割引で使う段階で、改ざん対策としてサーバー管理へ</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 -->
+  <section>
+    <h2><span class="n">06</span>大学APIにお願いしたい機能</h2>
+    <p class="note">本人トークンで呼ぶものが1・2・4、通行証で呼ぶものが3。この4本で上の図がすべて成立する。</p>
+    <div class="api-grid">
+      <div class="api-item">
+        <div class="num">API 1 — 本人トークン</div>
+        <h3>本人登録</h3>
+        <p>学内Wi‑Fiに繋いだ状態でアクセスすると、そのMACアドレスを本人のものとして登録する（他人のMACで登録されるのを防ぐため）。</p>
+      </div>
+      <div class="api-item">
+        <div class="num">API 2 — 本人トークン</div>
+        <h3>通行証の発行・無効化・範囲設定</h3>
+        <p>フレンドごとの通行証を発行／無効化し、見せる範囲（キャンパス / 建物）を設定する。</p>
+      </div>
+      <div class="api-item">
+        <div class="num">API 3 — 通行証</div>
+        <h3>在校の問い合わせ</h3>
+        <p>通行証を渡すと、範囲内で「いる / いない」を返す（ベストフレンドには建物も）。</p>
+      </div>
+      <div class="api-item">
+        <div class="num">API 4 — 本人トークン</div>
+        <h3>かくれんぼ オン / オフ</h3>
+        <p>本人が設定すると、以降すべての問い合わせに「いない」を返す。</p>
+      </div>
+    </div>
+    <div class="fallback">
+      難しければ、まずは「このMACアドレスはいるか」の1本だけでも試作は進められる。
+      上の仕組みは大学API模擬の試作品で一通り動作確認済み（1人だけの解除・ベストフレンド・かくれんぼ・ポイント）。
+    </div>
+  </section>
+
+  <footer>COKOYO 設計方針 · 仮名は変更可</footer>
+</div>
+</body>
+</html>

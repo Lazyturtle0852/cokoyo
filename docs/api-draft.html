@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>COKOYO — 大学APIサンプル案</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #16211d;
+    --muted: #55655e;
+    --faint: #8b9a93;
+    --line: #ccd8d2;
+    --paper: #f4f7f5;
+    --card: #ffffff;
+    --me: #0d6f5e;
+    --me-bg: #e3f2ee;
+    --me-br: #9ed0c4;
+    --fr: #9a5a1f;
+    --fr-bg: #fbeadb;
+    --fr-br: #e2b98f;
+    --api: #2f5a8c;
+    --api-bg: #e2ecf6;
+    --api-br: #a8c4de;
+    --mac: #b03a3a;
+    --mac-bg: #fae3e1;
+    --mac-br: #e3aaa4;
+    --code-bg: #f7f9f8;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: "IBM Plex Sans JP", system-ui, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    line-height: 1.5;
+    padding: 40px 22px 64px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1140px; margin: 0 auto; }
+
+  header { margin-bottom: 30px; }
+  .brand {
+    font-family: Syne, sans-serif; font-weight: 800; font-size: 2.4rem;
+    letter-spacing: -0.03em; color: #0a4f43; line-height: 1;
+  }
+  .tag {
+    display: inline-block; margin-top: 9px; font-size: 0.74rem;
+    font-weight: 700; letter-spacing: 0.09em; color: var(--api);
+  }
+  .lede { margin-top: 12px; max-width: 48em; font-size: 0.93rem; color: var(--muted); }
+
+  section { margin-bottom: 34px; }
+
+  h2 {
+    font-family: Syne, sans-serif; font-weight: 700; font-size: 1.16rem; margin-bottom: 6px;
+  }
+  h2 .n { font-size: 0.7rem; color: var(--me); letter-spacing: 0.08em; margin-right: 8px; }
+  .note { font-size: 0.84rem; color: var(--muted); margin-bottom: 14px; max-width: 54em; }
+
+  code, .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+  /* auth */
+  .auths { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .auth {
+    border-radius: 12px; padding: 14px 16px; border: 1.5px solid;
+  }
+  .auth.own { background: var(--me-bg); border-color: var(--me-br); }
+  .auth.pass { background: var(--fr-bg); border-color: var(--fr-br); }
+  .auth h3 { font-size: 0.9rem; margin-bottom: 4px; }
+  .auth.own h3 { color: var(--me); }
+  .auth.pass h3 { color: var(--fr); }
+  .auth p { font-size: 0.8rem; color: var(--muted); margin-bottom: 8px; }
+  .auth .hdr {
+    font-family: "IBM Plex Mono", monospace; font-size: 0.76rem;
+    background: #fff; border: 1.5px solid rgba(0,0,0,0.08);
+    border-radius: 7px; padding: 7px 10px; display: block;
+  }
+
+  /* endpoints */
+  .eps { display: flex; flex-direction: column; gap: 11px; }
+
+  .ep {
+    background: var(--card); border: 1.5px solid var(--line);
+    border-radius: 13px; padding: 14px 16px 15px;
+  }
+
+  .ep-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 3px; }
+
+  .verb {
+    font-family: "IBM Plex Mono", monospace; font-size: 0.7rem; font-weight: 600;
+    padding: 3px 8px; border-radius: 6px; color: #fff; letter-spacing: 0.02em;
+  }
+  .verb.get { background: #2f6f4e; }
+  .verb.post { background: #2f5a8c; }
+  .verb.put { background: #8a6a1c; }
+  .verb.del { background: #a33c3c; }
+
+  .path { font-family: "IBM Plex Mono", monospace; font-size: 0.88rem; font-weight: 600; }
+
+  .who {
+    font-size: 0.68rem; font-weight: 700; padding: 3px 8px; border-radius: 6px; margin-left: auto;
+  }
+  .who.own { background: var(--me-bg); color: var(--me); border: 1.5px solid var(--me-br); }
+  .who.pass { background: var(--fr-bg); color: var(--fr); border: 1.5px solid var(--fr-br); }
+
+  .ep .desc { font-size: 0.82rem; color: var(--muted); margin-bottom: 10px; }
+
+  .io { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+  .io.single { grid-template-columns: 1fr; }
+
+  .box { border: 1.5px solid var(--line); border-radius: 9px; overflow: hidden; }
+  .box .bt {
+    font-size: 0.68rem; font-weight: 700; color: var(--faint);
+    padding: 5px 10px; background: #f0f3f1; border-bottom: 1.5px solid var(--line);
+    letter-spacing: 0.04em;
+  }
+  pre {
+    font-family: "IBM Plex Mono", monospace; font-size: 0.75rem; line-height: 1.55;
+    padding: 9px 11px; background: var(--code-bg); white-space: pre-wrap; color: #3b4a44;
+  }
+  .k { color: #2f5a8c; }
+  .s { color: #8a5a1c; }
+  .n2 { color: #7a3f8a; }
+  .b { color: #2f6f4e; font-weight: 600; }
+  .cm { color: #98a5a0; }
+
+  .hint {
+    margin-top: 9px; font-size: 0.77rem; color: var(--muted);
+    background: #fbfcfb; border: 1.5px dashed var(--line);
+    border-radius: 8px; padding: 8px 11px;
+  }
+  .hint b { color: var(--ink); }
+  .hint.warn { border-color: var(--mac-br); background: #fdf5f4; }
+
+  /* decisions */
+  .dec { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 11px; }
+  .dcard {
+    background: var(--card); border: 1.5px solid var(--mac-br);
+    border-radius: 12px; padding: 13px 15px;
+  }
+  .dcard h3 { font-size: 0.85rem; color: var(--mac); margin-bottom: 5px; }
+  .dcard p { font-size: 0.78rem; color: var(--muted); }
+
+  .mini {
+    background: var(--card); border: 1.5px dashed var(--line);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .mini h3 { font-size: 0.88rem; margin-bottom: 6px; }
+  .mini p { font-size: 0.81rem; color: var(--muted); margin-bottom: 9px; }
+
+  table.codes { width: 100%; border-collapse: separate; border-spacing: 5px; font-size: 0.79rem; }
+  table.codes td { padding: 7px 10px; border-radius: 7px; }
+  table.codes td.c {
+    font-family: "IBM Plex Mono", monospace; font-weight: 600; width: 88px;
+    background: var(--api-bg); color: var(--api); text-align: center;
+  }
+  table.codes td.d { background: #fff; border: 1.5px solid var(--line); color: var(--muted); }
+
+  footer { font-size: 0.74rem; color: var(--faint); margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">COKOYO API 案</div>
+    <div class="tag">大学側に実装をお願いしたいエンドポイント（たたき台）</div>
+    <p class="lede">
+      MACアドレスはリクエストにもレスポンスにも一切出てきません。アプリが扱うのは
+      <b>本人トークン</b>と<b>通行証</b>の2種類だけです。パスとフィールド名は例なので、既存の命名規則に合わせて変更可能です。
+    </p>
+  </header>
+
+  <section>
+    <h2><span class="n">01</span>認証は2系統</h2>
+    <p class="note">同じAPIでも、本人トークンで来た呼び出しは設定を変えられ、通行証で来た呼び出しは在否を1件読めるだけ。</p>
+    <div class="auths">
+      <div class="auth own">
+        <h3>本人トークン</h3>
+        <p>自分の設定を変える鍵。keio.jp のログイン、または本人登録で発行。</p>
+        <span class="hdr">Authorization: Bearer &lt;user_token&gt;</span>
+      </div>
+      <div class="auth pass">
+        <h3>通行証</h3>
+        <p>相手に渡す鍵。読み取り専用で、1枚ごとに範囲と有効・無効を持つ。</p>
+        <span class="hdr">Authorization: Pass &lt;pass_token&gt;</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">02</span>エンドポイント</h2>
+    <p class="note">ベースURLは仮に <code>/presence/v1</code>。全部で8本、うち通行証で叩くのは <code>GET /presence</code> の1本だけ。</p>
+
+    <div class="eps">
+
+      <!-- 1 -->
+      <div class="ep">
+        <div class="ep-head">
+          <span class="verb post">POST</span>
+          <span class="path">/presence/v1/me/register</span>
+          <span class="who own">本人トークン</span>
+        </div>
+        <div class="desc">本人登録。学内Wi‑Fiに繋いだ状態で呼ぶと、その接続元の端末を本人のものとして登録する。</div>
+        <div class="io">
+          <div class="box">
+            <div class="bt">REQUEST</div>
+<pre>{
+  <span class="k">"device_label"</span>: <span class="s">"iPhone"</span>   <span class="cm">// 任意</span>
+}</pre>
+          </div>
+          <div class="box">
+            <div class="bt">RESPONSE 200</div>
+<pre>{
+  <span class="k">"device_id"</span>: <span class="s">"dev_3a91"</span>,
+  <span class="k">"registered_at"</span>: <span class="s">"2026-09-15T00:10:00+09:00"</span>
+}</pre>
+          </div>
+        </div>
+        <div class="hint warn">
+          <b>MACはリクエストに含めません。</b>サーバー側が接続元セッション（DHCP / RADIUS）から引く前提です。
+          ユーザーに入力させると他人のMACを登録できてしまうため。
+        </div>
+      </div>
+
+      <!-- 2 -->
+      <div class="ep">
+        <div class="ep-head">
+          <span class="verb post">POST</span>
+          <span class="path">/presence/v1/passes</span>
+          <span class="who own">本人トークン</span>
+        </div>
+        <div class="desc">通行証を1枚発行する。相手ごとに1枚つくり、アプリが相手に渡す。</div>
+        <div class="io">
+          <div class="box">
+            <div class="bt">REQUEST</div>
+<pre>{
+  <span class="k">"scope"</span>: <span class="s">"campus"</span>,      <span class="cm">// campus | building</span>
+  <span class="k">"label"</span>: <span class="s">"たろう"</span>        <span class="cm">// 自分用のメモ</span>
+}</pre>
+          </div>
+          <div class="box">
+            <div class="bt">RESPONSE 201</div>
+<pre>{
+  <span class="k">"pass_id"</span>: <span class="s">"pass_7f3a"</span>,
+  <span class="k">"token"</span>: <span class="s">"p_9Xk2…"</span>,      <span class="cm">// 相手に渡す値</span>
+  <span class="k">"scope"</span>: <span class="s">"campus"</span>,
+  <span class="k">"status"</span>: <span class="s">"active"</span>
+}</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3 -->
+      <div class="ep">
+        <div class="ep-head">
+          <span class="verb get">GET</span>
+          <span class="path">/presence/v1/passes</span>
+          <span class="who own">本人トークン</span>
+        </div>
+        <div class="desc">自分が発行した通行証の一覧。アプリの「誰に見せているか」画面に使う。</div>
+        <div class="io single">
+          <div class="box">
+            <div class="bt">RESPONSE 200</div>
+<pre>{
+  <span class="k">"passes"</span>: [
+    { <span class="k">"pass_id"</span>: <span class="s">"pass_7f3a"</span>, <span class="k">"label"</span>: <span class="s">"たろう"</span>, <span class="k">"scope"</span>: <span class="s">"campus"</span>,   <span class="k">"status"</span>: <span class="s">"active"</span>,  <span class="k">"last_used_at"</span>: <span class="s">"2026-09-14T18:20:00+09:00"</span> },
+    { <span class="k">"pass_id"</span>: <span class="s">"pass_91c2"</span>, <span class="k">"label"</span>: <span class="s">"はなこ"</span>, <span class="k">"scope"</span>: <span class="s">"building"</span>, <span class="k">"status"</span>: <span class="s">"active"</span>,  <span class="k">"last_used_at"</span>: <span class="s">"2026-09-14T12:05:00+09:00"</span> }
+  ]
+}</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4 -->
+      <div class="ep">
+        <div class="ep-head">
+          <span class="verb put">PATCH</span>
+          <span class="path">/presence/v1/passes/{pass_id}</span>
+          <span class="verb del" style="margin-left:6px">DELETE</span>
+          <span class="path">/presence/v1/passes/{pass_id}</span>
+          <span class="who own">本人トークン</span>
+        </div>
+        <div class="desc">見せる範囲の変更（PATCH）と、1枚だけの無効化（DELETE）。フレンド1人だけの解除はこれで完結する。</div>
+        <div class="io">
+          <div class="box">
+            <div class="bt">PATCH REQUEST</div>
+<pre>{
+  <span class="k">"scope"</span>: <span class="s">"building"</span>   <span class="cm">// ベストフレンドに昇格</span>
+}</pre>
+          </div>
+          <div class="box">
+            <div class="bt">DELETE RESPONSE</div>
+<pre><span class="b">204 No Content</span>
+<span class="cm">// 以降このtokenは無効。
+// 他の通行証には影響しない。</span></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5 -->
+      <div class="ep">
+        <div class="ep-head">
+          <span class="verb get">GET</span>
+          <span class="path">/presence/v1/presence</span>
+          <span class="who pass">通行証</span>
+        </div>
+        <div class="desc">在校の問い合わせ。フレンドのアプリが開かれたときに呼ぶ。返るのはその通行証に許された範囲だけ。</div>
+        <div class="io">
+          <div class="box">
+            <div class="bt">RESPONSE — scope: campus</div>
+<pre>{
+  <span class="k">"present"</span>: <span class="n2">true</span>,
+  <span class="k">"as_of"</span>: <span class="s">"2026-09-15T00:12:30+09:00"</span>
+}</pre>
+          </div>
+          <div class="box">
+            <div class="bt">RESPONSE — scope: building</div>
+<pre>{
+  <span class="k">"present"</span>: <span class="n2">true</span>,
+  <span class="k">"building"</span>: <span class="s">"南館"</span>,
+  <span class="k">"as_of"</span>: <span class="s">"2026-09-15T00:12:30+09:00"</span>
+}</pre>
+          </div>
+        </div>
+        <div class="hint">
+          <b>かくれんぼ中も、いないときと同じ形で返す。</b>
+          <code>{"present": false}</code> のみ。<code>hidden: true</code> のようなフィールドを足すと、
+          隠していること自体が相手に伝わってしまう。
+        </div>
+      </div>
+
+      <!-- 6 -->
+      <div class="ep">
+        <div class="ep-head">
+          <span class="verb put">PUT</span>
+          <span class="path">/presence/v1/me/visibility</span>
+          <span class="who own">本人トークン</span>
+        </div>
+        <div class="desc">かくれんぼのオン / オフ。オンの間は、有効な通行証で来た問い合わせにもすべて「いない」を返す。</div>
+        <div class="io">
+          <div class="box">
+            <div class="bt">REQUEST</div>
+<pre>{
+  <span class="k">"hidden"</span>: <span class="n2">true</span>,
+  <span class="k">"until"</span>: <span class="s">"2026-09-15T18:00:00+09:00"</span>  <span class="cm">// 任意・自動解除</span>
+}</pre>
+          </div>
+          <div class="box">
+            <div class="bt">RESPONSE 200</div>
+<pre>{
+  <span class="k">"hidden"</span>: <span class="n2">true</span>,
+  <span class="k">"until"</span>: <span class="s">"2026-09-15T18:00:00+09:00"</span>
+}</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7 -->
+      <div class="ep">
+        <div class="ep-head">
+          <span class="verb get">GET</span>
+          <span class="path">/presence/v1/me/presence</span>
+          <span class="who own">本人トークン</span>
+        </div>
+        <div class="desc">自分自身の在校確認。ポイント獲得ボタンを押したときに、本人がキャンパスにいるかを確かめるために使う。</div>
+        <div class="io single">
+          <div class="box">
+            <div class="bt">RESPONSE 200</div>
+<pre>{ <span class="k">"present"</span>: <span class="n2">true</span>, <span class="k">"building"</span>: <span class="s">"南館"</span>, <span class="k">"as_of"</span>: <span class="s">"2026-09-15T00:12:30+09:00"</span> }</pre>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">03</span>ステータスコード</h2>
+    <table class="codes">
+      <tr><td class="c">200 / 201</td><td class="d">正常。201は通行証の発行時。</td></tr>
+      <tr><td class="c">204</td><td class="d">通行証の無効化に成功。</td></tr>
+      <tr><td class="c">401</td><td class="d">本人トークンが無効。再ログインが必要。</td></tr>
+      <tr><td class="c">403</td><td class="d">本人登録が学内ネットワーク以外から呼ばれた。</td></tr>
+      <tr><td class="c">404</td><td class="d">通行証が存在しない（または無効化済み）。※下の検討ポイント参照</td></tr>
+      <tr><td class="c">429</td><td class="d">問い合わせが多すぎる。アプリ側はキャッシュして再試行。</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2><span class="n">04</span>大学側と決めたい点</h2>
+    <div class="dec">
+      <div class="dcard">
+        <h3>1. 本人特定はMACかアカウントか</h3>
+        <p>keiomobile2 は個人アカウントの 802.1X 認証なので、MAC登録を省いて「ログイン中のアカウントの在校」を直接引ける可能性がある。引けるなら <code>/me/register</code> は不要になる。</p>
+      </div>
+      <div class="dcard">
+        <h3>2. 無効な通行証への返し方</h3>
+        <p>404 を返すと「解除された」と相手に伝わる。角が立たないよう <code>{"present": false}</code> を返し続ける選択肢もある。どちらが良いかは運用方針しだい。</p>
+      </div>
+      <div class="dcard">
+        <h3>3. 鮮度とキャッシュ</h3>
+        <p><code>as_of</code> の粒度（リアルタイムか5分前か）と、1通行証あたりの問い合わせ上限。アプリ側はキャッシュ前提で作る。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">05</span>まず1本だけなら</h2>
+    <div class="mini">
+      <h3>試作を進めるための最小エンドポイント</h3>
+      <p>上の8本が難しければ、これ1本があれば残りはアプリ側の模擬で先に作れます。</p>
+      <div class="io single">
+        <div class="box">
+          <div class="bt">GET /presence/v1/devices/{mac}</div>
+<pre>{ <span class="k">"present"</span>: <span class="n2">true</span>, <span class="k">"as_of"</span>: <span class="s">"2026-09-15T00:12:30+09:00"</span> }</pre>
+        </div>
+      </div>
+      <div class="hint warn" style="margin-top:9px">
+        ただしこの形はMACを直接扱うため、<b>開発中の限定利用</b>にとどめる想定です。本番では通行証方式に置き換えます。
+      </div>
+    </div>
+  </section>
+
+  <footer>COKOYO API 案 · パス名・フィールド名は例です · 2026-09-15</footer>
+</div>
+</body>
+</html>

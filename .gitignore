@@ -1,0 +1,6 @@
+# 共有用PNGは tools/render.sh で再生成できる
+share/
+
+.DS_Store
+__pycache__/
+*.pyc
