@@ -25,9 +25,13 @@ MACアドレスは誰にも渡さず、API側がフレンド1人ごとに別々�
 | ファイル | 中身 |
 |---|---|
 | `docs/architecture.html` | 層構成、MACの到達範囲、通行証とMACの関係、シーケンス図5本 |
-| `docs/api-draft.html` | 大学側にお願いするAPIのたたき台（8エンドポイント） |
+| `docs/api-draft.html` | 大学側にお願いするAPIのたたき台（8エンドポイント・通行証方式） |
+| `docs/mac-v1.html` | **v1仕様。CNS限定・MAC方式・通行証なし（4エンドポイント）** |
+| `docs/v1-poc.html` | **v1 PoC仕様。3層構成・MAC手入力・key方式（5エンドポイント）** |
 
-ブラウザで直接開く。
+公開版: https://lazyturtle0852.github.io/cokoyo/
+
+ローカルではブラウザで直接開く。
 
 ```sh
 open docs/architecture.html

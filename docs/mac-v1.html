@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>COKOYO — v1仕様（CNS・MAC方式）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #16211d;
+    --muted: #55655e;
+    --faint: #8b9a93;
+    --line: #ccd8d2;
+    --paper: #f4f7f5;
+    --card: #ffffff;
+    --me: #0d6f5e;
+    --me-bg: #e3f2ee;
+    --me-br: #9ed0c4;
+    --fr: #9a5a1f;
+    --fr-bg: #fbeadb;
+    --fr-br: #e2b98f;
+    --api: #2f5a8c;
+    --api-bg: #e2ecf6;
+    --api-br: #a8c4de;
+    --mac: #b03a3a;
+    --mac-bg: #fae3e1;
+    --mac-br: #e3aaa4;
+    --code-bg: #f7f9f8;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: "IBM Plex Sans JP", system-ui, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    line-height: 1.5;
+    padding: 40px 22px 64px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1140px; margin: 0 auto; }
+
+  header { margin-bottom: 30px; }
+  .brand {
+    font-family: Syne, sans-serif; font-weight: 800; font-size: 2.4rem;
+    letter-spacing: -0.03em; color: #0a4f43; line-height: 1;
+  }
+  .tag {
+    display: inline-block; margin-top: 9px; font-size: 0.74rem;
+    font-weight: 700; letter-spacing: 0.09em; color: var(--api);
+  }
+  .lede { margin-top: 12px; max-width: 48em; font-size: 0.93rem; color: var(--muted); }
+
+  section { margin-bottom: 34px; }
+
+  h2 {
+    font-family: Syne, sans-serif; font-weight: 700; font-size: 1.16rem; margin-bottom: 6px;
+  }
+  h2 .n { font-size: 0.7rem; color: var(--me); letter-spacing: 0.08em; margin-right: 8px; }
+  .note { font-size: 0.84rem; color: var(--muted); margin-bottom: 14px; max-width: 54em; }
+
+  code, .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+  /* auth */
+  .auths { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .auth {
+    border-radius: 12px; padding: 14px 16px; border: 1.5px solid;
+  }
+  .auth.own { background: var(--me-bg); border-color: var(--me-br); }
+  .auth.pass { background: var(--fr-bg); border-color: var(--fr-br); }
+  .auth h3 { font-size: 0.9rem; margin-bottom: 4px; }
+  .auth.own h3 { color: var(--me); }
+  .auth.pass h3 { color: var(--fr); }
+  .auth p { font-size: 0.8rem; color: var(--muted); margin-bottom: 8px; }
+  .auth .hdr {
+    font-family: "IBM Plex Mono", monospace; font-size: 0.76rem;
+    background: #fff; border: 1.5px solid rgba(0,0,0,0.08);
+    border-radius: 7px; padding: 7px 10px; display: block;
+  }
+
+  /* endpoints */
+  .eps { display: flex; flex-direction: column; gap: 11px; }
+
+  .ep {
+    background: var(--card); border: 1.5px solid var(--line);
+    border-radius: 13px; padding: 14px 16px 15px;
+  }
+
+  .ep-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 3px; }
+
+  .verb {
+    font-family: "IBM Plex Mono", monospace; font-size: 0.7rem; font-weight: 600;
+    padding: 3px 8px; border-radius: 6px; color: #fff; letter-spacing: 0.02em;
+  }
+  .verb.get { background: #2f6f4e; }
+  .verb.post { background: #2f5a8c; }
+  .verb.put { background: #8a6a1c; }
+  .verb.del { background: #a33c3c; }
+
+  .path { font-family: "IBM Plex Mono", monospace; font-size: 0.88rem; font-weight: 600; }
+
+  .who {
+    font-size: 0.68rem; font-weight: 700; padding: 3px 8px; border-radius: 6px; margin-left: auto;
+  }
+  .who.own { background: var(--me-bg); color: var(--me); border: 1.5px solid var(--me-br); }
+  .who.pass { background: var(--fr-bg); color: var(--fr); border: 1.5px solid var(--fr-br); }
+
+  .ep .desc { font-size: 0.82rem; color: var(--muted); margin-bottom: 10px; }
+
+  .io { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+  .io.single { grid-template-columns: 1fr; }
+
+  .box { border: 1.5px solid var(--line); border-radius: 9px; overflow: hidden; }
+  .box .bt {
+    font-size: 0.68rem; font-weight: 700; color: var(--faint);
+    padding: 5px 10px; background: #f0f3f1; border-bottom: 1.5px solid var(--line);
+    letter-spacing: 0.04em;
+  }
+  pre {
+    font-family: "IBM Plex Mono", monospace; font-size: 0.75rem; line-height: 1.55;
+    padding: 9px 11px; background: var(--code-bg); white-space: pre-wrap; color: #3b4a44;
+  }
+  .k { color: #2f5a8c; }
+  .s { color: #8a5a1c; }
+  .n2 { color: #7a3f8a; }
+  .b { color: #2f6f4e; font-weight: 600; }
+  .cm { color: #98a5a0; }
+
+  .hint {
+    margin-top: 9px; font-size: 0.77rem; color: var(--muted);
+    background: #fbfcfb; border: 1.5px dashed var(--line);
+    border-radius: 8px; padding: 8px 11px;
+  }
+  .hint b { color: var(--ink); }
+  .hint.warn { border-color: var(--mac-br); background: #fdf5f4; }
+
+  /* decisions */
+  .dec { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 11px; }
+  .dcard {
+    background: var(--card); border: 1.5px solid var(--mac-br);
+    border-radius: 12px; padding: 13px 15px;
+  }
+  .dcard h3 { font-size: 0.85rem; color: var(--mac); margin-bottom: 5px; }
+  .dcard p { font-size: 0.78rem; color: var(--muted); }
+
+  .mini {
+    background: var(--card); border: 1.5px dashed var(--line);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .mini h3 { font-size: 0.88rem; margin-bottom: 6px; }
+  .mini p { font-size: 0.81rem; color: var(--muted); margin-bottom: 9px; }
+
+  table.codes { width: 100%; border-collapse: separate; border-spacing: 5px; font-size: 0.79rem; }
+  table.codes td { padding: 7px 10px; border-radius: 7px; }
+  table.codes td.c {
+    font-family: "IBM Plex Mono", monospace; font-weight: 600; width: 88px;
+    background: var(--api-bg); color: var(--api); text-align: center;
+  }
+  table.codes td.d { background: #fff; border: 1.5px solid var(--line); color: var(--muted); }
+
+  footer { font-size: 0.74rem; color: var(--faint); margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">COKOYO v1</div>
+    <div class="tag">CNS 限定 / MAC方式 / 通行証なし</div>
+    <p class="lede">
+      対象を SFC の <code>cns</code> 1本に絞り、通行証の台帳を大学側に持ってもらうのをやめた版。
+      大学への依頼は <b>エンドポイント4本・保存データはアカウント1行</b> まで縮む。
+      引き換えに「相手ごとの粒度」と「1人だけ解除」を捨てる。
+    </p>
+  </header>
+
+  <section>
+    <h2><span class="n">01</span>前提と、意識的に捨てるもの</h2>
+    <p class="note">
+      APIがMACでしか引けず、COKOYOのサーバーを置かず、フレンドの端末が直接問い合わせる。
+      この3つが揃うと<b>フレンドは相手のMACそのものを持つ</b>しかない。以下はその帰結。
+    </p>
+    <div class="dec">
+      <div class="dcard">
+        <h3>捨てる — 相手ごとの粒度</h3>
+        <p>鍵が1人1本なのでAPIが相手を区別できない。代わりに<b>本人が全員に対する粒度を1つ選ぶ</b>（後述の <code>granularity</code>）。ベストフレンドだけ建物、は作れない。</p>
+      </div>
+      <div class="dcard">
+        <h3>捨てる — 1人だけ解除</h3>
+        <p>失効は<b>MACのローテーションのみ</b>。全員分が同時に切れるので、残す相手には再配布する。アプリ内ブロックは作らない（表示が消えるだけで相手のアクセスは止まらず、守られていると誤解させるため）。</p>
+      </div>
+      <div class="dcard">
+        <h3>残る — かくれんぼ</h3>
+        <p>本人単位のフラグなので通行証と無関係に成立する。アプリを経由しない直接アクセスにも効く。いないときと<b>同じ形</b>で返すのも変わらない。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">02</span>エンドポイント</h2>
+    <p class="note">
+      ベースURLは仮に <code>/presence/v1</code>。<b>すべてCNSアカウントの本人トークンで認証する</b>。
+      無記名で叩けるAPIにはしない — 呼び出し元が特定できることで、レート制限も監査も成立し、
+      「学内の認証済みユーザーだけが使える」と説明できる。
+    </p>
+
+    <div class="auths">
+      <div class="auth own">
+        <h3>本人トークン（1種類だけ）</h3>
+        <p>CNSアカウントのログインで発行。自分の設定変更にも、フレンドの在否問い合わせにも、同じものを使う。</p>
+        <span class="hdr">Authorization: Bearer &lt;user_token&gt;</span>
+      </div>
+      <div class="auth pass">
+        <h3>MAC = フレンドに渡す値</h3>
+        <p>認証には使わない。あくまで「誰について聞いているか」を示すパラメータ。持っているだけでは叩けない。</p>
+        <span class="hdr">a2b41c9e7703（小文字16進12桁・区切りなし）</span>
+      </div>
+    </div>
+
+    <div class="eps" style="margin-top:13px">
+
+      <div class="ep">
+        <div class="ep-head">
+          <span class="verb get">GET</span>
+          <span class="path">/presence/v1/me/mac</span>
+          <span class="who own">本人トークン</span>
+        </div>
+        <p class="desc">自分のMACを取得する。<b>cns に接続した状態で呼ぶ。</b>友達交換に配る値であり、ローテーション検知の起点でもある。</p>
+        <div class="io">
+          <div class="box">
+            <div class="bt">RESPONSE 200</div>
+<pre>{
+  <span class="k">"mac"</span>: <span class="s">"a2b41c9e7703"</span>,
+  <span class="k">"network"</span>: <span class="s">"cns"</span>,
+  <span class="k">"as_of"</span>: <span class="s">"2026-09-15T00:10:00+09:00"</span>
+}</pre>
+          </div>
+          <div class="box">
+            <div class="bt">RESPONSE 409 — cns 以外から</div>
+<pre>{
+  <span class="k">"error"</span>: <span class="s">"not_on_cns"</span>
+}</pre>
+          </div>
+        </div>
+        <div class="hint">
+          <b>これが無いと成立しない。</b> iOS も Android も、アプリに自端末のMACを渡さない（どちらも <code>02:00:00:00:00:00</code> を返す）。
+          サーバーが送信元IPから DHCP / RADIUS を辿って返す形にすることで、ユーザーに12桁を手入力させずに済む。
+        </div>
+      </div>
+
+      <div class="ep">
+        <div class="ep-head">
+          <span class="verb post">POST</span>
+          <span class="path">/presence/v1/presence</span>
+          <span class="who own">本人トークン</span>
+        </div>
+        <p class="desc">在校の問い合わせ。フレンド一覧を開いたときに、<b>全員分をまとめて1往復で</b>聞く。返る粒度は相手が設定した <code>granularity</code> に従う。</p>
+        <div class="io">
+          <div class="box">
+            <div class="bt">REQUEST</div>
+<pre>{
+  <span class="k">"macs"</span>: [
+    <span class="s">"a2b41c9e7703"</span>,
+    <span class="s">"6e0d33b1c840"</span>
+  ]
+}</pre>
+          </div>
+          <div class="box">
+            <div class="bt">RESPONSE 200</div>
+<pre>{
+  <span class="k">"results"</span>: [
+    { <span class="k">"mac"</span>: <span class="s">"a2b41c9e7703"</span>, <span class="k">"present"</span>: <span class="n2">true</span>,
+      <span class="k">"building"</span>: <span class="s">"ι館"</span> },
+    { <span class="k">"mac"</span>: <span class="s">"6e0d33b1c840"</span>, <span class="k">"present"</span>: <span class="n2">false</span> }
+  ],
+  <span class="k">"as_of"</span>: <span class="s">"2026-09-15T00:10:00+09:00"</span>
+}</pre>
+          </div>
+        </div>
+        <div class="hint warn">
+          <b>false は1種類だけにする。</b> 「いない」「かくれんぼ中」「未登録のMAC」「存在しないMAC」を、
+          レスポンスでも<b>応答時間でも</b>区別できないようにする。区別がつくと、
+          かくれんぼ中であることや、そのMACが実在することが相手に伝わってしまう。
+        </div>
+        <div class="hint">
+          <b><code>as_of</code> は5分に丸める。</b> 秒精度で building が返ると、連続して呼ぶだけで移動の軌跡が再構成できる。
+          「今どこにいるか」と「どう動いたか」は別物なので、後者は渡さない。アプリ側もこの粒度でキャッシュする。
+        </div>
+      </div>
+
+      <div class="ep">
+        <div class="ep-head">
+          <span class="verb put">PUT</span>
+          <span class="path">/presence/v1/me/settings</span>
+          <span class="who own">本人トークン</span>
+        </div>
+        <p class="desc">かくれんぼと、<b>全員に対する公開粒度</b>。通行証が無いので相手ごとの出し分けはできないが、本人が1つ選ぶことはできる。</p>
+        <div class="io">
+          <div class="box">
+            <div class="bt">REQUEST</div>
+<pre>{
+  <span class="k">"hidden"</span>: <span class="n2">false</span>,
+  <span class="k">"hidden_until"</span>: <span class="n2">null</span>,   <span class="cm">// 任意・自動解除</span>
+  <span class="k">"granularity"</span>: <span class="s">"campus"</span>  <span class="cm">// campus | building</span>
+}</pre>
+          </div>
+          <div class="box">
+            <div class="bt">保存されるデータはこれだけ</div>
+<pre><span class="cm">アカウント1件につき1行:</span>
+
+  account_id   <span class="cm">(既にある)</span>
+  hidden       <span class="cm">bool</span>
+  hidden_until <span class="cm">timestamp / null</span>
+  granularity  <span class="cm">enum</span></pre>
+          </div>
+        </div>
+        <div class="hint">
+          <b>既定値は <code>campus</code>。</b> building は本人が明示的に選んだときだけ。
+          粒度をクライアント側で絞る案は採らない — APIが建物を返す限り、
+          アプリを通さず直接叩けば見えてしまうので、境界として機能しない。
+        </div>
+      </div>
+
+      <div class="ep">
+        <div class="ep-head">
+          <span class="verb get">GET</span>
+          <span class="path">/presence/v1/me/settings</span>
+          <span class="who own">本人トークン</span>
+        </div>
+        <p class="desc">現在の設定の取得。アプリ再インストール時に状態を復元するために要る。</p>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">03</span>友達交換</h2>
+    <p class="note">
+      <b>MAC方式が一番強いのがここ。</b>渡す値が全員に対して同じなので、
+      QRを1枚出して周りがスキャンするだけで終わる。人数が増えても手順が増えない。
+      （通行証方式だと相手ごとに別の値を正しい相手にだけ届ける必要があり、端末間のペアリング処理が要る。）
+    </p>
+    <div class="mini">
+      <h3>QRのペイロード</h3>
+      <p>アプリ以外が読んでも意味を持たないよう、独自スキームにする。URLにしない（プレビューやスキャン履歴に残るため）。</p>
+      <div class="io single">
+        <div class="box">
+          <div class="bt">FORMAT</div>
+<pre>cokoyo1:a2b41c9e7703:りょうま</pre>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:9px">
+        <b>10人で一気に交換する場合:</b> 各自が順にQRを出し、残り全員がスキャンする。
+        10巡で全員が全員を登録できる。ホスト役の端末を立ててローカルで配る方式にもできるが、
+        v1では実装量を抑えて素のQRで始める。
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">04</span>壊れ方と、その扱い</h2>
+    <p class="note">
+      この方式は<b>静かに壊れる</b>のが最大の弱点。どちらも「いない」と同じ見え方になるので、
+      アプリ側で能動的に検知しないと、本人もフレンドも気づかないまま機能が死ぬ。
+    </p>
+    <div class="dec">
+      <div class="dcard">
+        <h3>A. MACのローテーション</h3>
+        <p>iOSの「プライバシー警告をリセット」やネットワーク設定の削除・再接続で、cns 用のランダムMACは変わる。変わった瞬間から全フレンドに <code>present: false</code> が返り続ける。</p>
+      </div>
+      <div class="dcard">
+        <h3>B. SSIDの取りこぼし</h3>
+        <p>SFCにいても cns ではなく keiomobile2 / eduroam に繋いでいると在校が見えない。端末は前回のSSIDに自動接続するので、本人の意識と無関係に起きる。</p>
+      </div>
+      <div class="dcard">
+        <h3>C. 相手側の値が古い</h3>
+        <p>相手がAを起こして再配布していない場合、こちらからは永久に「いない」に見える。かくれんぼとも区別がつかない。</p>
+      </div>
+    </div>
+    <div class="hint" style="margin-top:11px">
+      <b>対策 —</b>
+      <b>A:</b> アプリ起動時（cns接続中）に <code>GET /me/mac</code> を呼び、保存値と比較する。違っていたら再配布フローへ誘導する。
+      <b>B:</b> SSIDを読んで（iOS: Access WiFi Information + 位置情報 / Android: ACCESS_FINE_LOCATION）、
+      学内で cns 以外に繋いでいるときに接続を促す。
+      <b>C:</b> 交換日と「最後に present: true だった日」を端末内に持ち、長期間falseが続く相手に
+      「IDが古い可能性」を表示する。完全には解けないので、<b>無言の故障を減らす</b>ところまで。
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">05</span>CNSに確認したいこと</h2>
+    <table class="codes">
+      <tr><td class="c">1</td><td class="d"><b>cns の認証方式</b>と、RADIUS Accounting / DHCP ログの参照可否・保持期間。802.1X なら送信元IP → MAC → アカウント が辿れるので <code>GET /me/mac</code> が成立する。PEAPの内側のidentityがログに残っているかも含めて。</td></tr>
+      <tr><td class="c">2</td><td class="d"><b>AP → 館の対応表</b>を持っているか。building 粒度はこれが無いと出せない。</td></tr>
+      <tr><td class="c">3</td><td class="d"><b>SFC構内の keiomobile2 / eduroam のAPもCNS管理か。</b>同じログに乗るなら、SSIDを問わず在校を判定できて上のBが消える。ここが一番効く質問。</td></tr>
+      <tr><td class="c">4</td><td class="d"><b>レート制限の要件。</b>本人トークン単位で掛ける（学内はIPが共有されるためIP単位は無意味）。バッチ問い合わせ前提なら、1アカウントあたり数分に1回で足りる。</td></tr>
+      <tr><td class="c">5</td><td class="d"><b>台帳を持ってもらえる余地。</b><code>key → アカウント</code> のテーブル1つと発行・失効の2本があれば、相手ごとの粒度と1人だけ解除が戻る。v1をこれに依存させないが、聞くだけ聞いておく。</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2><span class="n">06</span>v2 に移れる形で作る</h2>
+    <div class="mini">
+      <h3>クライアントでは MAC と呼ばない</h3>
+      <p>交換する値を <code>friend.mac</code> ではなく <code>friend.presence_key</code> という<b>不透明な文字列</b>としてモデル化する。今そこに入っているのがたまたまMACである、という扱いにする。</p>
+      <div class="io single">
+        <div class="box">
+          <div class="bt">後から台帳が手に入ったとき</div>
+<pre><span class="b">変えるもの</span>   交換する値（MAC → 発行トークン）
+             相手ごとに別値になるためのペアリング処理
+
+<span class="b">変えないもの</span> 交換UI・QR・フレンド一覧・キャッシュ
+             POST /presence の呼び出し形</pre>
+        </div>
+      </div>
+      <div class="hint warn" style="margin-top:9px">
+        <b>ただし完全には巻き戻せない。</b> v1で配ったMACは回収できないので、
+        v2への移行手順には<b>全員のMACローテーション</b>（cns の設定を削除して再接続）を含める必要がある。
+        v1を選ぶ判断には、この一度きりの片道分が含まれている。
+      </div>
+    </div>
+  </section>
+
+  <footer>COKOYO v1 仕様 · CNS限定・MAC方式 · パス名とフィールド名は例 · 2026-09-15</footer>
+</div>
+</body>
+</html>

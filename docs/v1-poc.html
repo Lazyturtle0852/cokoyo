@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>COKOYO — v1 PoC仕様（3層・key方式）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #16211d;
+    --muted: #55655e;
+    --faint: #8b9a93;
+    --line: #ccd8d2;
+    --paper: #f4f7f5;
+    --card: #ffffff;
+    --me: #0d6f5e;
+    --me-bg: #e3f2ee;
+    --me-br: #9ed0c4;
+    --fr: #9a5a1f;
+    --fr-bg: #fbeadb;
+    --fr-br: #e2b98f;
+    --be: #6b4f9e;
+    --be-bg: #efeaf8;
+    --be-br: #c3b8dd;
+    --api: #2f5a8c;
+    --api-bg: #e2ecf6;
+    --api-br: #a8c4de;
+    --mac: #b03a3a;
+    --mac-bg: #fae3e1;
+    --mac-br: #e3aaa4;
+    --code-bg: #f7f9f8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "IBM Plex Sans JP", system-ui, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    line-height: 1.5;
+    padding: 40px 22px 64px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1140px; margin: 0 auto; }
+  header { margin-bottom: 30px; }
+  .brand {
+    font-family: Syne, sans-serif; font-weight: 800; font-size: 2.4rem;
+    letter-spacing: -0.03em; color: #0a4f43; line-height: 1;
+  }
+  .tag {
+    display: inline-block; margin-top: 9px; font-size: 0.74rem;
+    font-weight: 700; letter-spacing: 0.09em; color: var(--be);
+  }
+  .lede { margin-top: 12px; max-width: 50em; font-size: 0.93rem; color: var(--muted); }
+  section { margin-bottom: 34px; }
+  h2 {
+    font-family: Syne, sans-serif; font-weight: 700; font-size: 1.16rem; margin-bottom: 6px;
+  }
+  h2 .n { font-size: 0.7rem; color: var(--me); letter-spacing: 0.08em; margin-right: 8px; }
+  .note { font-size: 0.84rem; color: var(--muted); margin-bottom: 14px; max-width: 56em; }
+  code, .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  .note code, p code, td code, li code {
+    background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 4px; padding: 0 4px; font-size: 0.92em;
+  }
+
+  /* layers */
+  .layers { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .layer {
+    border-radius: 12px; padding: 14px 16px; border: 1.5px solid;
+    background: var(--card);
+  }
+  .layer.fe { background: var(--me-bg); border-color: var(--me-br); }
+  .layer.be { background: var(--be-bg); border-color: var(--be-br); }
+  .layer.dtc { background: var(--api-bg); border-color: var(--api-br); }
+  .layer h3 { font-size: 0.92rem; margin-bottom: 5px; }
+  .layer.fe h3 { color: var(--me); }
+  .layer.be h3 { color: var(--be); }
+  .layer.dtc h3 { color: var(--api); }
+  .layer p { font-size: 0.79rem; color: var(--muted); margin-bottom: 9px; }
+  .knows { list-style: none; font-size: 0.76rem; }
+  .knows li { padding: 3px 0 3px 16px; position: relative; color: var(--ink); }
+  .knows li::before {
+    content: "●"; position: absolute; left: 0; font-size: 0.6rem; top: 5px; color: var(--me);
+  }
+  .knows li.no { color: var(--faint); text-decoration: line-through; }
+  .knows li.no::before { content: "×"; color: var(--mac); text-decoration: none; font-size: 0.72rem; top: 3px; }
+  .knows li.mac::before { color: var(--mac); }
+
+  /* auth pair */
+  .auths { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .auth { border-radius: 12px; padding: 14px 16px; border: 1.5px solid; }
+  .auth.pub { background: var(--fr-bg); border-color: var(--fr-br); }
+  .auth.sec { background: var(--me-bg); border-color: var(--me-br); }
+  .auth h3 { font-size: 0.9rem; margin-bottom: 4px; }
+  .auth.pub h3 { color: var(--fr); }
+  .auth.sec h3 { color: var(--me); }
+  .auth p { font-size: 0.8rem; color: var(--muted); margin-bottom: 8px; }
+  .auth .hdr {
+    font-family: "IBM Plex Mono", monospace; font-size: 0.76rem;
+    background: #fff; border: 1.5px solid rgba(0,0,0,0.08);
+    border-radius: 7px; padding: 7px 10px; display: block;
+  }
+
+  /* endpoints */
+  .eps { display: flex; flex-direction: column; gap: 11px; }
+  .ep {
+    background: var(--card); border: 1.5px solid var(--line);
+    border-radius: 13px; padding: 14px 16px 15px;
+  }
+  .ep-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 3px; }
+  .verb {
+    font-family: "IBM Plex Mono", monospace; font-size: 0.7rem; font-weight: 600;
+    padding: 3px 8px; border-radius: 6px; color: #fff; letter-spacing: 0.02em;
+  }
+  .verb.get { background: #2f6f4e; }
+  .verb.post { background: #2f5a8c; }
+  .verb.patch { background: #8a6a1c; }
+  .path { font-family: "IBM Plex Mono", monospace; font-size: 0.88rem; font-weight: 600; }
+  .who { font-size: 0.68rem; font-weight: 700; padding: 3px 8px; border-radius: 6px; margin-left: auto; }
+  .who.sec { background: var(--me-bg); color: var(--me); border: 1.5px solid var(--me-br); }
+  .who.open { background: #f0f3f1; color: var(--muted); border: 1.5px solid var(--line); }
+  .ep .desc { font-size: 0.82rem; color: var(--muted); margin-bottom: 10px; }
+  .io { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+  .io.single { grid-template-columns: 1fr; }
+  .box { border: 1.5px solid var(--line); border-radius: 9px; overflow: hidden; }
+  .box .bt {
+    font-size: 0.68rem; font-weight: 700; color: var(--faint);
+    padding: 5px 10px; background: #f0f3f1; border-bottom: 1.5px solid var(--line);
+    letter-spacing: 0.04em;
+  }
+  pre {
+    font-family: "IBM Plex Mono", monospace; font-size: 0.75rem; line-height: 1.55;
+    padding: 9px 11px; background: var(--code-bg); white-space: pre-wrap; color: #3b4a44;
+  }
+  pre.wide { border: 1.5px solid var(--line); border-radius: 10px; }
+  .k { color: #2f5a8c; }
+  .s { color: #8a5a1c; }
+  .n2 { color: #7a3f8a; }
+  .b { color: #2f6f4e; font-weight: 600; }
+  .cm { color: #98a5a0; }
+
+  .hint {
+    margin-top: 9px; font-size: 0.77rem; color: var(--muted);
+    background: #fbfcfb; border: 1.5px dashed var(--line);
+    border-radius: 8px; padding: 8px 11px;
+  }
+  .hint b { color: var(--ink); }
+  .hint.warn { border-color: var(--mac-br); background: #fdf5f4; }
+  .hint.good { border-color: var(--me-br); background: #f3faf8; }
+
+  /* sequence */
+  .flow {
+    background: var(--card); border: 1.5px solid var(--line);
+    border-radius: 14px; padding: 18px 20px 20px; margin-bottom: 16px;
+  }
+  .flow h3 { font-size: 0.97rem; margin-bottom: 3px; }
+  .flow .sub { font-size: 0.78rem; color: var(--muted); margin-bottom: 12px; }
+  .seq {
+    position: relative; display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 7px; align-items: center; padding-top: 24px;
+  }
+  .guides { position: absolute; inset: 58px 0 0 0; pointer-events: none; z-index: 0; }
+  .guides i { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1.5px dotted #cfdad4; }
+  .g1 { left: 12.5%; } .g2 { left: 37.5%; } .g3 { left: 62.5%; } .g4 { left: 87.5%; }
+  .macwall {
+    position: absolute; left: 50%; top: 22px; bottom: -4px;
+    border-left: 2.5px dashed var(--mac); z-index: 2; pointer-events: none;
+  }
+  .macwall b {
+    position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
+    white-space: nowrap; font-size: 0.68rem; font-weight: 700;
+    color: var(--mac); background: var(--card); padding: 0 6px;
+  }
+  .lane {
+    grid-row: 1; text-align: center; font-size: 0.73rem; font-weight: 700;
+    padding: 6px 3px; border-radius: 8px; position: relative; z-index: 1; line-height: 1.25;
+  }
+  .lane.me { grid-column: 1; background: var(--me-bg); color: var(--me); }
+  .lane.fr { grid-column: 2; background: var(--fr-bg); color: var(--fr); }
+  .lane.be { grid-column: 3; background: var(--be-bg); color: var(--be); border: 1.5px dashed var(--be-br); }
+  .lane.api { grid-column: 4; background: var(--api-bg); color: var(--api); }
+  .msg {
+    position: relative; z-index: 1; background: #fff;
+    border: 1.5px solid var(--line); border-radius: 9px;
+    padding: 7px 10px; font-size: 0.77rem;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .msg .no {
+    flex: 0 0 auto; width: 17px; height: 17px; border-radius: 50%;
+    background: #eef2f0; color: var(--muted); font-size: 0.64rem; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .msg .txt { flex: 1; }
+  .msg .dir { color: var(--faint); font-weight: 700; font-size: 0.85rem; }
+  .msg.mac { background: var(--mac-bg); border-color: var(--mac-br); }
+  .msg.mac .no { background: #f0cac5; color: var(--mac); }
+  .msg.own { background: var(--me-bg); border-color: var(--me-br); }
+  .msg.own .no { background: #c6e3da; color: var(--me); }
+  .msg.pub { background: var(--fr-bg); border-color: var(--fr-br); }
+  .msg.pub .no { background: #eed3b6; color: var(--fr); }
+  .msg.bedo { background: var(--be-bg); border-color: var(--be-br); }
+  .msg.bedo .no { background: #d5cbe9; color: var(--be); }
+  .msg.stop { background: #f1eef7; border-color: #c3b8dd; }
+  .msg.idle {
+    background: transparent; border-style: dashed; border-color: #dde4e0;
+    color: var(--faint); font-size: 0.72rem; justify-content: center;
+  }
+  .mtag, .ptag, .otag {
+    flex: 0 0 auto; font-size: 0.62rem; font-weight: 700;
+    padding: 2px 6px; border-radius: 5px; color: #fff; white-space: nowrap;
+  }
+  .mtag { background: var(--mac); }
+  .ptag { background: var(--fr); }
+  .otag { background: var(--me); }
+  .c1 { grid-column: 1 / 2; } .c2 { grid-column: 2 / 3; }
+  .c3 { grid-column: 3 / 4; } .c4 { grid-column: 4 / 5; }
+  .c1_2 { grid-column: 1 / 3; } .c1_3 { grid-column: 1 / 4; } .c1_4 { grid-column: 1 / 5; }
+  .c2_3 { grid-column: 2 / 4; } .c2_4 { grid-column: 2 / 5; } .c3_4 { grid-column: 3 / 5; }
+  .r1 { grid-row: 2; } .r2 { grid-row: 3; } .r3 { grid-row: 4; } .r4 { grid-row: 5; }
+  .r5 { grid-row: 6; } .r6 { grid-row: 7; } .r7 { grid-row: 8; } .r8 { grid-row: 9; }
+
+  /* dropped / decisions */
+  .dec { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 11px; }
+  .dcard {
+    background: var(--card); border: 1.5px solid var(--mac-br);
+    border-radius: 12px; padding: 13px 15px;
+  }
+  .dcard h3 { font-size: 0.85rem; color: var(--mac); margin-bottom: 5px; }
+  .dcard p { font-size: 0.78rem; color: var(--muted); }
+
+  .mini { background: var(--card); border: 1.5px dashed var(--line); border-radius: 12px; padding: 14px 16px; }
+  .mini h3 { font-size: 0.88rem; margin-bottom: 6px; }
+  .mini p { font-size: 0.81rem; color: var(--muted); margin-bottom: 9px; }
+
+  table.t { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.8rem; background: var(--card); border: 1.5px solid var(--line); border-radius: 12px; overflow: hidden; }
+  table.t th { text-align: left; font-size: 0.7rem; letter-spacing: 0.04em; color: var(--faint); background: #f0f3f1; padding: 7px 12px; border-bottom: 1.5px solid var(--line); font-weight: 700; }
+  table.t td { padding: 8px 12px; border-bottom: 1px solid #e6ece9; color: var(--muted); vertical-align: top; }
+  table.t tr:last-child td { border-bottom: none; }
+  table.t td.h { color: var(--ink); font-weight: 600; white-space: nowrap; }
+  table.t td.mono { font-family: "IBM Plex Mono", monospace; font-size: 0.74rem; color: var(--ink); }
+
+  ol.q { list-style: none; counter-reset: q; }
+  ol.q li { counter-increment: q; position: relative; padding: 7px 0 7px 30px; font-size: 0.82rem; color: var(--muted); border-bottom: 1px solid #e6ece9; }
+  ol.q li:last-child { border-bottom: none; }
+  ol.q li::before {
+    content: counter(q); position: absolute; left: 0; top: 8px;
+    width: 19px; height: 19px; border-radius: 50%; background: var(--api-bg);
+    color: var(--api); font-size: 0.66rem; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  ol.q li b { color: var(--ink); }
+
+  footer { font-size: 0.74rem; color: var(--faint); margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="brand">COKOYO v1</div>
+  <div class="tag">PoC / 3層構成 / MAC手入力 / key方式</div>
+  <p class="lede">
+    アプリのサーバーを持たない制約を取り下げ、<b>フロント・バックエンド・DTC API の3層</b>にした版。
+    MACはバックエンドの中だけに閉じ、ユーザーが扱うのは <code>key</code> だけになる。
+    引き換えに、MAC ↔ 本人の対応表を自分たちで持つことになった。
+  </p>
+</header>
+
+<!-- 00 -->
+<section>
+  <h2><span class="n">00</span>この版で何が変わったか</h2>
+  <p class="note">
+    <code>mac-v1.html</code> は「アプリのサーバーを持たない」を前提に、フレンドがMACそのものを持ち、
+    大学APIを直接叩く設計だった。この版はバックエンドを1枚挟む。得たものと失ったものは、はっきりしている。
+  </p>
+  <div class="layers">
+    <div class="layer fe" style="background:#f3faf8;border-color:var(--me-br)">
+      <h3>得たもの — 相手ごとの粒度と、1人だけ解除</h3>
+      <p>
+        バックエンドが「key → 誰か」を解決してから <code>connections</code> を見るので、
+        <b>keyが全員共通の1本でも、scopeとblockは相手ごとに効く。</b>
+      </p>
+      <ul class="knows">
+        <li>通行証（1人1本のkey）が要らない</li>
+        <li>QR / LINE で1つの値を配るUXのまま</li>
+        <li>大学側に台帳を持ってもらう必要がない</li>
+      </ul>
+    </div>
+    <div class="layer be" style="background:#fdf5f4;border-color:var(--mac-br)">
+      <h3>失ったもの — サーバーレス原則</h3>
+      <p>
+        README の「アプリ側のサーバーは持たず」は取り下げ。
+        そして<b>バックエンドが MAC ↔ 人 の対応表を持つ</b>。元の設計が意図的に避けていたもの。
+      </p>
+      <ul class="knows">
+        <li class="mac">漏洩時の影響範囲が「参加者全員のMAC」になる</li>
+        <li class="mac">運用者・ホスティング先を決める必要がある</li>
+      </ul>
+    </div>
+    <div class="layer dtc" style="background:#fbfcfb;border-color:var(--line)">
+      <h3>この版の目的</h3>
+      <p>
+        PoC。<b>仕組みが成立することの確認</b>が目的で、悪意ある参加者は想定しない。
+        本番化のときに必ず塞ぐ穴は 07 と 08 に明記する。
+      </p>
+      <ul class="knows">
+        <li>フレンドの在校が見えること</li>
+        <li>scope と block が相手ごとに効くこと</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 01 -->
+<section>
+  <h2><span class="n">01</span>3層と、各層が知っていること</h2>
+  <p class="note">
+    設計の中心は <b>MACの壁をバックエンドの内側に引いたこと</b>。
+    フロントは最後までMACを見ないし、DTC API は最後までkeyを見ない。
+    ユーザーが自分のMACを入力するのは登録の一度だけで、以降どこにも出てこない。
+  </p>
+  <div class="layers">
+    <div class="layer fe">
+      <h3>フロント</h3>
+      <p>ブラウザで動く。端末内に <code>secret</code> とフレンド一覧を持つ。</p>
+      <ul class="knows">
+        <li>自分の <code>secret</code></li>
+        <li>自分の <code>share_key</code></li>
+        <li>フレンドの <code>share_key</code> と表示名</li>
+        <li class="no">MACアドレス（登録フォームの一度きり）</li>
+      </ul>
+    </div>
+    <div class="layer be">
+      <h3>バックエンド</h3>
+      <p>唯一 key と MAC の両方を知る層。ここで scope と block を判定する。</p>
+      <ul class="knows">
+        <li>key ↔ MAC の対応</li>
+        <li>誰と誰がつながっているか</li>
+        <li class="mac">参加者全員のMAC</li>
+      </ul>
+    </div>
+    <div class="layer dtc">
+      <h3>DTC API</h3>
+      <p>MACを受け取って在校を返す。COKOYO の存在を知らない。</p>
+      <ul class="knows">
+        <li>MACと、その在校・位置</li>
+        <li class="no">key</li>
+        <li class="no">誰と誰がフレンドか</li>
+      </ul>
+    </div>
+  </div>
+  <div class="hint warn">
+    <b>なぜバックエンドを挟むのか。</b>
+    MACを持っている人は、アプリを経由せず DTC API を直接叩けてしまう。
+    ユーザーが扱う値をMACではなく key にすることで、<b>「見せる/見せない」の判断をアプリ側で必ず通る場所に置ける。</b>
+    これがこの層の存在理由で、それゆえ <b>key の扱いを間違えると層ごと意味を失う</b>（→ 02）。
+  </div>
+</section>
+
+<!-- 02 -->
+<section>
+  <h2><span class="n">02</span>登録すると2つの値が返る</h2>
+  <p class="note">
+    <b>配る値と、認証する値を分ける。</b>
+    1つのkeyで兼ねると、LINEでkeyを受け取った相手が「あなたとして」問い合わせられてしまい、
+    block も scope も守れなくなる。カラム1本で防げるので、PoCでも分ける。
+  </p>
+  <div class="auths">
+    <div class="auth pub">
+      <h3>share_key — 配る値</h3>
+      <p>LINEやQRで友達に渡す。公開される前提の値。これ単体では何もできない。</p>
+      <span class="hdr">k_7f3a9c21e84b06d5</span>
+    </div>
+    <div class="auth sec">
+      <h3>secret — 配らない値</h3>
+      <p>端末内（localStorage）にだけ置く。「誰が聞いているか」を示す。実質的にアカウント。</p>
+      <span class="hdr">Authorization: Bearer s_9b21f04c7ad3e918</span>
+    </div>
+  </div>
+  <div class="hint">
+    <b>どちらもMACから導出しない。</b>
+    ハッシュ等で導出すると、MACの空間が狭いので総当たりで逆算できる。無関係な128bit乱数にして、対応は
+    <code>persons</code> テーブルの中だけに置く。<br />
+    <b>共有文字列には表示名を載せる。</b> keyだけ渡されても誰か分からないので、
+    受け取った側が端末内に名前を保存する。バックエンドは名前を持たない。
+  </div>
+  <pre class="wide" style="margin-top:10px"><span class="cm">// LINEに貼る / QRに載せる文字列（URLにはしない）</span>
+cokoyo1:k_7f3a9c21e84b06d5:りょうま</pre>
+</section>
+
+<!-- 03 -->
+<section>
+  <h2><span class="n">03</span>データモデル</h2>
+  <p class="note">
+    key が事実上 person。ログイン画面もアカウント登録もない。
+    <code>persons</code> の1行が1人で、<code>connections</code> の1行が1つの関係。
+  </p>
+  <pre class="wide"><span class="b">persons</span>
+  id             <span class="cm">-- 内部ID。外に出さない</span>
+  share_key      UNIQUE   <span class="cm">-- 配る</span>
+  secret         UNIQUE   <span class="cm">-- 配らない</span>
+  mac            UNIQUE   <span class="cm">-- 手入力。小文字16進12桁に正規化して保存</span>
+  created_at
+
+<span class="b">connections</span>
+  id
+  person_low              <span class="cm">-- idの小さい方</span>
+  person_high             <span class="cm">-- idの大きい方</span>
+  scope                   <span class="cm">-- 'campus' | 'building'  無向・双方に同じ値が効く</span>
+  blocked        bool     <span class="cm">-- trueで相互に見えなくなる</span>
+  created_at
+  UNIQUE(person_low, person_high)</pre>
+  <div class="hint">
+    <b>(A,B) と (B,A) は id の大小で正規化</b>して1行に畳む。UNIQUE制約で重複を防ぐ。<br />
+    <b>scope は無向。</b> どちらかが <code>building</code> にすると、お互いに建物まで見える。相互主義として扱い、どちらからでも変更できる。<br />
+    <b>MACは保存前に正規化。</b> 手入力なので <code>A2-B4-1C-9E-77-03</code> も <code>a2:b4:...</code> も来る。
+    小文字・区切りなし12桁に寄せないと、突合が静かに失敗する。
+  </div>
+</section>
+
+<!-- 04 -->
+<section>
+  <h2><span class="n">04</span>エンドポイント</h2>
+  <p class="note">
+    ベースURLは仮に <code>/api/v1</code>。<code>POST /register</code> 以外はすべて <code>secret</code> で認証する。
+    フロントはこの5本しか叩かない。
+  </p>
+  <div class="eps">
+
+    <div class="ep">
+      <div class="ep-head">
+        <span class="verb post">POST</span><span class="path">/api/v1/register</span>
+        <span class="who open">認証なし</span>
+      </div>
+      <p class="desc">自分のMACをフォームから送ると、2つの値が返る。これが唯一MACがフロントを通る瞬間。</p>
+      <div class="io">
+        <div class="box"><div class="bt">REQUEST</div><pre>{
+  <span class="k">"mac"</span>: <span class="s">"a2b41c9e7703"</span>,
+  <span class="k">"name"</span>: <span class="s">"りょうま"</span>  <span class="cm">// 任意・共有文字列用</span>
+}</pre></div>
+        <div class="box"><div class="bt">RESPONSE 200</div><pre>{
+  <span class="k">"share_key"</span>: <span class="s">"k_7f3a9c21e84b06d5"</span>,
+  <span class="k">"secret"</span>:    <span class="s">"s_9b21f04c7ad3e918"</span>
+}</pre></div>
+      </div>
+      <div class="hint">
+        <b>同じMACの再登録は冪等。</b> すでに登録済みのMACなら、新規発行せず既存の
+        <code>share_key</code> / <code>secret</code> を返す。毎回新規発行すると、同じ人が複数のpersonに分裂して
+        connections が割れる。<br />
+        <b>secret を返すのはこの一度だけ。</b> 端末を変えたら再登録（＝同じMACなので同じ値が返る）。
+      </div>
+    </div>
+
+    <div class="ep">
+      <div class="ep-head">
+        <span class="verb post">POST</span><span class="path">/api/v1/connections</span>
+        <span class="who sec">secret</span>
+      </div>
+      <p class="desc">友達から受け取った <code>share_key</code> でつながる。承認フローなし・即時成立。</p>
+      <div class="io">
+        <div class="box"><div class="bt">REQUEST</div><pre>{
+  <span class="k">"share_key"</span>: <span class="s">"k_2c81ff409a7b3d62"</span>
+}</pre></div>
+        <div class="box"><div class="bt">RESPONSE 200</div><pre>{
+  <span class="k">"share_key"</span>: <span class="s">"k_2c81ff409a7b3d62"</span>,
+  <span class="k">"scope"</span>:     <span class="s">"campus"</span>,
+  <span class="k">"blocked"</span>:   <span class="b">false</span>
+}</pre></div>
+      </div>
+      <div class="hint warn">
+        <b>承認なしの帰結。</b> keyを持っている人は、相手の同意なく一方的につながれる。
+        LINEで配る以上そういうものとして扱うが、<b>裏を返すとblockが唯一の対抗手段</b>になるので、
+        blockはv1に必須。存在しないkeyを指定したときも 200 を返す（→ 06）。
+      </div>
+    </div>
+
+    <div class="ep">
+      <div class="ep-head">
+        <span class="verb patch">PATCH</span><span class="path">/api/v1/connections/{share_key}</span>
+        <span class="who sec">secret</span>
+      </div>
+      <p class="desc">粒度の変更とブロック。無向なので、どちらから変えても両方に効く。</p>
+      <div class="io">
+        <div class="box"><div class="bt">REQUEST</div><pre>{
+  <span class="k">"scope"</span>:   <span class="s">"building"</span>,  <span class="cm">// 任意</span>
+  <span class="k">"blocked"</span>: <span class="b">true</span>         <span class="cm">// 任意</span>
+}</pre></div>
+        <div class="box"><div class="bt">RESPONSE 200</div><pre>{
+  <span class="k">"share_key"</span>: <span class="s">"k_2c81ff409a7b3d62"</span>,
+  <span class="k">"scope"</span>:     <span class="s">"building"</span>,
+  <span class="k">"blocked"</span>:   <span class="b">true</span>
+}</pre></div>
+      </div>
+      <div class="hint">
+        <b>blockは削除と同じ扱い。</b> 行は残すが、以降どちらからも相手が見えなくなる。
+        解除できる形にしておくと、PoCの検証がしやすい。
+      </div>
+    </div>
+
+    <div class="ep">
+      <div class="ep-head">
+        <span class="verb post">POST</span><span class="path">/api/v1/presence</span>
+        <span class="who sec">secret</span>
+      </div>
+      <p class="desc">在校の問い合わせ。フレンド一覧を開いたとき、あるいはボタンを押したときに、全員分を1往復で聞く。</p>
+      <div class="io">
+        <div class="box"><div class="bt">REQUEST</div><pre>{
+  <span class="k">"share_keys"</span>: [
+    <span class="s">"k_2c81ff409a7b3d62"</span>,
+    <span class="s">"k_55e0a1b7cc94f302"</span>
+  ]
+}</pre></div>
+        <div class="box"><div class="bt">RESPONSE 200</div><pre>{
+  <span class="k">"results"</span>: [
+    { <span class="k">"share_key"</span>: <span class="s">"k_2c81..."</span>, <span class="k">"present"</span>: <span class="b">true</span>,
+      <span class="k">"building"</span>: <span class="s">"ι館"</span> },
+    { <span class="k">"share_key"</span>: <span class="s">"k_55e0..."</span>, <span class="k">"present"</span>: <span class="b">false</span> }
+  ],
+  <span class="k">"as_of"</span>: <span class="s">"2026-09-15T12:05:00+09:00"</span>
+}</pre></div>
+      </div>
+      <div class="hint">
+        <b>バックエンドの処理順。</b>
+        ① secret から自分を引く →
+        ② share_key から相手を引く →
+        ③ <code>connections</code> を見て scope と blocked を判定 →
+        ④ 通ったものだけMACに変換して DTC API へ →
+        ⑤ 返ってきた結果を scope に従って削って返す。<br />
+        <b>scope が <code>campus</code> なら <code>building</code> を落としてから返す。</b>
+        フロント側で隠す実装にはしない。APIが建物を返す時点で、アプリを通さず見られてしまうため。
+      </div>
+    </div>
+
+    <div class="ep">
+      <div class="ep-head">
+        <span class="verb get">GET</span><span class="path">/api/v1/me</span>
+        <span class="who sec">secret</span>
+      </div>
+      <p class="desc">自分の <code>share_key</code> とフレンド一覧の取得。再インストール時の復元と、QR表示に使う。</p>
+      <div class="io single">
+        <div class="box"><div class="bt">RESPONSE 200</div><pre>{
+  <span class="k">"share_key"</span>: <span class="s">"k_7f3a9c21e84b06d5"</span>,
+  <span class="k">"connections"</span>: [
+    { <span class="k">"share_key"</span>: <span class="s">"k_2c81..."</span>, <span class="k">"scope"</span>: <span class="s">"building"</span>, <span class="k">"blocked"</span>: <span class="b">false</span> },
+    { <span class="k">"share_key"</span>: <span class="s">"k_55e0..."</span>, <span class="k">"scope"</span>: <span class="s">"campus"</span>,   <span class="k">"blocked"</span>: <span class="b">true</span>  }
+  ]
+}</pre></div>
+      </div>
+      <div class="hint">
+        表示名はバックエンドが持たないので、ここには返らない。フロントが端末内の対応表と突き合わせる。
+        <b>secret を失うと復元できない</b>が、同じMACで再登録すれば同じ値が返るので実質復帰できる。
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- 05 -->
+<section>
+  <h2><span class="n">05</span>流れ</h2>
+  <p class="note">
+    赤い破線が<b>MACの壁</b>。ここは端末とサーバーの境界でもある。
+    壁を越えるのは登録のとき（A-2）だけで、以降フロント側にMACは出てこない。
+  </p>
+
+  <div class="flow">
+    <h3>A. 登録 — MACがフロントを通る唯一の瞬間</h3>
+    <div class="sub">フォームに自分のMACを入力する。検証はしない（→ 07）</div>
+    <div class="seq">
+      <div class="guides"><i class="g1"></i><i class="g2"></i><i class="g3"></i><i class="g4"></i></div>
+      <div class="macwall"><b>MACの壁</b></div>
+      <div class="lane me">自分のフロント</div>
+      <div class="lane fr">フレンドのフロント</div>
+      <div class="lane be">アプリBE</div>
+      <div class="lane api">DTC API</div>
+
+      <div class="msg own c1 r1"><span class="no">1</span><span class="txt">設定アプリで自分のWi‑Fiアドレスを確認してコピー</span></div>
+      <div class="msg mac c1_3 r2"><span class="no">2</span><span class="txt">フォームで送信</span><span class="mtag">MAC</span><span class="dir">▶</span></div>
+      <div class="msg mac c3 r3"><span class="no">3</span><span class="txt">正規化して persons に保存</span><span class="mtag">MAC</span></div>
+      <div class="msg own c1_3 r4"><span class="dir">◀</span><span class="no">4</span><span class="txt">share_key と secret を返す（MACは返さない）</span></div>
+      <div class="msg own c1 r5"><span class="no">5</span><span class="txt">secret を localStorage に保存。以降MACは使わない</span></div>
+      <div class="msg idle c2 r6"><span class="txt">フレンドは関与しない</span></div>
+      <div class="msg idle c4 r6"><span class="txt">DTC APIも関与しない</span></div>
+    </div>
+  </div>
+
+  <div class="flow">
+    <h3>B. つながる — LINEで share_key を配る</h3>
+    <div class="sub">全員に同じ値を配る。相手ごとの出し分けは connections 側で行うので、配る値は1つでいい</div>
+    <div class="seq">
+      <div class="guides"><i class="g1"></i><i class="g2"></i><i class="g3"></i><i class="g4"></i></div>
+      <div class="macwall"><b>MACの壁</b></div>
+      <div class="lane me">自分のフロント</div>
+      <div class="lane fr">フレンドのフロント</div>
+      <div class="lane be">アプリBE</div>
+      <div class="lane api">DTC API</div>
+
+      <div class="msg pub c1_2 r1"><span class="no">1</span><span class="txt">cokoyo1:k_7f3a...:りょうま を LINE / QR で渡す</span><span class="ptag">share_key</span><span class="dir">▶</span></div>
+      <div class="msg pub c2 r2"><span class="no">2</span><span class="txt">名前を端末内に保存</span></div>
+      <div class="msg pub c2_3 r3"><span class="no">3</span><span class="txt">POST /connections（自分の secret で認証）</span><span class="ptag">share_key</span><span class="dir">▶</span></div>
+      <div class="msg bedo c3 r4"><span class="no">4</span><span class="txt">id の大小で正規化して1行作る。scope は campus</span></div>
+      <div class="msg pub c2_3 r5"><span class="dir">◀</span><span class="no">5</span><span class="txt">成立。承認待ちの状態は作らない</span></div>
+      <div class="msg idle c4 r6"><span class="txt">DTC APIは関与しない</span></div>
+    </div>
+  </div>
+
+  <div class="flow">
+    <h3>C. 在校を聞く — scope と block が効く場所</h3>
+    <div class="sub">この判定を通らないとMACに変換されない。バックエンドを置いた理由がここ</div>
+    <div class="seq">
+      <div class="guides"><i class="g1"></i><i class="g2"></i><i class="g3"></i><i class="g4"></i></div>
+      <div class="macwall"><b>MACの壁</b></div>
+      <div class="lane me">自分のフロント</div>
+      <div class="lane fr">フレンドのフロント</div>
+      <div class="lane be">アプリBE</div>
+      <div class="lane api">DTC API</div>
+
+      <div class="msg own c1_3 r1"><span class="no">1</span><span class="txt">「今いる？」を押す → POST /presence（secret + share_keys）</span><span class="dir">▶</span></div>
+      <div class="msg bedo c3 r2"><span class="no">2</span><span class="txt">secret → 自分。share_key → 相手。connections を引く</span></div>
+      <div class="msg stop c3 r3"><span class="no">3</span><span class="txt">blocked / つながっていない / 存在しない key → ここで打ち切り</span></div>
+      <div class="msg mac c3_4 r4"><span class="no">4</span><span class="txt">通ったものだけ MAC に変換して問い合わせ</span><span class="mtag">MAC</span><span class="dir">▶</span></div>
+      <div class="msg mac c3_4 r5"><span class="dir">◀</span><span class="no">5</span><span class="txt">在校と建物が返る</span><span class="mtag">MAC</span></div>
+      <div class="msg bedo c3 r6"><span class="no">6</span><span class="txt">scope=campus なら building を落とす。打ち切り分は present:false を合成</span></div>
+      <div class="msg own c1_3 r7"><span class="dir">◀</span><span class="no">7</span><span class="txt">share_key をキーにした結果を返す</span></div>
+      <div class="msg idle c2 r8"><span class="txt">相手の端末は関与しない（アプリを開いていなくてよい）</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 06 -->
+<section>
+  <h2><span class="n">06</span>見せない情報の設計</h2>
+  <p class="note">
+    <b><code>false</code> は1種類だけにする。</b>
+    実装コストはほぼゼロで、後から直すのは面倒な種類のもの。PoCでも最初から入れる。
+  </p>
+  <table class="t">
+    <tr><th style="width:38%">状況</th><th>返すもの</th></tr>
+    <tr><td class="h">本当にキャンパスにいない</td><td class="mono">{ "present": false }</td></tr>
+    <tr><td class="h">ブロックされている</td><td class="mono">{ "present": false }</td></tr>
+    <tr><td class="h">つながっていない share_key</td><td class="mono">{ "present": false }</td></tr>
+    <tr><td class="h">存在しない share_key</td><td class="mono">{ "present": false }</td></tr>
+    <tr><td class="h">DTC API が落ちている</td><td class="mono">5xx（ここだけは正直に返す）</td></tr>
+  </table>
+  <div class="hint warn" style="margin-top:12px">
+    <b>応答時間も揃える。</b> ブロックされた相手だけ DTC API を叩かず即座に返ると、
+    速さの差でブロックされたことが伝わる。打ち切り分もリクエスト全体の完了を待ってから返す。<br />
+    <b>404 を使わない。</b> 存在しない key に 404 を返すと、そのkeyが実在するかどうかを総当たりで調べられる。
+    <code>POST /connections</code> も同様に、存在しないkeyでも 200 を返して行だけ作らない。<br />
+    <b>as_of は5分に丸める。</b> 秒精度で building が返ると、連続して呼ぶだけで移動の軌跡が再構成できる。
+    「今どこにいるか」と「どう動いたか」は別物なので、後者は渡さない。
+  </div>
+</section>
+
+<!-- 07 -->
+<section>
+  <h2><span class="n">07</span>PoCで意図的に捨てるもの</h2>
+  <p class="note">
+    どれも「気づいていない」のではなく「この版では対処しない」と決めたもの。本番化の前に必ず戻ってくる。
+  </p>
+  <div class="dec">
+    <div class="dcard">
+      <h3>登録の検証がない</h3>
+      <p>
+        MACが手入力なので、<b>他人のMACを自分として登録できる</b>。
+        その人の在校が、登録した人の名前でフレンドに公開される。
+        UNIQUE制約で二重登録は防げるが、早い者勝ちで先に取られる形は防げない。
+      </p>
+    </div>
+    <div class="dcard">
+      <h3>MACのローテーションに対応しない</h3>
+      <p>
+        MACが変わると、その人は全フレンドから永久に「いない」に見える。
+        <b>かくれんぼと区別がつかない。</b>
+        v1は「変わったら再登録してください」で済ませる。
+        key は変わらないので、<b>フレンドへの再配布は発生しない</b>のが救い。
+      </p>
+    </div>
+    <div class="dcard">
+      <h3>承認フローがない</h3>
+      <p>
+        key を持っていれば一方的につながれる。
+        LINEで配る前提なのでそういうものだが、<b>block が唯一の対抗手段</b>になる。
+      </p>
+    </div>
+    <div class="dcard">
+      <h3>かくれんぼは保留</h3>
+      <p>
+        本人フラグ1つで実装できるが、v1には入れない。
+        <code>scope</code> に <code>none</code> を足せば後付けできる形にしておく。
+        なお意味は変わっていて、MACを知るのがBEだけになった今、
+        <b>「フレンドに対して隠れる」</b>であって、直接アクセス対策ではない。
+      </p>
+    </div>
+    <div class="dcard">
+      <h3>ポイントは入れない</h3>
+      <p>
+        在校が見えることの確認が目的。
+        ポイントは端末内計算で後から足せる。
+      </p>
+    </div>
+    <div class="dcard">
+      <h3>キャッシュを入れない</h3>
+      <p>
+        フレンド一覧を開くたびに聞きに行く。
+        人数が少ないPoCでは問題にならない。
+        レート制限が見えてきたら <code>as_of</code> の粒度に合わせて5分キャッシュを入れる。
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- 08 -->
+<section>
+  <h2><span class="n">08</span>本番化のときの宿題</h2>
+  <p class="note">
+    PoC（DTC APIのモック相手）では問題にならないが、実データに繋ぐ段階で必ず問われる。
+  </p>
+  <ol class="q">
+    <li>
+      <b>DTC API から見た信頼の形が変わっている。</b>
+      以前の案は「学生本人が自分のトークンで叩く」だったが、この構成では
+      <b>バックエンドが単一のクレデンシャルで、原理的に全学のMACを照会できる</b>。
+      誰が聞いたかはCNS側から見えず、レート制限もサーバー単位でしか掛けられない。
+      「なぜ学外サーバーに全件照会権限を渡すのか」への答えを用意しておく。
+      緩和策としては、本人のCNSトークンを添えて中継し、権限は本人由来のままにする形が考えられる。
+    </li>
+    <li>
+      <b>MAC ↔ 人 の対応表を自分たちで持つことの扱い。</b>
+      運用者・ホスティング先・保持期間・漏洩時の影響範囲を決める。
+      READMEの「アプリ側のサーバーは持たず」の書き換えとセット。
+    </li>
+    <li>
+      <b>DTC API の契約の確定。</b>
+      入力は単体かバッチか。建物まで返るか。レート制限と <code>as_of</code> の粒度。
+      ここが決まるとキャッシュ方針も決まる。
+    </li>
+    <li>
+      <b>登録の検証。</b> 最低限「入力されたMACが今キャンパスに在圏しているか」をDTCに確認する。
+      完全には防げないので、登録・変更の履歴を残すこととセットで。
+    </li>
+    <li>
+      <b>アカウント方式への乗り換え余地。</b>
+      DTCが「このアカウントは今いるか」に答えられるなら、MACも登録も検証もローテーションも丸ごと不要になる。
+      <code>cns</code> は 802.1X なので、Aruba のクライアント情報に username 列が含まれていないかを確認する価値がある。
+      新規のデータ連携ではなく、<b>既存データに列があるかの確認</b>として聞くのが軽い。
+    </li>
+  </ol>
+</section>
+
+<footer>COKOYO v1 PoC仕様 · 3層構成・MAC手入力・key方式 · パス名とフィールド名は例 · 2026-09-15</footer>
+
+</div>
+</body>
+</html>

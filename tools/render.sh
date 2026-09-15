@@ -40,5 +40,7 @@ PY
 rm -f share/*.png
 render docs/architecture.html architecture arch
 render docs/api-draft.html api-draft api
+render docs/mac-v1.html mac-v1 macv1
+render docs/v1-poc.html v1-poc v1poc
 
 ls -la share/

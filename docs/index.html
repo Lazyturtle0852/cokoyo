@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>COKOYO — 設計ドキュメント</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+<style>
+  :root { --ink:#16211d; --muted:#55655e; --faint:#8b9a93; --line:#ccd8d2; --paper:#f4f7f5; --card:#fff; --me:#0d6f5e; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink);
+         font-family:"IBM Plex Sans JP",system-ui,sans-serif; line-height:1.7; }
+  .wrap { max-width:760px; margin:0 auto; padding:64px 24px 96px; }
+  h1 { font-family:Syne,system-ui,sans-serif; font-weight:800; font-size:44px; letter-spacing:.02em; margin:0 0 8px; }
+  .lead { color:var(--muted); margin:0 0 40px; }
+  .lead strong { color:var(--ink); }
+  h2 { font-size:15px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint);
+       font-weight:600; margin:40px 0 16px; }
+  a.card { display:block; background:var(--card); border:1px solid var(--line); border-radius:12px;
+           padding:20px 22px; margin-bottom:12px; text-decoration:none; color:inherit; }
+  a.card:hover { border-color:var(--me); }
+  a.card .t { font-weight:700; font-size:18px; margin-bottom:4px; }
+  a.card .t .tag { font-size:11px; font-weight:600; letter-spacing:.08em; color:var(--me);
+                   border:1px solid var(--me); border-radius:999px; padding:2px 8px; margin-left:8px;
+                   vertical-align:2px; }
+  a.card .d { color:var(--muted); font-size:14px; }
+  footer { margin-top:48px; color:var(--faint); font-size:13px; }
+  footer a { color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>COKOYO</h1>
+  <p class="lead">フレンドが今キャンパスにいるかを知れるアプリの設計ドキュメント。<br />
+  <strong>アプリ側のサーバーは持たず、スマホアプリと大学側のAPIだけで動く。</strong></p>
+
+  <h2>v1</h2>
+  <a class="card" href="v1-poc.html">
+    <div class="t">v1 PoC仕様<span class="tag">最新</span></div>
+    <div class="d">3層構成・MAC手入力・key方式（5エンドポイント）</div>
+  </a>
+  <a class="card" href="mac-v1.html">
+    <div class="t">v1仕様</div>
+    <div class="d">CNS限定・MAC方式・通行証なし（4エンドポイント）</div>
+  </a>
+
+  <h2>全体設計</h2>
+  <a class="card" href="architecture.html">
+    <div class="t">アーキテクチャ</div>
+    <div class="d">層構成、MACの到達範囲、通行証とMACの関係、シーケンス図5本</div>
+  </a>
+  <a class="card" href="api-draft.html">
+    <div class="t">APIたたき台</div>
+    <div class="d">大学側にお願いするAPI（8エンドポイント・通行証方式）</div>
+  </a>
+
+  <footer>仮名なので変更可。 · <a href="https://github.com/Lazyturtle0852/cokoyo">GitHub</a></footer>
+</div>
+</body>
+</html>
