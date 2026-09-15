@@ -1,0 +1,32 @@
+# main に push されたら VPS の update.sh を叩く。
+# ビルドはサーバ側（update.sh の中の docker run）でやるので、ここでは繋いで実行するだけ。
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:   # 手動でも流せるようにしておく
+
+# 連続 push で update.sh が重ならないようにする
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: SSH の鍵と known_hosts を用意する
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: 本番を更新する
+        run: |
+          ssh -o BatchMode=yes \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            'bash /opt/cokoyo/deploy/update.sh'
