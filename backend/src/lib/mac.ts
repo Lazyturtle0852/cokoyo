@@ -18,3 +18,13 @@ export function normalizeMac(input: string): string | null {
 export function toColonMac(normalized: string): string {
   return (normalized.match(/.{2}/g) ?? []).join(":");
 }
+
+/**
+ * 表示用。MACそのものはアプリにも返さない。
+ * 先頭2オクテットと末尾1オクテットだけ見せて、登録し直しのときに
+ * 「今どれが入っているか」を本人が見分けられるようにする。
+ */
+export function maskMac(normalized: string): string {
+  const o = normalized.match(/.{2}/g) ?? [];
+  return [o[0], o[1], "••", "••", "••", o[5]].join(":");
+}

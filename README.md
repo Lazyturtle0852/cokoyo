@@ -60,21 +60,21 @@ tools/render.sh
 | ディレクトリ | 中身 |
 |---|---|
 | `docs/` | 設計・仕様（HTML） |
-| `shared/api-types.ts` | フロント／バックが共有する API の型 |
-| `backend/` | Hono + SQLite。scope と block を判定して DTC API を叩く（詳細は `backend/README.md`） |
-| `frontend/` | **仮**。動作確認用。同僚のビルド成果物に差し替える |
-| `deploy/` | Caddyfile と docker-compose |
+| `shared/app-types.ts` | アプリ⇄バックエンドの契約（型） |
+| `backend/` | Hono + SQLite。ブロック・かくれんぼ・ベスト・ポイントの判定とDTCへの問い合わせ |
+| `frontend-v2/` | React + Vite のアプリ画面 |
+| `deploy/` | Apache の vhost、docker-compose、更新スクリプト |
 | `tools/` | 共有用PNGの書き出し |
 
-本番は `cokoyo.lazyta-toru.net` の1オリジンで、手前のリバースプロキシが振り分ける。
-既存の Apache が他のサイトを配信しているので、そこに vhost を1枚足す形
-（`deploy/apache/`）。80/443 が空いているホスト向けに Caddy 版も置いてある。
+本番は `cokoyo.lazyta-toru.net` の1オリジン。既存の Apache が他のサイトを配信しているので、
+そこに vhost を1枚足している（`deploy/apache/`）。
 
 | パス | 行き先 |
 |---|---|
-| `/api/*` | バックエンド |
-| `/documents/*` | `docs/`（GitHub Pages からの引っ越し先） |
-| `/*` | フロント |
+| `/` | アプリ（**実データ**） |
+| `/test/` | 同じ画面を、模擬バックエンドで動かしたもの（偽のデータ） |
+| `/api/v1/*` | バックエンド |
+| `/documents/` | 設計ドキュメント |
 
 フロントとAPIが同一オリジンなので **CORS は不要**。開発時は Vite の dev proxy が同じ役割を果たす。
 
@@ -83,19 +83,24 @@ tools/render.sh
 server: { proxy: { "/api": { target: "https://cokoyo.lazyta-toru.net", changeOrigin: true } } }
 ```
 
+## 更新
+
+```sh
+ssh root@160.251.210.209 'bash /opt/cokoyo/deploy/update.sh'
+```
+
 ## 状態
 
-- **v1 PoC のバックエンドは実装済み**（5エンドポイント・テスト19件）。**実データで往復確認済み**
-- DTC API (`api.dtc.wide.ad.jp`) の `/wifi/*` は有効。既知のMACは建物まで返る
-- ただし**観測が無いMACは 404 ではなく恒久的に 503** を返す。`present:false` + `degraded` で吸収しているが、
-  sfc-icar に報告したほうがよい挙動（詳細は `backend/README.md`）
-- フロントは同僚が React + Vite で製作中。`frontend/` は差し替え前提の仮実装
-- 通行証方式（1人1本のkey）は v2。バックエンドを置いたことで、v1 でも scope と block は相手ごとに効く
+- **アプリ・バックエンドとも実データで動作**。登録・在校確認・ポイント・フレンド・ベスト・ブロック・かくれんぼ
+- DTC API (`api.dtc.wide.ad.jp`) の `/wifi/*` と `/weather` を使用
+- 観測が無いMACが 404 ではなく恒久的に 503 を返す挙動があり、こちらで吸収している。
+  **sfc-icar に報告したほうがよい**（詳細は `backend/README.md`）
 
-## 大学と決めたい点
+## 決まっていないこと
 
-1. **観測が無いMACに 503 が返る件。** 404 を返すか、古い未パースのスナップショットを埋めてもらえれば、
-   `degraded` で吸収している経路が丸ごと不要になる（詳細は `backend/README.md`）
-2. **アカウント方式の可否。** DTC のデータ源は SNMP ポーリングなのでアカウントは取れない。
-   RADIUS を繋いでもらう話になるため重い。取れれば MAC の登録・検証・ローテーション対応が丸ごと不要になる
-3. **鮮度とレート制限。** `as_of` の粒度と、問い合わせ上限
+1. **アプリを消して入れ直したとき。** ログインが無いので端末トークンが消え、同じMACでは
+   `409 mac_taken` になる。復元用コードなどの引き継ぎ方法を決める必要がある
+2. **他人のMACで登録できてしまう。** 手入力なので防げない。当面は仲間内の試用に限る
+3. **大学側APIの利用キー。** 誰でもDTCを叩けると、MACを知っている人がブロックやかくれんぼを
+   迂回できる。バックエンドだけが使える形にしてもらいたい
+4. **鮮度とレート制限。** 何分前の接続まで「いる」とみなすか。連打の制限を入れるか

@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true, "rootDir": "..", "types": [] },
+  "include": ["test/contract.test-d.ts", "../shared/**/*.ts", "../frontend-v2/src/api/types.ts"]
+}

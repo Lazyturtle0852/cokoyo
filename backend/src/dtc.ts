@@ -1,4 +1,4 @@
-import type { BuildingKey } from "../../shared/api-types.js";
+import type { BuildingKey } from "../../shared/app-types.js";
 import { config } from "./config.js";
 import { toColonMac } from "./lib/mac.js";
 import { sleep } from "./lib/time.js";
@@ -15,9 +15,11 @@ export interface DtcClient {
    * 最新の観測を1件だけ引く。
    *
    * 履歴は絶対に取りに行かない。DTC は時間範囲を渡すと最大7日分を返すうえ認証が無いので、
-   * これを中継すると移動の軌跡がそのまま漏れる（仕様06）。
+   * これを中継すると移動の軌跡がそのまま漏れる。
    */
   latest(mac: string): Promise<Lookup>;
+  /** 雨の日ボーナスの判定に使う。取れなければ null。 */
+  weather(): Promise<string | null>;
 }
 
 /** 503 は取り込み中を意味する。落ちているわけではないので少しだけ粘る。 */
@@ -68,6 +70,17 @@ export class RealDtcClient implements DtcClient {
       return { status: "present", buildingKey: latest.buildingKey };
     }
   }
+
+  async weather(): Promise<string | null> {
+    try {
+      const res = await fetch(`${this.baseUrl}/weather`, { headers: { accept: "application/json" } });
+      if (!res.ok) return null;
+      const body = (await res.json()) as { weather?: { condition?: string } };
+      return body.weather?.condition ?? null;
+    } catch {
+      return null;
+    }
+  }
 }
 
 const MOCK_BUILDINGS: BuildingKey[] = ["iota", "tau", "omega", "epsilon", "delta", "lambda"];
@@ -88,6 +101,10 @@ export class MockDtcClient implements DtcClient {
 
     if (hash % 10 < 3) return { status: "absent" };
     return { status: "present", buildingKey: MOCK_BUILDINGS[hash % MOCK_BUILDINGS.length] };
+  }
+
+  async weather(): Promise<string | null> {
+    return "cloudy";
   }
 }
 

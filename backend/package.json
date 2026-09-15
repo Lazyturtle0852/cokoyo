@@ -3,13 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=24" },
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/backend/src/index.js",
-    "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "test": "vitest run && tsc -p tsconfig.contract.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.contract.json"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",

@@ -1,13 +1,20 @@
-const FIVE_MIN_MS = 5 * 60 * 1000;
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
-/**
- * 仕様06。秒精度で建物が返ると、連続して呼ぶだけで移動の軌跡が再構成できる。
- * 「今どこにいるか」だけを渡し、「どう動いたか」は渡さない。
- */
-export function roundToFiveMinutes(date: Date): string {
-  return new Date(Math.floor(date.getTime() / FIVE_MIN_MS) * FIVE_MIN_MS).toISOString();
+/** ポイントの「今日」は日本時間で区切る。 */
+export function jstDate(at: Date = new Date()): string {
+  return new Date(at.getTime() + JST_OFFSET_MS).toISOString().slice(0, 10);
 }
 
-export function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/** YYYY-MM-DD を日本時間の日付として足し引きする。 */
+export function shiftDate(date: string, days: number): string {
+  const base = new Date(`${date}T00:00:00Z`).getTime();
+  return new Date(base + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
+
+/** 土日か。連続来校は平日だけ数え、土日では途切れない。 */
+export function isWeekend(date: string): boolean {
+  const day = new Date(`${date}T00:00:00Z`).getUTCDay();
+  return day === 0 || day === 6;
+}
+
+export const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));

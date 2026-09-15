@@ -11,15 +11,16 @@ import { createRoutes } from "./routes.js";
 export function createApp(repo: Repo, dtc: DtcClient) {
   const app = new Hono();
 
-  app.route("/api/v1", createRoutes(repo, dtc));
+  // フロントは apiBaseUrl("/api") + "/v1/..." で叩く。
+  app.route("/api", createRoutes(repo, dtc));
 
-  app.notFound((c) => errorResponse(c, "VALIDATION_ERROR", "Not found"));
+  app.notFound((c) => errorResponse(c, 404, "not_found", "見つかりません"));
 
   app.onError((err, c) => {
-    if (err instanceof ApiFailure) return errorResponse(c, err.type, err.message);
+    if (err instanceof ApiFailure) return errorResponse(c, err.status, err.code, err.message);
     // MACを含みうるので詳細はログに出さない。
     console.error("unhandled error:", err instanceof Error ? err.name : "unknown");
-    return errorResponse(c, "SERVER_ERROR", "Internal server error");
+    return errorResponse(c, 500, "server_error", "サーバー側で問題が起きました");
   });
 
   return app;
