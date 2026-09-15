@@ -18,10 +18,21 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: SSH の鍵と known_hosts を用意する
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          # 秘密鍵は改行位置まで含めて意味があるので、base64 で1行にして渡す。
+          # 生のまま貼られた場合（BEGIN 行がある）も受け付ける。
+          if printf '%s' "$KEY" | grep -q 'BEGIN'; then
+            printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          else
+            printf '%s' "$KEY" | tr -d ' \n' | base64 -d > ~/.ssh/id_ed25519
+          fi
           chmod 600 ~/.ssh/id_ed25519
+          # 壊れていたら SSH まで行かず、ここで理由が分かる形で落とす
+          ssh-keygen -y -f ~/.ssh/id_ed25519 > /dev/null \
+            || { echo "DEPLOY_SSH_KEY が鍵として読めない。base64 で入れ直す"; exit 1; }
           printf '%s\n' "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
