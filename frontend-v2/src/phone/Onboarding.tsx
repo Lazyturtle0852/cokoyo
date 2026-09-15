@@ -6,7 +6,7 @@ import { api, callLog, device, type ApiError } from '../api/client';
 import { useMockBackend } from '../config';
 import { Icon } from './ui';
 
-type Step = 'welcome' | 'name' | 'mac' | 'done';
+type Step = 'welcome' | 'name' | 'mac' | 'restore' | 'done';
 type Os = 'ios' | 'android';
 
 const IOS_STEPS: ReactNode[] = [
@@ -38,8 +38,12 @@ export function Onboarding() {
   const [os, setOs] = useState<Os>('ios');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // 登録しようとしたMACがすでに使われていたとき、引き継ぎに進めるようにする
+  const [taken, setTaken] = useState(false);
 
-  const go = (s: Step) => { setError(''); setStep(s); };
+  const restoring = step === 'restore';
+
+  const go = (s: Step) => { setError(''); setTaken(false); setStep(s); };
   const Back = ({ onClick, label }: { onClick: () => void; label: string }) => (
     <button className="ob-back" onClick={onClick}><Icon.Back />{label}</button>
   );
@@ -55,6 +59,23 @@ export function Onboarding() {
     setError('');
   };
 
+  // 登録済みのMACを、この端末に引き継ぐ
+  const restore = async (value: string) => {
+    setBusy(true); setError(''); setTaken(false);
+    callLog.begin('この端末に引き継ぐ');
+    try {
+      const r = await api.restore(value);
+      device.set(r.deviceToken);
+      await completeRegistration();
+      showToast('この端末に引き継ぎました');
+      finishOnboarding('home');
+    } catch (e) {
+      setError((e as ApiError).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const submit = async () => {
     const m = normalizeMac(mac);
     if (!validMac(m)) {
@@ -62,7 +83,9 @@ export function Onboarding() {
       return;
     }
     if (m === '02:00:00:00:00:00') { setError('この値はスマホが隠しているときの仮の値です。設定アプリの値を写してください'); return; }
-    setBusy(true); setError('');
+    if (restoring) { await restore(m); return; }
+
+    setBusy(true); setError(''); setTaken(false);
     callLog.begin(reRegister ? 'MACアドレスを登録し直す' : 'はじめての登録');
     try {
       if (reRegister) {
@@ -77,7 +100,10 @@ export function Onboarding() {
         setStep('done');
       }
     } catch (e) {
-      setError((e as ApiError).message);
+      const err = e as ApiError;
+      setError(err.message);
+      // すでに使われているMACなら、行き止まりにせず引き継ぎを出す
+      if (err.code === 'mac_taken') setTaken(true);
     } finally {
       setBusy(false);
     }
@@ -97,6 +123,7 @@ export function Onboarding() {
           <li><span className="ob-ico hide"><Icon.Hide /></span><span><b>いつでも隠れられます</b>かくれんぼ中は、フレンド全員から「いません」に見えます</span></li>
         </ul>
         <button className="btn btn-primary" onClick={() => go('name')}>はじめる</button>
+        <button className="btn btn-quiet" onClick={() => go('restore')}>登録ずみの方はこちら</button>
       </div>
     );
   }
@@ -116,14 +143,22 @@ export function Onboarding() {
     );
   }
 
-  if (step === 'mac') {
+  if (step === 'mac' || restoring) {
     const steps = os === 'ios' ? IOS_STEPS : ANDROID_STEPS;
     return (
       <div className="content ob">
-        {reRegister ? <Back onClick={cancelReregister} label="設定に戻る" /> : <Back onClick={() => go('name')} label="戻る" />}
-        {!reRegister && <p className="ob-step">2 / 2</p>}
-        <h2 className="ob-title">{reRegister ? 'MACアドレスを登録し直す' : 'キャンパスのWiFiのMACアドレスを登録'}</h2>
-        <p className="ob-lead">スマホの識別番号です。これで「キャンパスにいるか」を判定します。フレンドには見せません。</p>
+        {reRegister ? <Back onClick={cancelReregister} label="設定に戻る" />
+          : restoring ? <Back onClick={() => go('welcome')} label="戻る" />
+          : <Back onClick={() => go('name')} label="戻る" />}
+        {!reRegister && !restoring && <p className="ob-step">2 / 2</p>}
+        <h2 className="ob-title">
+          {restoring ? 'この端末に引き継ぐ' : reRegister ? 'MACアドレスを登録し直す' : 'キャンパスのWiFiのMACアドレスを登録'}
+        </h2>
+        <p className="ob-lead">
+          {restoring
+            ? '登録したときのMACアドレスを入れてください。名前・フレンド・ポイントはそのまま引き継がれます。'
+            : 'スマホの識別番号です。これで「キャンパスにいるか」を判定します。フレンドには見せません。'}
+        </p>
 
         <div className="seg" role="tablist" aria-label="スマホの種類">
           {(['ios', 'android'] as Os[]).map((o) => (
@@ -160,15 +195,25 @@ export function Onboarding() {
           <button className="mini-btn" onClick={() => void paste()}>貼り付け</button>
         </div>
         <p className="field-err" id="obMacErr" role="alert">{error}</p>
-        {useMockBackend && <button className="demo-link" onClick={fillSample}>（デモ）例のアドレスを入れる</button>}
+        {taken && (
+          <button className="btn btn-quiet" onClick={() => void restore(normalizeMac(mac))} disabled={busy}>
+            このMACアドレスをこの端末に引き継ぐ
+          </button>
+        )}
+        {useMockBackend && !restoring && <button className="demo-link" onClick={fillSample}>（デモ）例のアドレスを入れる</button>}
 
         <div className="notice">
           <p><b>キャンパスではWiFiをオンに。</b>モバイルデータだけだと検知できません。</p>
-          <p className="muted">本人確認の仕組みができるまでの暫定の登録方法です。</p>
+          <p className="muted">
+            {restoring
+              ? '前に使っていた端末は、引き継ぐとログアウトされます。'
+              : '本人確認の仕組みができるまでの暫定の登録方法です。'}
+          </p>
         </div>
 
         <button className="btn btn-primary" onClick={() => void submit()} disabled={busy}>
-          {busy ? '登録しています…' : reRegister ? '登録し直す' : '登録する'}
+          {busy ? (restoring ? '引き継いでいます…' : '登録しています…')
+            : restoring ? '引き継ぐ' : reRegister ? '登録し直す' : '登録する'}
         </button>
       </div>
     );

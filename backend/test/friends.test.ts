@@ -161,3 +161,35 @@ describe("認証", () => {
     expect((await h.call("/v1/me")).status).toBe(401);
   });
 });
+
+describe("登録済みのMACを引き継ぐ", () => {
+  it("新しい端末トークンが出て、前のものは使えなくなる", async () => {
+    const h = createHarness();
+    const alice = await h.signUp("ゆうき", MAC.alice);
+
+    const res = await h.call("/v1/sessions", {
+      method: "POST",
+      body: JSON.stringify({ mac: "A2-B4-1C-9E-77-03" }),
+    });
+    expect(res.status).toBe(200);
+
+    const restored = await h.json<{ userId: string; shareKey: string; deviceToken: string }>(res);
+    // 同じ人。shareKey も変わらないので、フレンドに配り直す必要がない
+    expect(restored.userId).toBe(alice.userId);
+    expect(restored.shareKey).toBe(alice.shareKey);
+    expect(restored.deviceToken).not.toBe(alice.deviceToken);
+
+    expect((await h.call("/v1/me", { token: restored.deviceToken })).status).toBe(200);
+    expect((await h.call("/v1/me", { token: alice.deviceToken })).status).toBe(401);
+  });
+
+  it("未登録のMACは404", async () => {
+    const h = createHarness();
+    const res = await h.call("/v1/sessions", {
+      method: "POST",
+      body: JSON.stringify({ mac: MAC.carol }),
+    });
+    expect(res.status).toBe(404);
+    expect((await h.json<{ error: { code: string } }>(res)).error.code).toBe("mac_not_registered");
+  });
+});

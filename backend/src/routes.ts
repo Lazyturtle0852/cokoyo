@@ -106,6 +106,30 @@ export function createRoutes(repo: Repo, dtc: DtcClient) {
     return c.json(response, 201);
   });
 
+  /**
+   * 登録済みのMACを、この端末に引き継ぐ。
+   *
+   * アプリを入れ直すと端末トークンが消え、同じMACでは mac_taken になって
+   * 二度と入れなくなるため、その退路。
+   *
+   * MACの持ち主であることは確かめられないが、それは登録そのものも同じで
+   * （手入力なので他人のMACでも登録できる）、ここだけ厳しくしても意味がない。
+   * 当面は仲間内の試用に限る、という前提を共有した上での割り切り。
+   */
+  app.post("/v1/sessions", async (c) => {
+    const mac = validMac((await c.req.json().catch(() => null))?.mac);
+
+    const user = repo.findByMac(mac);
+    if (!user) fail(404, "mac_not_registered", "このMACアドレスはまだ登録されていません");
+
+    // 前の端末は使えなくなる。乗っ取られたときに気づけるよう、黙って両方は生かさない。
+    const deviceToken = newDeviceToken();
+    repo.rotateToken(user.id, deviceToken);
+
+    const response: RegisterResponse = { ...toMe(user), deviceToken };
+    return c.json(response);
+  });
+
   app.get("/v1/me", (c) => c.json(toMe(requireUser(c, repo))));
 
   app.patch("/v1/me", async (c) => {

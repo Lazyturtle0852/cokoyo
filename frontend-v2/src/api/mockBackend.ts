@@ -203,6 +203,17 @@ function createUser(body: Body) {
   return ok({ ...meView(uid), deviceToken: db.users[uid].token }, 201);
 }
 
+// POST /v1/sessions — 登録済みのMACをこの端末に引き継ぐ
+function restoreSession(body: Body) {
+  const mac = normalizeMac(body.mac);
+  if (!validMac(mac)) return E(400, 'invalid_mac', 'MACアドレスの形が正しくありません（例：a2:3f:9c:1b:7e:44）');
+  const uid = Object.keys(db.users).find((id) => db.users[id].mac === mac);
+  if (!uid) return E(404, 'mac_not_registered', 'このMACアドレスはまだ登録されていません');
+  db.users[uid].token = rand('dt_', 20); // 前の端末は使えなくなる
+  save();
+  return ok({ ...meView(uid), deviceToken: db.users[uid].token });
+}
+
 // PATCH /v1/me — 表示名・かくれんぼ
 function updateMe(uid: string, body: Body) {
   const u = db.users[uid];
@@ -391,6 +402,7 @@ function userFromToken(headers: Record<string, string>) {
 
 function route(method: string, path: string, headers: Record<string, string>, body: Body): MockResult {
   if (method === 'POST' && path === '/v1/users') return createUser(body);
+  if (method === 'POST' && path === '/v1/sessions') return restoreSession(body);
 
   const uid = userFromToken(headers);
   if (!uid) return E(401, 'unauthorized', 'この端末は登録されていません。登録からやり直してください');

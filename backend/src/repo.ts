@@ -54,6 +54,7 @@ export function createRepo(db: Db) {
        VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
     ),
     updateProfile: db.prepare("UPDATE users SET display_name = ?, hidden = ? WHERE id = ?"),
+    updateToken: db.prepare("UPDATE users SET device_token_hash = ? WHERE id = ?"),
     updateMac: db.prepare("UPDATE users SET mac = ?, mac_registered_at = ? WHERE id = ?"),
 
     friendship: db.prepare(
@@ -129,6 +130,11 @@ export function createRepo(db: Db) {
 
     updateProfile(id: number, displayName: string, hidden: boolean): void {
       q.updateProfile.run(displayName, hidden ? 1 : 0, id);
+    },
+
+    /** 端末トークンを作り直す。前の端末はこれで使えなくなる。 */
+    rotateToken(id: number, deviceToken: string): void {
+      q.updateToken.run(hashToken(deviceToken), id);
     },
 
     updateMac(id: number, mac: string): void {

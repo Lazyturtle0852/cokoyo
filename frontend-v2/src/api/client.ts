@@ -103,6 +103,8 @@ const id = encodeURIComponent;
 export const api = {
   // 登録・自分
   register: (displayName: string, mac: string) => request<RegisterResponse>('POST', '/v1/users', { displayName, mac }),
+  // 登録済みのMACを、この端末に引き継ぐ（アプリを入れ直したとき）
+  restore: (mac: string) => request<RegisterResponse>('POST', '/v1/sessions', { mac }),
   getMe: () => request<Me>('GET', '/v1/me'),
   updateMe: (patch: { displayName?: string; hidden?: boolean }) => request<Me>('PATCH', '/v1/me', patch),
   updateMac: (mac: string) => request<Me>('PUT', '/v1/me/mac', { mac }),
