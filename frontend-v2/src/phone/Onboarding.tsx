@@ -7,24 +7,95 @@ import { useMockBackend } from '../config';
 import { Icon } from './ui';
 
 type Step = 'welcome' | 'name' | 'mac' | 'restore' | 'done';
-type Os = 'ios' | 'android';
+type Os = 'ios' | 'android' | 'mac' | 'windows';
 
-const IOS_STEPS: ReactNode[] = [
-  <>キャンパスのWiFi（keiomobile2 など）につなぐ</>,
-  <><b>設定</b>アプリを開き、<b>Wi-Fi</b>をタップ</>,
-  <>つながっているネットワーク名の右にある <b>ⓘ</b> をタップ</>,
-  <><b>プライベートWi-Fiアドレス</b>が「ローテーション」なら「<b>固定</b>」にする</>,
-  <><b>Wi-Fiアドレス</b>を長押しして<b>コピー</b></>,
-  <>このアプリに戻って、下の欄に貼り付ける</>,
-];
-const ANDROID_STEPS: ReactNode[] = [
-  <>キャンパスのWiFi（keiomobile2 など）につなぐ</>,
-  <><b>設定</b>アプリ →「<b>ネットワークとインターネット</b>」→「<b>インターネット</b>」（機種によっては「Wi-Fi」）</>,
-  <>つながっているネットワークの <b>歯車</b> をタップ</>,
-  <><b>プライバシー</b>は「ランダムMACを使用」のままでOK（このネットワークでは同じ値が使われます）</>,
-  <><b>詳細設定</b>を開き、<b>MACアドレス</b>の値を確認する</>,
-  <>このアプリに戻って、下の欄に入力する（コピーできない機種は手で入力）</>,
-];
+/**
+ * 端末ごとのMACアドレスの調べ方。
+ *
+ * スマホだけでなくパソコンからも登録できる。どの端末でも、要るのは
+ * 「キャンパスのWiFiにつないでいるアダプタのMACアドレス」1つ。
+ * どのOSも既定でネットワークごとにランダム化するので、その値が
+ * 変わり続ける設定になっていないかを先に確かめてもらう。
+ */
+const GUIDE: Record<Os, { label: string; steps: ReactNode[]; sample: ReactNode; note?: string }> = {
+  ios: {
+    label: 'iPhone',
+    steps: [
+      <>キャンパスのWiFi（keiomobile2 など）につなぐ</>,
+      <><b>設定</b>アプリを開き、<b>Wi-Fi</b>をタップ</>,
+      <>つながっているネットワーク名の右にある <b>ⓘ</b> をタップ</>,
+      <><b>プライベートWi-Fiアドレス</b>が「ローテーション」なら「<b>固定</b>」にする</>,
+      <><b>Wi-Fiアドレス</b>を長押しして<b>コピー</b></>,
+      <>このアプリに戻って、下の欄に貼り付ける</>,
+    ],
+    sample: (
+      <div className="sm">
+        <div className="sm-cap">設定 › Wi-Fi › keiomobile2 ⓘ</div>
+        <div className="sm-row"><span>プライベートWi-Fiアドレス</span><span className="sm-val">固定 ›</span></div>
+        <div className="sm-row hl"><span>Wi-Fiアドレス</span><span className="sm-val mono">A2:3F:9C:1B:7E:44</span></div>
+      </div>
+    ),
+  },
+  android: {
+    label: 'Android',
+    steps: [
+      <>キャンパスのWiFi（keiomobile2 など）につなぐ</>,
+      <><b>設定</b>アプリ →「<b>ネットワークとインターネット</b>」→「<b>インターネット</b>」（機種によっては「Wi-Fi」）</>,
+      <>つながっているネットワークの <b>歯車</b> をタップ</>,
+      <><b>プライバシー</b>は「ランダムMACを使用」のままでOK（このネットワークでは同じ値が使われます）</>,
+      <><b>詳細設定</b>を開き、<b>MACアドレス</b>の値を確認する</>,
+      <>このアプリに戻って、下の欄に入力する（コピーできない機種は手で入力）</>,
+    ],
+    sample: (
+      <div className="sm">
+        <div className="sm-cap">ネットワークの詳細 › 詳細設定</div>
+        <div className="sm-row"><span>プライバシー</span><span className="sm-val">ランダムMACを使用</span></div>
+        <div className="sm-row hl"><span>MACアドレス</span><span className="sm-val mono">a2:3f:9c:1b:7e:44</span></div>
+      </div>
+    ),
+    note: '機種によって項目の名前や場所が違います。',
+  },
+  mac: {
+    label: 'Mac',
+    steps: [
+      <>キャンパスのWiFi（keiomobile2 など）につなぐ（<b>有線LANではなくWiFi</b>）</>,
+      <>アップルメニュー  →「<b>システム設定</b>」→「<b>Wi-Fi</b>」</>,
+      <>つながっているネットワークの右の「<b>詳細…</b>」をクリック</>,
+      <><b>プライベートWi-Fiアドレス</b>が「ローテーション」なら「<b>固定</b>」にする</>,
+      <><b>Wi-Fiアドレス</b>の値をコピー</>,
+      <>このページに戻って、下の欄に貼り付ける</>,
+    ],
+    sample: (
+      <div className="sm">
+        <div className="sm-cap">システム設定 › Wi-Fi › keiomobile2 › 詳細…</div>
+        <div className="sm-row"><span>プライベートWi-Fiアドレス</span><span className="sm-val">固定 ›</span></div>
+        <div className="sm-row hl"><span>Wi-Fiアドレス</span><span className="sm-val mono">a2:3f:9c:1b:7e:44</span></div>
+      </div>
+    ),
+    note: 'macOS 13 以前は「システム環境設定」→「ネットワーク」→「Wi-Fi」→「詳細」→「ハードウェア」にあります。',
+  },
+  windows: {
+    label: 'Windows',
+    steps: [
+      <>キャンパスのWiFi（keiomobile2 など）につなぐ（<b>有線LANではなくWiFi</b>）</>,
+      <><b>設定</b>→「<b>ネットワークとインターネット</b>」→「<b>Wi-Fi</b>」</>,
+      <>つながっているネットワーク名（「<b>…のプロパティ</b>」）をクリック</>,
+      <><b>ランダムなハードウェアアドレス</b>が「毎日変更する」なら「<b>オン</b>」にする（値が固定されます）</>,
+      <>下のほうの「<b>物理アドレス (MAC)</b>」の値をコピー</>,
+      <>このページに戻って、下の欄に貼り付ける</>,
+    ],
+    sample: (
+      <div className="sm">
+        <div className="sm-cap">設定 › ネットワークとインターネット › Wi-Fi › keiomobile2 のプロパティ</div>
+        <div className="sm-row"><span>ランダムなハードウェアアドレス</span><span className="sm-val">オン</span></div>
+        <div className="sm-row hl"><span>物理アドレス (MAC)</span><span className="sm-val mono">A2-3F-9C-1B-7E-44</span></div>
+      </div>
+    ),
+    note: '「-」区切りのまま貼り付けても大丈夫です。',
+  },
+};
+
+const OS_LIST = Object.keys(GUIDE) as Os[];
 
 const normalizeMac = (s: string) => s.trim().toLowerCase().replace(/-/g, ':');
 const validMac = (s: string) => /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(s);
@@ -88,7 +159,7 @@ export function Onboarding() {
       setError(m ? '形が正しくありません。「a2:3f:9c:1b:7e:44」のように、2文字ずつ「:」で区切った12文字です' : 'MACアドレスを入力してください');
       return;
     }
-    if (m === '02:00:00:00:00:00') { setError('この値はスマホが隠しているときの仮の値です。設定アプリの値を写してください'); return; }
+    if (m === '02:00:00:00:00:00') { setError('この値は端末がMACアドレスを隠しているときの仮の値です。設定画面に出ている値を写してください'); return; }
     if (restoring) { await restore(m); return; }
 
     setBusy(true); setError(''); setTaken(false);
@@ -150,7 +221,7 @@ export function Onboarding() {
   }
 
   if (step === 'mac' || restoring) {
-    const steps = os === 'ios' ? IOS_STEPS : ANDROID_STEPS;
+    const guide = GUIDE[os];
     return (
       <div className="content ob">
         {reRegister ? <Back onClick={cancelReregister} label="設定に戻る" />
@@ -163,35 +234,21 @@ export function Onboarding() {
         <p className="ob-lead">
           {restoring
             ? '登録したときのMACアドレスを入れてください。名前・フレンド・ポイントはそのまま引き継がれます。'
-            : 'スマホの識別番号です。これで「キャンパスにいるか」を判定します。フレンドには見せません。'}
+            : 'WiFiにつなぐ機器ごとの識別番号です。これで「キャンパスにいるか」を判定します。フレンドには見せません。'}
         </p>
 
-        <div className="seg" role="tablist" aria-label="スマホの種類">
-          {(['ios', 'android'] as Os[]).map((o) => (
+        <div className="seg four" role="tablist" aria-label="端末の種類">
+          {OS_LIST.map((o) => (
             <button key={o} role="tab" className={os === o ? 'on' : ''} aria-selected={os === o} onClick={() => setOs(o)}>
-              {o === 'ios' ? 'iPhone' : 'Android'}
+              {GUIDE[o].label}
             </button>
           ))}
         </div>
 
-        <ol className="steps">{steps.map((s, i) => <li key={i}><span>{s}</span></li>)}</ol>
+        <ol className="steps">{guide.steps.map((s, i) => <li key={i}><span>{s}</span></li>)}</ol>
 
-        {os === 'ios' ? (
-          <div className="sm">
-            <div className="sm-cap">設定 › Wi-Fi › keiomobile2 ⓘ</div>
-            <div className="sm-row"><span>プライベートWi-Fiアドレス</span><span className="sm-val">固定 ›</span></div>
-            <div className="sm-row hl"><span>Wi-Fiアドレス</span><span className="sm-val mono">A2:3F:9C:1B:7E:44</span></div>
-          </div>
-        ) : (
-          <>
-            <div className="sm">
-              <div className="sm-cap">ネットワークの詳細 › 詳細設定</div>
-              <div className="sm-row"><span>プライバシー</span><span className="sm-val">ランダムMACを使用</span></div>
-              <div className="sm-row hl"><span>MACアドレス</span><span className="sm-val mono">a2:3f:9c:1b:7e:44</span></div>
-            </div>
-            <p className="row-note">機種によって項目の名前や場所が違います。</p>
-          </>
-        )}
+        {guide.sample}
+        {guide.note && <p className="row-note">{guide.note}</p>}
 
         <label className="field-label" htmlFor="obMac">MACアドレス</label>
         <div className="field-row">
@@ -209,7 +266,7 @@ export function Onboarding() {
         {useMockBackend && !restoring && <button className="demo-link" onClick={fillSample}>（デモ）例のアドレスを入れる</button>}
 
         <div className="notice">
-          <p><b>キャンパスではWiFiをオンに。</b>モバイルデータだけだと検知できません。</p>
+          <p><b>キャンパスではWiFiにつないでおいてください。</b>モバイルデータや有線LANだけだと検知できません。</p>
           <p className="muted">
             {restoring
               ? '前に使っていた端末は、引き継ぐとログアウトされます。'

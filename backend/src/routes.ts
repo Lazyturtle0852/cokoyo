@@ -410,11 +410,14 @@ export function createRoutes(repo: Repo, dtc: DtcClient) {
   // ── 説明用 ────────────────────────────────────────────────
   /**
    * /explain のページが「バックエンドのDBに何が入っているか」を出すために叩く。
-   * アプリ本体は使わない。返すのは呼んだ本人に関係する行だけ。
+   * アプリ本体は使わない。
+   *
+   * PoC なので、テーブルを丸ごと・全員ぶん返す。登録していない人にも見せたい
+   * （説明のためのページなので）ため、端末トークンも要求しない。
+   * MAC だけは伏せる。理由は repo.dump() のコメント。
    */
   app.get("/v1/debug/db", (c) => {
-    const me = requireUser(c, repo);
-    const response: DebugDbResponse = { tables: repo.dump(me.id) };
+    const response: DebugDbResponse = { tables: repo.dump() };
     return c.json(response);
   });
 

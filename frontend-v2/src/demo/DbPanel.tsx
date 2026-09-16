@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../app/AppContext';
-import { api, device } from '../api/client';
+import { api } from '../api/client';
 import type { DbTable } from '../api/types';
 import { useMockBackend } from '../config';
 
@@ -15,7 +15,7 @@ export function DbPanel() {
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
-    if (useMockBackend || !device.token) return;
+    if (useMockBackend) return;
     try {
       setTables((await api.debugDb()).tables);
       setError('');
@@ -43,13 +43,14 @@ export function DbPanel() {
     <section className="panel">
       <h2>バックエンドのDBの中身</h2>
       <p className="desc">
-        SQLite の行をそのまま出しています。<b>あなたに関係する行だけ</b>です。
-        他人の行は <span className="mono">user_id</span> と表示名だけ（<span className="mono">—</span> は伏せた列）、
-        自分の MAC も伏せてあります。
+        バックエンドの SQLite を、テーブルごと・全員ぶん、行の形のまま出しています（PoC なので）。
+        伏せてあるのは <span className="mono">mac</span> だけ。この仕組みでは MAC が事実上のパスワードで
+        （<span className="mono">POST /v1/sessions</span> は MAC を知っていれば端末を乗り換えられる）、
+        ここに平文で並べると全員のアカウントを渡すのと同じになるためです。
       </p>
 
       {error && <p className="empty">読めませんでした：{error}</p>}
-      {!error && !tables && <p className="empty">登録するとここに表示されます</p>}
+      {!error && !tables && <p className="empty">読み込み中…</p>}
 
       {tables?.map((t) => (
         <div className="dbt" key={t.name}>

@@ -15,55 +15,54 @@ const col = (dump: DebugDbResponse, name: string, column: string) => {
 };
 
 describe("/v1/debug/db", () => {
-  it("トークンが無ければ見せない", async () => {
+  it("登録していなくても見られる（説明用のページなので）", async () => {
     const h = createHarness();
-    expect((await h.call("/v1/debug/db")).status).toBe(401);
+    const res = await h.call("/v1/debug/db");
+    expect(res.status).toBe(200);
+    expect(table(await h.json<DebugDbResponse>(res), "users").rows).toHaveLength(0);
   });
 
-  it("自分の行はMACを伏せ、端末トークンは頭だけ出す", async () => {
-    const h = createHarness();
-    const alice = await h.signUp("ゆうき", MAC.alice);
-    const dump = await h.json<DebugDbResponse>(await alice.get("/v1/debug/db"));
-
-    const users = table(dump, "users");
-    expect(users.rows).toHaveLength(1);
-    expect(col(dump, "users", "mac")).toEqual(["a2:b4:••:••:••:03"]);
-    expect(JSON.stringify(dump)).not.toContain(MAC.alice);
-    expect(JSON.stringify(dump)).not.toContain(alice.deviceToken);
-    expect(String(col(dump, "users", "device_token_hash")[0])).toMatch(/^[0-9a-f]{12}…$/);
-    // 自分の share_key は自分のものなので、そのまま出す
-    expect(col(dump, "users", "share_key")).toEqual([alice.shareKey]);
-  });
-
-  it("関わりのある人は user_id と表示名だけ、無関係な人は出さない", async () => {
+  it("全員ぶんの行を、テーブルの形のまま返す", async () => {
     const h = createHarness();
     const alice = await h.signUp("ゆうき", MAC.alice);
     const bob = await h.signUp("佐藤", MAC.bob);
-    await h.signUp("知らない人", MAC.carol); // フレンドでもブロックでもない
+    await h.signUp("知らない人", MAC.carol); // 誰ともフレンドではない
     await alice.post("/v1/friends", { shareKey: bob.shareKey, via: "qr" });
 
-    const dump = await h.json<DebugDbResponse>(await alice.get("/v1/debug/db"));
-    expect(col(dump, "users", "display_name")).toEqual(["ゆうき", "佐藤"]);
-    expect(JSON.stringify(dump)).not.toContain("知らない人");
-    expect(JSON.stringify(dump)).not.toContain(MAC.bob);
-    expect(JSON.stringify(dump)).not.toContain(bob.shareKey);
+    const dump = await h.json<DebugDbResponse>(await h.call("/v1/debug/db"));
+
+    // 関わりの無い人も含めて、users は丸ごと出る
+    expect(col(dump, "users", "display_name")).toEqual(["ゆうき", "佐藤", "知らない人"]);
+    expect(col(dump, "users", "share_key")).toContain(bob.shareKey);
 
     // friendships は (小さい方, 大きい方) に畳まれている
-    const f = table(dump, "friendships");
-    expect(f.rows).toHaveLength(1);
+    expect(table(dump, "friendships").rows).toHaveLength(1);
     expect(Number(col(dump, "friendships", "user_low")[0]))
       .toBeLessThan(Number(col(dump, "friendships", "user_high")[0]));
     expect(col(dump, "friendships", "status")).toEqual(["friends"]);
   });
 
-  it("自分をブロックしている相手は出さない", async () => {
+  it("MACは伏せ、端末トークンは頭だけにする", async () => {
+    const h = createHarness();
+    const alice = await h.signUp("ゆうき", MAC.alice);
+
+    const dump = await h.json<DebugDbResponse>(await h.call("/v1/debug/db"));
+    expect(col(dump, "users", "mac")).toEqual(["a2:b4:••:••:••:03"]);
+    // MAC は事実上のパスワード（POST /v1/sessions がこれで通る）なので平文で出さない
+    expect(JSON.stringify(dump)).not.toContain(MAC.alice);
+    expect(JSON.stringify(dump)).not.toContain(alice.deviceToken);
+    expect(String(col(dump, "users", "device_token_hash")[0])).toMatch(/^[0-9a-f]{12}…$/);
+  });
+
+  it("ブロックも、誰が誰をブロックしたかの形のまま出る", async () => {
     const h = createHarness();
     const alice = await h.signUp("ゆうき", MAC.alice);
     const bob = await h.signUp("佐藤", MAC.bob);
     await bob.post(`/v1/friends/${alice.userId}/block`);
 
-    const dump = await h.json<DebugDbResponse>(await alice.get("/v1/debug/db"));
-    expect(table(dump, "blocks").rows).toHaveLength(0);
-    expect(JSON.stringify(dump)).not.toContain("佐藤");
+    const dump = await h.json<DebugDbResponse>(await h.call("/v1/debug/db"));
+    expect(table(dump, "blocks").rows).toHaveLength(1);
+    expect(col(dump, "blocks", "blocker_id")).toEqual([2]);
+    expect(col(dump, "blocks", "blocked_id")).toEqual([1]);
   });
 });

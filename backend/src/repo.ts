@@ -113,20 +113,14 @@ export function createRepo(db: Db) {
   };
 
   // /explain で中身を見せるためのもの。アプリ本体は使わない。
+  // PoC なので、テーブルを丸ごと出す。件数の多いものだけ上限をつける。
   const dumpQ = {
-    me: db.prepare("SELECT * FROM users WHERE id = ?"),
-    others: db.prepare(
-      `SELECT id, user_id, display_name FROM users WHERE id IN (
-         SELECT CASE WHEN user_low = ? THEN user_high ELSE user_low END
-         FROM friendships WHERE user_low = ? OR user_high = ?
-         UNION SELECT blocked_id FROM blocks WHERE blocker_id = ?
-       ) ORDER BY id`,
-    ),
-    friendships: db.prepare("SELECT * FROM friendships WHERE user_low = ? OR user_high = ? ORDER BY id"),
-    blocks: db.prepare("SELECT * FROM blocks WHERE blocker_id = ? ORDER BY created_at"),
-    points: db.prepare("SELECT * FROM (SELECT * FROM point_events WHERE user_id = ? ORDER BY id DESC LIMIT 30) ORDER BY id"),
-    visits: db.prepare("SELECT * FROM (SELECT * FROM visits WHERE user_id = ? ORDER BY date DESC LIMIT 14) ORDER BY date"),
-    matches: db.prepare("SELECT * FROM matches WHERE user_id = ? ORDER BY other_user_id"),
+    users: db.prepare("SELECT * FROM users ORDER BY id"),
+    friendships: db.prepare("SELECT * FROM friendships ORDER BY id"),
+    blocks: db.prepare("SELECT * FROM blocks ORDER BY created_at"),
+    points: db.prepare("SELECT * FROM (SELECT * FROM point_events ORDER BY id DESC LIMIT 100) ORDER BY id"),
+    visits: db.prepare("SELECT * FROM visits ORDER BY date DESC, user_id LIMIT 100"),
+    matches: db.prepare("SELECT * FROM matches ORDER BY user_id, other_user_id"),
   };
 
   type Cell = string | number | null;
@@ -241,77 +235,67 @@ export function createRepo(db: Db) {
 
     // ── /explain 用のダンプ ───────────────────────────────────
     /**
-     * 呼んだ本人に関係する行だけを、テーブルの形のまま返す。
+     * テーブルを丸ごと、行の形のまま返す。PoC なので全員ぶんを出す。
      *
-     * 他人の行は user_id と display_name しか出さない。MAC は伏せ、
-     * 端末トークンのハッシュは頭だけにする（平文はそもそも無い）。
-     * 自分をブロックしている人は出さない（アプリでも見せていない）。
+     * MAC だけは伏せる。ここでの MAC は事実上のパスワードで
+     * （POST /v1/sessions は MAC を知っていれば端末を乗り換えられる）、
+     * 誰でも読めるページに平文で並べると、全員のアカウントを渡すのと同じになる。
+     * 端末トークンは sha256 しか持っていないので、頭だけ出して残りは省く。
      */
-    dump(me: number): DbTable[] {
-      const uRow = dumpQ.me.get(me) as Record<string, unknown> | undefined;
+    dump(): DbTable[] {
       const uCols = [
         "id", "user_id", "display_name", "share_key", "device_token_hash",
         "mac", "hidden", "mac_registered_at", "created_at",
       ];
-      const others = dumpQ.others.all(me, me, me, me) as Record<string, unknown>[];
-      const userRows: Cell[][] = [];
-      if (uRow) {
-        userRows.push(cells(
-          {
-            ...uRow,
-            device_token_hash: `${String(uRow.device_token_hash).slice(0, 12)}…`,
-            mac: maskMac(String(uRow.mac)),
-          },
-          uCols,
-        ));
-      }
-      for (const o of others) {
-        userRows.push([o.id as number, o.user_id as string, o.display_name as string,
-          "—", "—", "—", null, null, null]);
-      }
-
       const fCols = ["id", "user_low", "user_high", "status", "requested_by", "request_id",
         "best_low", "best_high", "created_at", "friends_since"];
-      const pCols = ["id", "date", "kind", "label", "pts", "other_user_id", "days"];
+      const pCols = ["id", "user_id", "date", "kind", "label", "pts", "other_user_id", "days"];
+      const rows = (stmt: { all: (...a: unknown[]) => unknown[] }, columns: string[]) =>
+        (stmt.all() as Record<string, unknown>[]).map((r) => cells(r, columns));
 
       return [
         {
           name: "users",
-          note: "自分の行と、関わりのある人の行。他人は user_id と表示名だけ（— は伏せた列）。",
+          note: "登録した人。share_key は配ってよい値。device_token_hash は sha256 の頭12文字（平文は保存していない）。MAC は伏せてある。",
           columns: uCols,
-          rows: userRows,
+          rows: (dumpQ.users.all() as Record<string, unknown>[]).map((r) => cells(
+            {
+              ...r,
+              device_token_hash: `${String(r.device_token_hash).slice(0, 12)}…`,
+              mac: maskMac(String(r.mac)),
+            },
+            uCols,
+          )),
         },
         {
           name: "friendships",
-          note: "(A,B) と (B,A) は id の小さい方を user_low にして1行に畳む。best は片側ずつのフラグ。",
+          note: "(A,B) と (B,A) は id の小さい方を user_low にして1行に畳む。best は片側ずつのフラグで、両方1ならベストフレンド成立。",
           columns: fCols,
-          rows: (dumpQ.friendships.all(me, me) as Record<string, unknown>[]).map((r) => cells(r, fCols)),
+          rows: rows(dumpQ.friendships, fCols),
         },
         {
           name: "blocks",
-          note: "一方向。自分がブロックした相手だけ（自分をブロックしている人は出さない）。",
+          note: "一方向。ブロックされた側からは、この行があることが分からないようにしてある。",
           columns: ["blocker_id", "blocked_id", "created_at"],
-          rows: (dumpQ.blocks.all(me) as Record<string, unknown>[])
-            .map((r) => cells(r, ["blocker_id", "blocked_id", "created_at"])),
+          rows: rows(dumpQ.blocks, ["blocker_id", "blocked_id", "created_at"]),
         },
         {
           name: "point_events",
-          note: "入ったポイント1件が1行。今日の分と累計はここを数えている。直近30件。",
+          note: "入ったポイント1件が1行。今日の分と累計はここを数えている。直近100件。",
           columns: pCols,
-          rows: (dumpQ.points.all(me) as Record<string, unknown>[]).map((r) => cells(r, pCols)),
+          rows: rows(dumpQ.points, pCols),
         },
         {
           name: "visits",
-          note: "来校した日。連続日数（streak）の判定に使う。直近14日。",
-          columns: ["date"],
-          rows: (dumpQ.visits.all(me) as Record<string, unknown>[]).map((r) => cells(r, ["date"])),
+          note: "来校した日。連続日数（streak）の判定に使う。新しい順に100件。",
+          columns: ["user_id", "date"],
+          rows: rows(dumpQ.visits, ["user_id", "date"]),
         },
         {
           name: "matches",
-          note: "相手ごとの、最後にマッチした日。久しぶり／はじめての判定に使う。",
-          columns: ["other_user_id", "last_date"],
-          rows: (dumpQ.matches.all(me) as Record<string, unknown>[])
-            .map((r) => cells(r, ["other_user_id", "last_date"])),
+          note: "相手ごとの、最後にマッチした日。久しぶり／はじめての判定に使う。一方向に持つ。",
+          columns: ["user_id", "other_user_id", "last_date"],
+          rows: rows(dumpQ.matches, ["user_id", "other_user_id", "last_date"]),
         },
       ];
     },
