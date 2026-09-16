@@ -38,21 +38,27 @@ const POINTS: Record<string, { lat: number; lon: number }> = {
   lounge: { lat: 35.387606, lon: 139.427354 },
 };
 
-// 緯度経度 → 画面の座標。北が上。
+// 緯度経度 → 画面の座標。北が上、1単位＝1メートル。
 // 経度は緯度35.39°の縮みぶん（cos）で詰める。1度ぶんのメートルは概算でよい。
 const DEG_M = 111320;
 const LON_M = DEG_M * Math.cos((35.3886 * Math.PI) / 180);
-const ORIGIN = { lat: 35.387181, lon: 139.425467 }; // 南西のすみ（σ館と δ館）
-const SPAN_M = { x: 227, y: 325 }; // キャンパスの実寸はおよそ 227m × 325m
-const SCALE = 1.06; // メートル → viewBox の単位
-const PAD = { x: 26, y: 26 };
+/** メートルの原点。σ館の緯度と、δ館の経度。 */
+const ORIGIN = { lat: 35.387181, lon: 139.425467 };
 
-export const MAP_W = Math.round(SPAN_M.x * SCALE + PAD.x * 2);
-export const MAP_H = Math.round(SPAN_M.y * SCALE + PAD.y * 2);
+/**
+ * 図に入れる範囲（メートル）。
+ * 建物だけなら 0〜227m ×  0〜325m で足りるが、鴨池は σ館より南（y が負）にあり、
+ * 外周道路はさらに西と南へ回り込む。空撮写真から読んだその範囲まで入れてある。
+ */
+const BOUNDS = { west: -42, east: 258, south: -90, north: 345 };
 
-/** メートル（南西のすみが原点、北が上）→ viewBox の座標 */
-const X = (m: number) => m * SCALE + PAD.x;
-const Y = (m: number) => (SPAN_M.y - m) * SCALE + PAD.y;
+export const MAP_W = BOUNDS.east - BOUNDS.west;
+export const MAP_H = BOUNDS.north - BOUNDS.south;
+
+/** メートル（東向きが正）→ viewBox の x */
+const X = (m: number) => m - BOUNDS.west;
+/** メートル（北向きが正）→ viewBox の y */
+const Y = (m: number) => BOUNDS.north - m;
 
 function project(key: string) {
   const p = POINTS[key];
@@ -116,7 +122,7 @@ export const MAP_BUILDINGS: MapBuilding[] = [
   fromWings('kappa', 'κ', 'κ館', 24, 20),
   fromPoint('lounge', 'ラウンジ', 'ラウンジ', 54, 24, -4, true),
   fromPoint('omega', 'ω', 'ω館', 44, 30, -10),
-  fromPoint('sigma', 'σ', 'σ館', 46, 26, 12),
+  fromPoint('sigma', 'σ', 'σ館', 40, 24, 12),
 ];
 
 // ---------------------------------------------------------------
@@ -142,39 +148,49 @@ function loop(points: [number, number][]) {
 }
 
 /**
- * キャンパスをぐるりと回る道。σ館の南は図の外まで続くので、
- * はみ出したぶんは角丸の内側で切る。
+ * キャンパスをぐるりと回る道。空撮写真から読んだ中心線。
+ * 建物より西にも南にも回り込むので、図のはしで切る。
  */
 const RING = loop([
-  [105, 250], [200, 220], [245, 140], [240, 60],
-  [170, -18], [70, -28], [18, 60], [18, 130], [28, 190],
+  [77, 238], [175, 222], [225, 130], [212, 21], [160, -61],
+  [64, -79], [-16, -44], [-36, 65], [-25, 182],
 ]);
 
-/** 鴨池。κ館・ε館の西がわ。 */
-const POND = loop([[30, 100], [44, 84], [45, 62], [32, 48], [14, 58], [11, 82]]);
+/**
+ * 鴨池。σ館の南東、建物の並びより南にある。
+ * 西がわが細く、東がわがふくらんだ、ひょうたんのようなかたち。
+ */
+const POND = loop([
+  [56, -25], [80, -21], [101, -15], [120, -4], [145, -11],
+  [156, -29], [148, -46], [123, -50], [98, -36], [76, -37], [58, -38],
+]);
 
 /** 中を抜ける道 */
 const PATHS = [
-  [[62, 10], [86, 96], [104, 176], [128, 214]],
-  [[90, 128], [150, 120], [196, 128]],
+  [[78, -4], [92, 60], [108, 130], [132, 200]],
+  [[88, 105], [150, 100], [200, 112]],
 ] as const;
 
 export const MAP_SCENE = `<g aria-hidden="true">
   <clipPath id="map-clip"><rect x="0" y="0" width="${MAP_W}" height="${MAP_H}" rx="22"/></clipPath>
   <g clip-path="url(#map-clip)">
     <rect x="0" y="0" width="${MAP_W}" height="${MAP_H}" fill="#F4F1EC"/>
-    <!-- 緑地 -->
-    <ellipse cx="${X(120)}" cy="${Y(130)}" rx="${118 * SCALE}" ry="${132 * SCALE}" fill="#E5EFDB"/>
-    <ellipse cx="${X(196)}" cy="${Y(78)}" rx="${46 * SCALE}" ry="${40 * SCALE}" fill="#DDECD0"/>
-    <ellipse cx="${X(58)}" cy="${Y(246)}" rx="${44 * SCALE}" ry="${36 * SCALE}" fill="#DDECD0"/>
+    <!-- 緑地。外周道路の外がわは木が多いので、内がわより濃くしている -->
+    <path d="${RING}" fill="#E7F0DD"/>
+    <ellipse cx="${X(112)}" cy="${Y(16)}" rx="86" ry="52" fill="#DEEDD0"/>
+    <ellipse cx="${X(214)}" cy="${Y(176)}" rx="44" ry="42" fill="#DEEDD0"/>
+    <!-- 外周道路の外、北がわ：運動場と駐車場 -->
+    <rect x="${X(-64)}" y="${Y(358)}" width="78" height="40" rx="8" fill="#D3E8C3"/>
+    <rect x="${X(51)}" y="${Y(292)}" width="66" height="45" rx="4" fill="#EBE6DE"/>
+    ${[0, 1, 2].map((i) => `<line x1="${X(55)}" y1="${Y(284 - i * 14)}" x2="${X(113)}" y2="${Y(284 - i * 14)}" stroke="#F4F1EC" stroke-width="2.5"/>`).join('')}
     <!-- 中を抜ける道（外周より下に敷く） -->
-    ${PATHS.map((pts) => `<polyline points="${pts.map(([mx, my]) => `${X(mx).toFixed(1)},${Y(my).toFixed(1)}`).join(' ')}" fill="none" stroke="#EDE8E1" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>`).join('')}
+    ${PATHS.map((pts) => `<polyline points="${pts.map(([mx, my]) => `${X(mx)},${Y(my)}`).join(' ')}" fill="none" stroke="#EDE8E1" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>`).join('')}
     <!-- 外周道路 -->
-    <path d="${RING}" fill="none" stroke="#DCD5CB" stroke-width="16" stroke-linejoin="round"/>
-    <path d="${RING}" fill="none" stroke="#EFEAE3" stroke-width="10" stroke-linejoin="round"/>
+    <path d="${RING}" fill="none" stroke="#DCD5CB" stroke-width="17" stroke-linejoin="round"/>
+    <path d="${RING}" fill="none" stroke="#EFEAE3" stroke-width="11" stroke-linejoin="round"/>
     <!-- 鴨池 -->
     <path d="${POND}" fill="#57ABD4"/>
     <path d="${POND}" fill="#8BCEEB" transform="translate(0 -3)"/>
   </g>
-  <text x="${X(29)}" y="${Y(33)}" text-anchor="middle" font-size="9.5" font-weight="700" fill="#2E7FA6">鴨池</text>
+  <text x="${X(96)}" y="${Y(-62)}" text-anchor="middle" font-size="11" font-weight="700" fill="#2E7FA6">鴨池</text>
 </g>`;
