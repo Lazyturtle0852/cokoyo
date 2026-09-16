@@ -2,8 +2,8 @@
 
 COKOYO のアプリ画面（React + Vite + TypeScript）。
 
-2026-09-15 にグループで決めた画面の仕様をもとにした**モック**で、バックエンドが未接続のときはブラウザの中の模擬バックエンドで一通り動く。
-既存の `frontend/`（仮実装）とは別に置いてある。
+2026-09-15 にグループで決めた画面の仕様をもとにしたもの。本番（`cokoyo.lazyta-toru.net`）で動いているのはこれ。
+バックエンドが未接続のときはブラウザの中の模擬バックエンドで一通り動く。既存の `frontend/`（仮実装）とは別に置いてある。
 
 ## 動かす
 
@@ -15,14 +15,15 @@ npm run build        # 型チェック → dist/
 npm run typecheck
 ```
 
-画面の右側に「デモ操作」（キャンパスの様子・天気・相手の操作を変える）と「バックエンドとの通信」（送った内容と返ってきた内容）が出る。
+開発中は説明用の外枠で出る。画面の右側に「デモ操作」（キャンパスの様子・天気・相手の操作を変える）、
+「バックエンドとの通信」（送った内容と返ってきた内容）、「DBの中身」が並ぶ。本番の見た目は `?shell=app`。
 
 ## 画面
 
 | 画面 | 内容 |
 |---|---|
 | ホーム | キャンパスのフィールド（在校している自分とフレンドがスライムで出る。かくれんぼ中の自分はおばけ）、「ポイント獲得（在校確認）」ボタン、フレンドの在校、今日の獲得、かくれんぼ |
-| フレンド | 追加（QRを見せる／読み取る・招待リンク）、届いた申請の承認、ベストフレンドの申請・承認・解除、ブロックと解除、かくれんぼ |
+| フレンド | 追加（QRを見せる／読み取る・招待リンク・MACアドレス直接入力）、届いた申請の承認、ベストフレンドの申請・承認・解除、ブロックと解除、かくれんぼ |
 | 設定 | 表示名、MACアドレスの登録し直し |
 | はじめての登録 | 表示名 → MACアドレス手入力（iPhone / Android の手順つき） |
 
@@ -49,25 +50,30 @@ npm run typecheck
 1. URLの `?api=<URL>`（例 `http://localhost:5173/?api=http://localhost:8080`）
 2. 環境変数 `VITE_API_BASE_URL`（`.env.local`）
 
-## 既存バックエンド（`backend/`・v1 PoC）との違い
+## バックエンドとの契約
 
-**このままでは既存バックエンドに繋がらない。** 画面は `docs/api-for-backend.md` の形で呼んでいて、
-`shared/api-types.ts` とはパスもデータの形も違う。繋ぐときは `src/api/client.ts` と `src/api/types.ts` を
-`shared/api-types.ts` に合わせるか、足りない機能をバックエンドに足すかを決める。
+`src/api/types.ts` と `shared/app-types.ts` は**同じ形**になっている。ずれたら
+`backend/test/contract.test-d.ts`（`cd backend && npm run typecheck`）が型エラーで落ちる。
+エンドポイントの一覧と、ポイント・振り分けの決まりは `docs/api-for-backend.md`。
 
-| 画面がしていること | frontend-v2 が呼ぶもの | 既存バックエンド |
+本番はフロントとAPIが同一オリジンなので CORS は要らない。開発中は Vite の dev proxy が同じ役割をする。
+
+```sh
+cd backend && npm run dev            # http://localhost:8080
+cd frontend-v2 && npm run dev        # http://localhost:5173/?api=/api
+```
+
+## 外枠（`VITE_SHELL`）
+
+同じソースから2つの見た目を作る。
+
+| `VITE_SHELL` | 見た目 | 使う場所 |
 |---|---|---|
-| 登録 | `POST /v1/users` `{ displayName, mac }` → `deviceToken`, `shareKey` | `POST /register` `{ mac, name }` → `secret`, `share_key` |
-| 自分の情報・表示名・かくれんぼ | `GET /v1/me` / `PATCH /v1/me` | `GET /me`（share_key と connections のみ。かくれんぼは無い） |
-| MACの登録し直し | `PUT /v1/me/mac` | 無い |
-| フレンド追加 | `POST /v1/friends` `{ shareKey, via: "qr" \| "link" }`（リンクは相手の承認が必要） | `POST /connections` `{ share_key }`（承認なし） |
-| フレンド一覧・申請・ブロック中 | `GET /v1/friends` | `GET /me` の connections |
-| ベストフレンド | 申請→承認（`POST` / `DELETE /v1/friends/:userId/best`） | `PATCH /connections/:share_key` `{ scope }`（無向・承認なし） |
-| ブロック | `POST` / `DELETE /v1/friends/:userId/block` | `PATCH /connections/:share_key` `{ blocked }` |
-| 在校確認 | `POST /v1/checks`（自分とフレンドの在校＋ポイント計算） | `POST /presence` `{ share_keys }`（ポイントなし。`as_of`・`degraded` あり） |
-| ポイント | `GET /v1/points` | 無い |
-| 建物 | 表示名（`"κ館"`） | キー（`"kappa"`）。ラベルは `BUILDING_LABELS` |
+| `app` | アプリだけ。スマホ枠・偽のステータスバー・説明は出さない | 本番（`/`） |
+| `explain`（既定） | 左にスマホ枠、右に「デモ操作」「バックエンドとの通信」「DBの中身」 | `/explain`、`/test`、開発中 |
 
-既存バックエンドにあって画面が使っていないもの：`degraded`（「確認できませんでした」の表示）、`as_of`、共有文字列 `cokoyo1:<key>:<name>`。
+`?shell=app` を付ければ、ビルドし直さずに本番の見た目を確認できる。
 
-本番はフロントとAPIが同一オリジンなので、繋ぐときは `VITE_API_BASE_URL` ではなく Vite の dev proxy（`/api`）に寄せるほうがリポジトリの方針に合う。
+「DBの中身」は `GET /v1/debug/db` を叩いて、SQLite の行をそのまま並べる。返るのは自分に関係する行だけで、
+他人の行は `user_id` と表示名のみ、自分のMACも伏せてある。この通信は「バックエンドとの通信」には記録しない
+（直前の操作の記録を汚さないため）。模擬バックエンドにはDBが無いので、`/test` では代わりに案内だけ出る。

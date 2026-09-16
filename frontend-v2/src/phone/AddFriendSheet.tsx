@@ -11,6 +11,7 @@ import { Avatar } from './ui';
 export function AddFriendSheet() {
   const { view, me, sheet, closeSheet, setAddMode, run, reloadFriends, showToast } = useApp();
   const [manualKey, setManualKey] = useState('');
+  const [manualMac, setManualMac] = useState('');
   const open = view === 'app' && sheet.open && !!me;
 
   const add = (shareKey: string, via: 'qr' | 'link', name: string) => run(name, async () => {
@@ -18,7 +19,18 @@ export function AddFriendSheet() {
     await reloadFriends();
     closeSheet();
     setManualKey('');
+    setManualMac('');
     showToast(r.status === 'friends' ? `${r.user.displayName}さんとフレンドになりました` : `${r.user.displayName}さんに申請しました`);
+  });
+
+  // 共有キーもQRも渡せないとき用。相手が登録したMACアドレスで申請する。
+  const addByMac = () => run('MACアドレスで申請', async () => {
+    const r = await api.addFriendByMac(manualMac.trim().toLowerCase().replace(/-/g, ':'));
+    await reloadFriends();
+    closeSheet();
+    setManualKey('');
+    setManualMac('');
+    showToast(`${r.user.displayName}さんに申請しました`);
   });
 
   const link = me ? config.shareLinkBase + me.shareKey : '';
@@ -81,6 +93,24 @@ export function AddFriendSheet() {
                     <button className="mini-btn primary" onClick={() => void add(manualKey.trim(), 'link', '共有キーで申請')}>申請</button>
                   </div>
                   <p className="row-note">入力した場合は、相手の承認でフレンドになります。</p>
+                </details>
+                <details className="manual">
+                  <summary>高度な設定：MACアドレスで追加</summary>
+                  <p className="row-note">
+                    共有キーも渡せないとき用です。相手が登録したMACアドレス（相手の設定アプリに出ている値）を入力すると、
+                    相手に申請が届きます。共有キーのときと同じで、相手が承認するとフレンドになります。
+                  </p>
+                  <div className="field-row">
+                    <input className="field mono" placeholder="例）a2:3f:9c:1b:7e:44" value={manualMac}
+                      autoComplete="off" autoCapitalize="off" spellCheck={false}
+                      onChange={(e) => setManualMac(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') void addByMac(); }} />
+                    <button className="mini-btn primary" onClick={() => void addByMac()}>申請</button>
+                  </div>
+                  <p className="row-note warn">
+                    MACアドレスを渡すと、その人はあなたがキャンパスに居るかどうかを調べられるようになります。
+                    <b>仲のいい友達とだけ</b>交換してください。
+                  </p>
                 </details>
               </>
             )}

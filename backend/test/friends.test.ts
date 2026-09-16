@@ -193,3 +193,35 @@ describe("登録済みのMACを引き継ぐ", () => {
     expect((await h.json<{ error: { code: string } }>(res)).error.code).toBe("mac_not_registered");
   });
 });
+
+describe("MACアドレスでフレンド申請", () => {
+  it("共有キーの代わりにMACでも申請できる（承認は必要）", async () => {
+    const h = createHarness();
+    const alice = await h.signUp("ゆうき", MAC.alice);
+    const bob = await h.signUp("佐藤", MAC.bob);
+
+    // 表記ゆれは吸収する
+    const res = await alice.post("/v1/friends", { mac: "6E-0D-33-B1-C8-40", via: "mac" });
+    expect(res.status).toBe(202);
+    const added = await h.json<AddFriendResponse>(res);
+    expect(added.status).toBe("requested");
+    expect(added.user.displayName).toBe("佐藤");
+
+    // QRと違って即フレンドにはならない。相手が承認して初めて成立する。
+    await bob.post(`/v1/friend-requests/${added.requestId}/accept`);
+    const friends = await h.json<FriendsResponse>(await alice.get("/v1/friends"));
+    expect(friends.friends.map((f) => f.displayName)).toEqual(["佐藤"]);
+  });
+
+  it("未登録のMACは404、自分のMACは400", async () => {
+    const h = createHarness();
+    const alice = await h.signUp("ゆうき", MAC.alice);
+
+    const unknown = await alice.post("/v1/friends", { mac: MAC.carol, via: "mac" });
+    expect(unknown.status).toBe(404);
+    expect((await h.json<{ error: { code: string } }>(unknown)).error.code).toBe("mac_not_registered");
+
+    const self = await alice.post("/v1/friends", { mac: MAC.alice, via: "mac" });
+    expect(self.status).toBe(400);
+  });
+});

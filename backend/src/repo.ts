@@ -1,5 +1,7 @@
+import type { DbTable } from "../../shared/app-types.js";
 import type { Db } from "./db.js";
 import { hashToken, newRequestId, newShareKey, newUserId } from "./lib/ids.js";
+import { maskMac } from "./lib/mac.js";
 
 export interface User {
   id: number;
@@ -110,6 +112,30 @@ export function createRepo(db: Db) {
     ),
   };
 
+  // /explain で中身を見せるためのもの。アプリ本体は使わない。
+  const dumpQ = {
+    me: db.prepare("SELECT * FROM users WHERE id = ?"),
+    others: db.prepare(
+      `SELECT id, user_id, display_name FROM users WHERE id IN (
+         SELECT CASE WHEN user_low = ? THEN user_high ELSE user_low END
+         FROM friendships WHERE user_low = ? OR user_high = ?
+         UNION SELECT blocked_id FROM blocks WHERE blocker_id = ?
+       ) ORDER BY id`,
+    ),
+    friendships: db.prepare("SELECT * FROM friendships WHERE user_low = ? OR user_high = ? ORDER BY id"),
+    blocks: db.prepare("SELECT * FROM blocks WHERE blocker_id = ? ORDER BY created_at"),
+    points: db.prepare("SELECT * FROM (SELECT * FROM point_events WHERE user_id = ? ORDER BY id DESC LIMIT 30) ORDER BY id"),
+    visits: db.prepare("SELECT * FROM (SELECT * FROM visits WHERE user_id = ? ORDER BY date DESC LIMIT 14) ORDER BY date"),
+    matches: db.prepare("SELECT * FROM matches WHERE user_id = ? ORDER BY other_user_id"),
+  };
+
+  type Cell = string | number | null;
+  const cells = (row: Record<string, unknown>, columns: string[]): Cell[] =>
+    columns.map((c) => {
+      const v = row[c];
+      return typeof v === "string" || typeof v === "number" || v === null ? (v as Cell) : String(v);
+    });
+
   return {
     // ── users ────────────────────────────────────────────────
     findById: (id: number) => one<User>(q.userById.get(id)),
@@ -212,6 +238,83 @@ export function createRepo(db: Db) {
     },
     recordMatch: (userId: number, otherId: number, date: string) =>
       void q.upsertMatch.run(userId, otherId, date),
+
+    // ── /explain 用のダンプ ───────────────────────────────────
+    /**
+     * 呼んだ本人に関係する行だけを、テーブルの形のまま返す。
+     *
+     * 他人の行は user_id と display_name しか出さない。MAC は伏せ、
+     * 端末トークンのハッシュは頭だけにする（平文はそもそも無い）。
+     * 自分をブロックしている人は出さない（アプリでも見せていない）。
+     */
+    dump(me: number): DbTable[] {
+      const uRow = dumpQ.me.get(me) as Record<string, unknown> | undefined;
+      const uCols = [
+        "id", "user_id", "display_name", "share_key", "device_token_hash",
+        "mac", "hidden", "mac_registered_at", "created_at",
+      ];
+      const others = dumpQ.others.all(me, me, me, me) as Record<string, unknown>[];
+      const userRows: Cell[][] = [];
+      if (uRow) {
+        userRows.push(cells(
+          {
+            ...uRow,
+            device_token_hash: `${String(uRow.device_token_hash).slice(0, 12)}…`,
+            mac: maskMac(String(uRow.mac)),
+          },
+          uCols,
+        ));
+      }
+      for (const o of others) {
+        userRows.push([o.id as number, o.user_id as string, o.display_name as string,
+          "—", "—", "—", null, null, null]);
+      }
+
+      const fCols = ["id", "user_low", "user_high", "status", "requested_by", "request_id",
+        "best_low", "best_high", "created_at", "friends_since"];
+      const pCols = ["id", "date", "kind", "label", "pts", "other_user_id", "days"];
+
+      return [
+        {
+          name: "users",
+          note: "自分の行と、関わりのある人の行。他人は user_id と表示名だけ（— は伏せた列）。",
+          columns: uCols,
+          rows: userRows,
+        },
+        {
+          name: "friendships",
+          note: "(A,B) と (B,A) は id の小さい方を user_low にして1行に畳む。best は片側ずつのフラグ。",
+          columns: fCols,
+          rows: (dumpQ.friendships.all(me, me) as Record<string, unknown>[]).map((r) => cells(r, fCols)),
+        },
+        {
+          name: "blocks",
+          note: "一方向。自分がブロックした相手だけ（自分をブロックしている人は出さない）。",
+          columns: ["blocker_id", "blocked_id", "created_at"],
+          rows: (dumpQ.blocks.all(me) as Record<string, unknown>[])
+            .map((r) => cells(r, ["blocker_id", "blocked_id", "created_at"])),
+        },
+        {
+          name: "point_events",
+          note: "入ったポイント1件が1行。今日の分と累計はここを数えている。直近30件。",
+          columns: pCols,
+          rows: (dumpQ.points.all(me) as Record<string, unknown>[]).map((r) => cells(r, pCols)),
+        },
+        {
+          name: "visits",
+          note: "来校した日。連続日数（streak）の判定に使う。直近14日。",
+          columns: ["date"],
+          rows: (dumpQ.visits.all(me) as Record<string, unknown>[]).map((r) => cells(r, ["date"])),
+        },
+        {
+          name: "matches",
+          note: "相手ごとの、最後にマッチした日。久しぶり／はじめての判定に使う。",
+          columns: ["other_user_id", "last_date"],
+          rows: (dumpQ.matches.all(me) as Record<string, unknown>[])
+            .map((r) => cells(r, ["other_user_id", "last_date"])),
+        },
+      ];
+    },
   };
 }
 

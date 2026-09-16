@@ -30,3 +30,5 @@ assert<Exact<App.AddFriendResponse, Fe.AddFriendResponse>>(true);
 assert<Exact<App.BestResponse, Fe.BestResponse>>(true);
 assert<Exact<App.BlockResponse, Fe.BlockResponse>>(true);
 assert<Exact<App.ApiErrorBody, Fe.ApiErrorBody>>(true);
+assert<Exact<App.DbTable, Fe.DbTable>>(true);
+assert<Exact<App.DebugDbResponse, Fe.DebugDbResponse>>(true);

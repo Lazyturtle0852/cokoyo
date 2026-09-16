@@ -100,6 +100,23 @@ export interface ApiErrorBody {
   error: { code: string; message: string };
 }
 
+/**
+ * /explain（説明用ページ）で中身を見せるための、DBの生の行。
+ * アプリ本体は使わない。返すのは呼び出した本人に関係する行だけ。
+ */
+export interface DbTable {
+  /** テーブル名（SQLite のものそのまま） */
+  name: string;
+  /** 何のテーブルか、何を絞ったかの説明 */
+  note: string;
+  columns: string[];
+  rows: Array<Array<string | number | null>>;
+}
+
+export interface DebugDbResponse {
+  tables: DbTable[];
+}
+
 /** DTC が返す buildingKey（api.dtc.wide.ad.jp の enum と一致させること）。 */
 export const BUILDING_KEYS = [
   "kappa", "epsilon", "iota", "omicron", "delta", "tau", "mu",

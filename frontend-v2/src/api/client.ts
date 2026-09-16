@@ -8,7 +8,7 @@ import { config, useMockBackend } from '../config';
 import { mockBackend } from './mockBackend';
 import type {
   AddFriendResponse, ApiErrorBody, BestResponse, BlockResponse, CheckResponse,
-  FriendsResponse, Me, PointsResponse, RegisterResponse, UserRef,
+  DebugDbResponse, FriendsResponse, Me, PointsResponse, RegisterResponse, UserRef,
 } from './types';
 
 // ---------------------------------------------------------------
@@ -66,7 +66,11 @@ export class ApiError extends Error {
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function request<T>(method: string, path: string, body?: Record<string, unknown>): Promise<T> {
+/**
+ * silent: 「バックエンドとの通信」に記録しない。
+ * 説明用ページが裏で叩くもの（DBの中身）に使う。直前の操作の記録を汚さないため。
+ */
+async function request<T>(method: string, path: string, body?: Record<string, unknown>, silent = false): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const token = device.token;
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -84,12 +88,12 @@ async function request<T>(method: string, path: string, body?: Record<string, un
       status = res.status;
       json = status === 204 ? null : await res.json().catch(() => null);
     } catch (e) {
-      push({ method, path, body, status: 0, json: { error: { message: String((e as Error).message ?? e) } }, withToken: !!token });
+      if (!silent) push({ method, path, body, status: 0, json: { error: { message: String((e as Error).message ?? e) } }, withToken: !!token });
       throw new ApiError('バックエンドに接続できません。URLとCORSの設定を確認してください', 0);
     }
   }
 
-  push({ method, path, body, status, json, withToken: !!token });
+  if (!silent) push({ method, path, body, status, json, withToken: !!token });
 
   if (status >= 400) {
     const err = (json as ApiErrorBody | null)?.error;
@@ -116,10 +120,15 @@ export const api = {
   // フレンド
   getFriends: () => request<FriendsResponse>('GET', '/v1/friends'),
   addFriend: (shareKey: string, via: 'qr' | 'link') => request<AddFriendResponse>('POST', '/v1/friends', { shareKey, via }),
+  // 共有キーを渡せないとき用。相手の承認でフレンドになる（link と同じ扱い）
+  addFriendByMac: (mac: string) => request<AddFriendResponse>('POST', '/v1/friends', { mac, via: 'mac' }),
   acceptRequest: (requestId: string) => request<{ status: 'friends'; user: UserRef }>('POST', `/v1/friend-requests/${id(requestId)}/accept`),
   declineRequest: (requestId: string) => request<null>('POST', `/v1/friend-requests/${id(requestId)}/decline`),
   requestBest: (userId: string) => request<BestResponse>('POST', `/v1/friends/${id(userId)}/best`),
   endBest: (userId: string) => request<BestResponse>('DELETE', `/v1/friends/${id(userId)}/best`),
   block: (userId: string) => request<BlockResponse>('POST', `/v1/friends/${id(userId)}/block`),
   unblock: (userId: string) => request<BlockResponse>('DELETE', `/v1/friends/${id(userId)}/block`),
+
+  // 説明用ページ（/explain）だけが使う。アプリ本体は使わない。
+  debugDb: () => request<DebugDbResponse>('GET', '/v1/debug/db', undefined, true),
 };

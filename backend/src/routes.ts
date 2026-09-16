@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type {
   AddFriendResponse, BestResponse, BestState, BlockResponse, CheckResponse,
-  FriendsResponse, Me, PointItem, PointsResponse, RegisterResponse, UserRef,
+  DebugDbResponse, FriendsResponse, Me, PointItem, PointsResponse, RegisterResponse, UserRef,
 } from "../../shared/app-types.js";
 import { BUILDING_LABELS } from "../../shared/app-types.js";
 import { config } from "./config.js";
@@ -275,13 +275,19 @@ export function createRoutes(repo: Repo, dtc: DtcClient) {
   app.post("/v1/friends", async (c) => {
     const me = requireUser(c, repo);
     const body = await c.req.json().catch(() => null);
-    const via = body?.via === "qr" ? "qr" : "link";
+    // qr は即フレンド。link と mac は相手の承認待ち（どちらも相手が居ない場で渡された値なので）。
+    const via = body?.via === "qr" ? "qr" : body?.via === "mac" ? "mac" : "link";
 
-    const other = typeof body?.shareKey === "string"
-      ? repo.findByShareKey(body.shareKey)
-      : undefined;
-    if (!other) fail(404, "share_key_not_found", "この共有キーの相手が見つかりません");
-    if (other.id === me.id) fail(400, "self", "自分のキーです");
+    const other = via === "mac"
+      ? repo.findByMac(validMac(body?.mac))
+      : typeof body?.shareKey === "string"
+        ? repo.findByShareKey(body.shareKey)
+        : undefined;
+    if (!other) {
+      if (via === "mac") fail(404, "mac_not_registered", "このMACアドレスの人は、まだ登録していません");
+      fail(404, "share_key_not_found", "この共有キーの相手が見つかりません");
+    }
+    if (other.id === me.id) fail(400, "self", via === "mac" ? "自分のMACアドレスです" : "自分のキーです");
     if (repo.isBlocking(me.id, other.id)) {
       fail(409, "blocked_by_you", "ブロック中の相手です。先にブロックを解除してください");
     }
@@ -398,6 +404,17 @@ export function createRoutes(repo: Repo, dtc: DtcClient) {
 
     repo.removeBlock(me.id, other.id);
     const response: BlockResponse = { userId: other.user_id, blocked: false };
+    return c.json(response);
+  });
+
+  // ── 説明用 ────────────────────────────────────────────────
+  /**
+   * /explain のページが「バックエンドのDBに何が入っているか」を出すために叩く。
+   * アプリ本体は使わない。返すのは呼んだ本人に関係する行だけ。
+   */
+  app.get("/v1/debug/db", (c) => {
+    const me = requireUser(c, repo);
+    const response: DebugDbResponse = { tables: repo.dump(me.id) };
     return c.json(response);
   });
 

@@ -260,11 +260,19 @@ function makeFriends(a: string, b: string) {
 
 // POST /v1/friends — QRコード（すぐ成立）かリンク（相手の承認が必要）でフレンド追加
 function addFriend(uid: string, body: Body) {
-  const via = body.via === 'qr' ? 'qr' : 'link';
-  const key = String(body.shareKey ?? '').trim();
-  const target = Object.keys(db.users).find((id) => db.users[id].shareKey === key);
-  if (!target) return E(404, 'share_key_not_found', 'このQRコード・リンクは見つかりません');
-  if (target === uid) return E(400, 'self', '自分のQRコードです');
+  const via = body.via === 'qr' ? 'qr' : body.via === 'mac' ? 'mac' : 'link';
+  let target: string | undefined;
+  if (via === 'mac') {
+    const mac = normalizeMac(body.mac);
+    if (!validMac(mac)) return E(400, 'invalid_mac', 'MACアドレスの形式が正しくありません');
+    target = Object.keys(db.users).find((id) => db.users[id].mac === mac);
+    if (!target) return E(404, 'mac_not_registered', 'このMACアドレスの人は、まだ登録していません');
+  } else {
+    const key = String(body.shareKey ?? '').trim();
+    target = Object.keys(db.users).find((id) => db.users[id].shareKey === key);
+    if (!target) return E(404, 'share_key_not_found', 'このQRコード・リンクは見つかりません');
+  }
+  if (target === uid) return E(400, 'self', via === 'mac' ? '自分のMACアドレスです' : '自分のQRコードです');
   if (blockedBy(uid, target)) return E(409, 'blocked_by_you', 'ブロック中の相手です。フレンド画面で解除してください');
   if (isFriend(uid, target)) return E(409, 'already_friends', `${db.users[target].name}さんとはすでにフレンドです`);
   // 相手にブロックされている場合は、ブロックされていることが分からないよう「申請した」と同じ形で返す
