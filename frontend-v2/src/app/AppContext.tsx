@@ -32,6 +32,8 @@ interface AppState {
   /** はじめての登録か、MACアドレスの登録し直しか */
   onboardingMode: 'new' | 'reregister';
   sheet: { open: boolean; mode: AddMode };
+  /** キャンパスの地図をひらいているか */
+  mapOpen: boolean;
   /** ポイント加算の演出中に、右上に出している累計 */
   displayTotal: number | null;
   toast: { id: number; message: string } | null;
@@ -45,6 +47,8 @@ interface AppActions {
   setTab(tab: Tab): void;
   openAddSheet(mode?: AddMode): void;
   closeSheet(): void;
+  openMap(): void;
+  closeMap(): void;
   setAddMode(mode: AddMode): void;
   showToast(message: string): void;
 
@@ -95,6 +99,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [checking, setChecking] = useState(false);
   const [onboardingMode, setOnboardingMode] = useState<'new' | 'reregister'>('new');
   const [sheet, setSheet] = useState<{ open: boolean; mode: AddMode }>({ open: false, mode: 'show' });
+  const [mapOpen, setMapOpen] = useState(false);
   const [displayTotal, setDisplayTotal] = useState<number | null>(null);
   const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
 
@@ -120,6 +125,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     field.clear();
     setDisplayTotal(null);
     setSheet({ open: false, mode: 'show' });
+    setMapOpen(false);
     setOnboardingMode('new');
     setView('onboarding');
   }, [field]);
@@ -239,18 +245,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     field.clear();
     setDisplayTotal(null);
     setSheet({ open: false, mode: 'show' });
+    setMapOpen(false);
     setTabState('home');
     setView('loading');
     await boot();
   }, [boot, field]);
 
   const value = useMemo<Ctx>(() => ({
-    view, error, tab, me, friends, points, lastCheck, checking, onboardingMode, sheet, displayTotal, toast,
+    view, error, tab, me, friends, points, lastCheck, checking, onboardingMode, sheet, mapOpen, displayTotal, toast,
     field, counter, screenRef,
-    setTab: (t) => setTabState(t),
+    // タブを移ると地図は閉じる
+    setTab: (t) => { setMapOpen(false); setTabState(t); },
     openAddSheet: (mode = 'show') => setSheet({ open: true, mode }),
     closeSheet: () => setSheet((s) => ({ ...s, open: false })),
     setAddMode: (mode) => setSheet((s) => ({ ...s, mode })),
+    openMap: () => setMapOpen(true),
+    closeMap: () => setMapOpen(false),
     showToast,
     run,
     check,
@@ -268,7 +278,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refresh,
     restart,
     restartFromOnboarding: () => { device.clear(); setTabState('home'); goOnboarding(); },
-  }), [view, error, tab, me, friends, points, lastCheck, checking, onboardingMode, sheet, displayTotal, toast,
+  }), [view, error, tab, me, friends, points, lastCheck, checking, onboardingMode, sheet, mapOpen, displayTotal, toast,
     field, showToast, run, check, toggleHide, reloadFriends, loadAll, refresh, restart, goOnboarding]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -7,9 +7,11 @@
 // 中身は「バックエンドのデータ」と「大学側APIの模擬（キャンパスの様子）」の2つ。
 // 状態はブラウザに保存するので、ページを開き直しても続きから使える。
 
-import type { BestState, PointItem, PointKind } from './types';
+import type { BestState, BuildingKey, PointItem, PointKind } from './types';
+import { BUILDING_KEYS, BUILDING_LABELS } from './types';
 
-const STORE_KEY = 'cokoyo-mock-backend:v1';
+// v2：建物をラベルの文字列ではなく buildingKey で持つようにしたので、古い保存は捨てる
+const STORE_KEY = 'cokoyo-mock-backend:v2';
 
 // ---------------------------------------------------------------
 // ポイントの決まり（10pt = 1円）
@@ -21,13 +23,15 @@ const P = { BASE: 20, RAIN: 10, MATCH: 6, REUNION: 50, FIRST: 70, CAP: 10 };
 const STREAK: [number, number][] = [[14, 20], [7, 10], [3, 5]]; // [連続日数, 加算pt]
 const REUNION_DAYS = 30;
 const RAINY = ['drizzle', 'rain', 'shower', 'thunderstorm', 'sleet', 'snow'];
-export const BUILDINGS = ['κ館', 'ε館', 'ι館', 'ο館', 'Δ館', 'τ館', 'Ω館', 'メディアセンター'];
+/** デモ操作で選べる建物。DTC が返す buildingKey と同じ。 */
+export const BUILDINGS = BUILDING_KEYS;
+export const buildingLabel = (key: BuildingKey) => BUILDING_LABELS[key];
 
 // ---------------------------------------------------------------
 // データの形（バックエンドの中だけで使う）
 // ---------------------------------------------------------------
 interface DbUser { name: string; mac: string; shareKey: string; token: string | null; hidden: boolean; macRegisteredAt: string; createdAt: string }
-interface Campus { connected: boolean; building: string }
+interface Campus { connected: boolean; buildingKey: BuildingKey }
 interface Ledger {
   total: number;
   visitDays: string[];
@@ -105,13 +109,13 @@ function seed(): Db {
       u_ito:       user('伊藤',   'f2:58:a1:3c:9d:06', 'sk_i7jt4qzs'),
     },
     campus: {
-      u_me:        { connected: false, building: 'κ館' },
-      u_sato:      { connected: true,  building: 'κ館' },
-      u_tanaka:    { connected: true,  building: 'ε館' },
-      u_suzuki:    { connected: true,  building: 'Ω館' },
-      u_yamada:    { connected: true,  building: 'Δ館' },
-      u_takahashi: { connected: false, building: 'ι館' },
-      u_ito:       { connected: true,  building: 'τ館' },
+      u_me:        { connected: false, buildingKey: 'kappa' },
+      u_sato:      { connected: true,  buildingKey: 'kappa' },
+      u_tanaka:    { connected: true,  buildingKey: 'epsilon' },
+      u_suzuki:    { connected: true,  buildingKey: 'omega' },
+      u_yamada:    { connected: true,  buildingKey: 'theta' },
+      u_takahashi: { connected: false, buildingKey: 'iota' },
+      u_ito:       { connected: true,  buildingKey: 'tau' },
     },
     friendships: [
       { a: 'u_me', b: 'u_sato',   since: ago(90) },
@@ -160,11 +164,14 @@ function bestState(me: string, other: string): BestState {
 }
 
 // viewer に target の在校を見せてよいか。だめなら「いない」と同じ形で返す（理由は区別しない）
-function visiblePresence(viewer: string, target: string): { present: boolean; building?: string } {
+function visiblePresence(viewer: string, target: string): { present: boolean; building?: string; buildingKey?: BuildingKey } {
   const c = db.campus[target];
   const u = db.users[target];
   if (!c || !c.connected || u.hidden || blockedEither(viewer, target) || !isFriend(viewer, target)) return { present: false };
-  return isBest(viewer, target) ? { present: true, building: c.building } : { present: true };
+  // 建物を出すのはベストフレンド同士のときだけ。本物のバックエンドと同じ条件。
+  return isBest(viewer, target)
+    ? { present: true, building: BUILDING_LABELS[c.buildingKey], buildingKey: c.buildingKey }
+    : { present: true };
 }
 
 const publicUser = (uid: string) => ({ userId: uid, displayName: db.users[uid].name });
@@ -201,7 +208,7 @@ function createUser(body: Body) {
   const uid = rand('u_', 8);
   const now = new Date().toISOString();
   db.users[uid] = { name, mac, shareKey: rand('sk_', 8), token: rand('dt_', 20), hidden: false, macRegisteredAt: now, createdAt: now };
-  db.campus[uid] = { connected: false, building: 'κ館' };
+  db.campus[uid] = { connected: false, buildingKey: 'kappa' };
   db.points[uid] = { total: 0, visitDays: [], lastMatch: {}, days: {} };
   return ok({ ...meView(uid), deviceToken: db.users[uid].token }, 201);
 }
@@ -395,7 +402,12 @@ function check(uid: string) {
 
   return ok({
     checkedAt: now.toISOString(),
-    me: { present, building: present ? c.building : null, hidden: me.hidden },
+    me: {
+      present,
+      building: present ? BUILDING_LABELS[c.buildingKey] : null,
+      buildingKey: present ? c.buildingKey : null,
+      hidden: me.hidden,
+    },
     weather: { condition: db.weather, rainy },
     friends,
     points: { awarded, notice, ...pointsView(uid) },
@@ -476,7 +488,7 @@ const sim = {
   setCampus(uid: string, patch: Partial<Campus>) {
     const c = db.campus[uid]; if (!c) return;
     if (typeof patch.connected === 'boolean') c.connected = patch.connected;
-    if (patch.building && BUILDINGS.includes(patch.building)) c.building = patch.building;
+    if (patch.buildingKey && BUILDINGS.includes(patch.buildingKey)) c.buildingKey = patch.buildingKey;
     save();
   },
   setHidden(uid: string, hidden: boolean) { if (db.users[uid]) { db.users[uid].hidden = hidden; save(); } },
