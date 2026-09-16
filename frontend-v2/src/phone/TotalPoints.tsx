@@ -30,7 +30,7 @@ export function TotalPoints() {
         };
         requestAnimationFrame(step);
       },
-      // 累計の下から「+250pt」が浮かび上がる
+      // 累計の下から「+20pt」が浮かび上がる
       pop(text) {
         const box = boxRef.current;
         const screen = screenRef.current;

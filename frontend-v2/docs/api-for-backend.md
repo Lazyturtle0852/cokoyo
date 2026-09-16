@@ -164,16 +164,16 @@ MACアドレスのハッシュにすると、総当たりで元のMACアドレ�
   ],
   "points": {
     "awarded": [
-      { "kind": "base",    "label": "来校ベース",              "pts": 250 },
-      { "kind": "streak",  "label": "5日連続で来校",           "pts": 50,  "days": 5 },
-      { "kind": "rain",    "label": "雨の日ボーナス",          "pts": 125 },
-      { "kind": "match",   "label": "佐藤さんとマッチ",        "pts": 100, "userId": "u_sato" },
-      { "kind": "reunion", "label": "田中さんと45日ぶりにマッチ", "pts": 500, "userId": "u_tanaka", "days": 45 }
+      { "kind": "base",    "label": "来校ベース",              "pts": 20 },
+      { "kind": "streak",  "label": "5日連続で来校",           "pts": 5,   "days": 5 },
+      { "kind": "rain",    "label": "雨の日ボーナス",          "pts": 10 },
+      { "kind": "match",   "label": "佐藤さんとマッチ",        "pts": 6,   "userId": "u_sato" },
+      { "kind": "reunion", "label": "田中さんと45日ぶりにマッチ", "pts": 50,  "userId": "u_tanaka", "days": 45 }
     ],
     "notice": null,
     "date": "2026-09-15",
-    "today": { "items": [ /* 今日これまでに入った分すべて（awardedと同じ形） */ ], "total": 1025 },
-    "total": 7445
+    "today": { "items": [ /* 今日これまでに入った分すべて（awardedと同じ形） */ ], "total": 91 },
+    "total": 731
   }
 }
 ```
@@ -201,19 +201,21 @@ MACアドレスのハッシュにすると、総当たりで元のMACアドレ�
 アプリを開いたときに使う。`POST /v1/checks` の `points` から `awarded` と `notice` を除いた形。
 
 ```json
-{ "date": "2026-09-15", "today": { "items": [], "total": 0 }, "total": 6420 }
+{ "date": "2026-09-15", "today": { "items": [], "total": 0 }, "total": 640 }
 ```
 
-### ポイントの決まり（100pt ＝ 1円の感覚）
+### ポイントの決まり（10pt ＝ 1円）
 
-| kind | 条件 | pt |
-|---|---|---|
-| `base` | その日はじめて、キャンパスにいる状態で押した | 250 |
-| `streak` | 平日の連続来校が 3日 / 7日 / 14日以上（土日では途切れない） | +50 / +125 / +250（一番高いもの1つ） |
-| `rain` | その日はじめて押したとき、DTCの天気が雨（drizzle, rain, shower, thunderstorm, sleet, snow） | +125 |
-| `match` | キャンパスにいるフレンド（1人あたり） | 100 |
-| `reunion` | 最後にマッチしてから30日以上たったフレンド | 500 |
-| `first` | はじめてマッチしたフレンド | 750 |
+| kind | 条件 | pt | 円 |
+|---|---|---|---|
+| `base` | その日はじめて、キャンパスにいる状態で押した | 20 | 2円 |
+| `streak` | 平日の連続来校が 3日 / 7日 / 14日以上（土日では途切れない） | +5 / +10 / +20（一番高いもの1つ） | 0.5〜2円 |
+| `rain` | その日はじめて押したとき、DTCの天気が雨（drizzle, rain, shower, thunderstorm, sleet, snow） | +10 | 1円 |
+| `match` | キャンパスにいるフレンド（1人あたり） | 6 | 0.6円 |
+| `reunion` | 最後にマッチしてから30日以上たったフレンド | 50 | 5円 |
+| `first` | はじめてマッチしたフレンド | 70 | 7円 |
+
+**目安**：普通の日（フレンド5人・雨でもはじめてでもない日）で 55〜70pt（5.5〜7円）。月16日通うと 880〜1,120pt ＝ **88〜112円**。
 
 - `base` `streak` `rain` は1日1回。何度押しても、その日の2回目以降は入らない
 - マッチ（`match` `reunion` `first`）は、**押した時点で在校が見えている**フレンドのうち、今日まだマッチしていない人だけ。1人につき3つのうち1つ

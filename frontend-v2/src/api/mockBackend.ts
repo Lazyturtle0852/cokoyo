@@ -12,10 +12,13 @@ import type { BestState, PointItem, PointKind } from './types';
 const STORE_KEY = 'cokoyo-mock-backend:v1';
 
 // ---------------------------------------------------------------
-// ポイントの決まり（100pt = 1円の感覚）
+// ポイントの決まり（10pt = 1円）
+//
+// 普通の日（フレンド5人・雨でもはじめてでもない日）で 55〜70pt（5.5〜7円）、
+// 月16日通って 88〜112円になる値。backend/src/points.ts と同じ値にすること。
 // ---------------------------------------------------------------
-const P = { BASE: 250, RAIN: 125, MATCH: 100, REUNION: 500, FIRST: 750, CAP: 10 };
-const STREAK: [number, number][] = [[14, 250], [7, 125], [3, 50]]; // [連続日数, 加算pt]
+const P = { BASE: 20, RAIN: 10, MATCH: 6, REUNION: 50, FIRST: 70, CAP: 10 };
+const STREAK: [number, number][] = [[14, 20], [7, 10], [3, 5]]; // [連続日数, 加算pt]
 const REUNION_DAYS = 30;
 const RAINY = ['drizzle', 'rain', 'shower', 'thunderstorm', 'sleet', 'snow'];
 export const BUILDINGS = ['κ館', 'ε館', 'ι館', 'ο館', 'Δ館', 'τ館', 'Ω館', 'メディアセンター'];
@@ -123,7 +126,7 @@ function seed(): Db {
     weather: 'mainly_clear',
     points: {
       u_me: {
-        total: 6420,
+        total: 640,
         visitDays: wd.map(fmt),
         lastMatch: { u_sato: fmt(wd[1]), u_tanaka: fmt(addDays(today, -45)), u_suzuki: fmt(addDays(today, -20)), u_ito: fmt(addDays(today, -60)) },
         days: {},
