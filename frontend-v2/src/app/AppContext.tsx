@@ -9,6 +9,7 @@ import { mockBackend } from '../api/mockBackend';
 import type { CheckResponse, FriendsResponse, Me, PointsResponse } from '../api/types';
 import { useMockBackend } from '../config';
 import { createCampusField, type CampusField } from '../field/campusField';
+import { clearPendingInvite, pendingInvite, takeInviteFromUrl } from './invite';
 
 export type View = 'loading' | 'onboarding' | 'app' | 'error';
 export type Tab = 'home' | 'friends' | 'settings';
@@ -87,6 +88,9 @@ const readLastCheck = (uid: string): CheckResponse | null => {
 const writeLastCheck = (uid: string, v: CheckResponse) => {
   try { localStorage.setItem(LASTCHECK_KEY(uid), JSON.stringify(v)); } catch { /* 保存できない環境 */ }
 };
+
+// 招待リンクで開かれたなら、URLからキーを預かる（表示の前に一度だけ）
+takeInviteFromUrl();
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [view, setView] = useState<View>('loading');
@@ -170,6 +174,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [goOnboarding, showToast]);
 
   const reloadFriends = useCallback(async () => { setFriends(await api.getFriends()); }, []);
+
+  // ---------------------------------------------------------------
+  // 招待リンク（?add=<共有キー>）で開かれたとき
+  //
+  // 登録ずみならそのまま申請する。まだなら invite.ts が預かっているので、
+  // 登録が終わってアプリの画面に入った時点でここに来る。
+  // ---------------------------------------------------------------
+  const inviting = useRef(false);
+  useEffect(() => {
+    if (view !== 'app' || !me || inviting.current) return;
+    const shareKey = pendingInvite();
+    if (!shareKey) return;
+    inviting.current = true;
+
+    if (shareKey === me.shareKey) {
+      clearPendingInvite();
+      showToast('これはあなた自身の招待リンクです');
+      return;
+    }
+
+    void run('招待リンクからフレンド申請', async () => {
+      // 断られた場合（すでにフレンド・ブロック中など）も預かったキーは捨てる。
+      // 残すと画面を開くたびに同じ申請を繰り返すことになる。
+      try {
+        const r = await api.addFriend(shareKey, 'link');
+        await reloadFriends();
+        setTabState('friends');
+        showToast(r.status === 'friends'
+          ? `${r.user.displayName}さんとフレンドになりました`
+          : `${r.user.displayName}さんに申請しました。相手が承認するとフレンドになります`);
+      } finally {
+        clearPendingInvite();
+      }
+    }).then((ok) => {
+      // ほかの操作の最中で run が動かなかったときは、次の機会にやり直す
+      if (!ok && pendingInvite()) inviting.current = false;
+    });
+  }, [view, me, run, reloadFriends, showToast]);
 
   // ---------------------------------------------------------------
   // 在校確認のあとの演出：スライムが現れ、ポイントが1つずつ累計に足される

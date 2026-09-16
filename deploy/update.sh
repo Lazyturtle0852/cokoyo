@@ -23,7 +23,6 @@ main() {
   echo "==> frontend-v2 をビルド（本番 / explain / test）"
   docker run --rm \
     -v "$repo/frontend-v2:/app" -w /app \
-    -e VITE_SHARE_LINK_BASE="https://cokoyo.lazyta-toru.net/add/" \
     node:24-alpine sh -c '
       set -e
       npm ci --no-audit --no-fund

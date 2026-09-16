@@ -16,8 +16,21 @@ const query = (name: string) => {
 
 export const config = {
   apiBaseUrl: query('api') || import.meta.env.VITE_API_BASE_URL || '',
-  // 本番のドメインが決まったら変える
-  shareLinkBase: import.meta.env.VITE_SHARE_LINK_BASE || 'https://cokoyo.example/add/',
+};
+
+/**
+ * 招待リンク。今いるページ（/ ・ /explain/ ・ /test/）のURLに ?add=<共有キー> を足す。
+ * 配った先でも同じビルドに戻ってくるので、本番のドメインを埋め込む必要がない。
+ * 開発中の ?api= などもそのまま残るので、手元でも受け取り側を試せる。
+ * 受け取る側は src/app/invite.ts。
+ */
+export const shareLink = (shareKey: string) => {
+  try {
+    const url = new URL(window.location.href);
+    url.hash = '';
+    url.searchParams.set('add', shareKey);
+    return url.toString();
+  } catch { return `?add=${shareKey}`; }
 };
 
 export const useMockBackend = !config.apiBaseUrl;
