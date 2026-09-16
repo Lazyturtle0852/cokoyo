@@ -250,7 +250,7 @@ export function createRepo(db: Db) {
       const fCols = ["id", "user_low", "user_high", "status", "requested_by", "request_id",
         "best_low", "best_high", "created_at", "friends_since"];
       const pCols = ["id", "user_id", "date", "kind", "label", "pts", "other_user_id", "days"];
-      const rows = (stmt: { all: (...a: unknown[]) => unknown[] }, columns: string[]) =>
+      const rows = (stmt: { all: () => unknown[] }, columns: string[]) =>
         (stmt.all() as Record<string, unknown>[]).map((r) => cells(r, columns));
 
       return [
