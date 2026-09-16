@@ -21,7 +21,7 @@ describe("在校の見え方", () => {
     await bob.post(`/v1/friends/${alice.userId}/best`);
 
     const after = await check(h, alice);
-    expect(after.friends[0]).toEqual({ userId: bob.userId, present: true, building: "ι館" });
+    expect(after.friends[0]).toEqual({ userId: bob.userId, present: true, building: "ι館", buildingKey: "iota" });
   });
 
   it("自分には、かくれんぼ中でも本当のことを返す", async () => {
@@ -31,7 +31,7 @@ describe("在校の見え方", () => {
     await alice.patch("/v1/me", { hidden: true });
 
     const body = await check(h, alice);
-    expect(body.me).toEqual({ present: true, building: "κ館", hidden: true });
+    expect(body.me).toEqual({ present: true, building: "κ館", buildingKey: "kappa", hidden: true });
   });
 
   it("かくれんぼ中・ブロック中・不在は、すべて同じ present:false で区別できない", async () => {

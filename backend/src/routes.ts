@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type {
-  AddFriendResponse, BestResponse, BestState, BlockResponse, CheckResponse,
+  AddFriendResponse, BestResponse, BestState, BlockResponse, BuildingKey, CheckResponse,
   DebugDbResponse, FriendsResponse, Me, PointItem, PointsResponse, RegisterResponse, UserRef,
 } from "../../shared/app-types.js";
 import { BUILDING_LABELS } from "../../shared/app-types.js";
@@ -13,10 +13,14 @@ import { jstDate, sleep } from "./lib/time.js";
 import { awardPoints, isRainy, type VisibleFriend } from "./points.js";
 import type { FriendshipRow, Repo, User } from "./repo.js";
 
-const buildingLabel = (lookup: Lookup): string | null =>
-  lookup.status === "present" && lookup.buildingKey
-    ? (BUILDING_LABELS[lookup.buildingKey] ?? null)
-    : null;
+/** 地図に置く場所。APが建物に紐づいていなければ null。 */
+const buildingKeyOf = (lookup: Lookup): BuildingKey | null =>
+  lookup.status === "present" && lookup.buildingKey ? lookup.buildingKey : null;
+
+const buildingLabel = (lookup: Lookup): string | null => {
+  const key = buildingKeyOf(lookup);
+  return key ? (BUILDING_LABELS[key] ?? null) : null;
+};
 
 const toRef = (u: User): UserRef => ({ userId: u.user_id, displayName: u.display_name });
 
@@ -209,6 +213,7 @@ export function createRoutes(repo: Repo, dtc: DtcClient) {
         present: mine?.status === "present",
         // かくれんぼ中でも、本人には本当のことを返す。
         building: mine ? buildingLabel(mine) : null,
+        buildingKey: mine ? buildingKeyOf(mine) : null,
         hidden: me.hidden !== 0,
       },
       weather: { condition, rainy },
@@ -216,13 +221,15 @@ export function createRoutes(repo: Repo, dtc: DtcClient) {
         const lookup = theirs[i];
         const present = lookup?.status === "present";
         // 建物を出すのはベストフレンド同士のときだけ。
-        const label = present && bestState(f.row, me.id) === "best" && lookup
-          ? buildingLabel(lookup)
-          : null;
+        // 地図に出す buildingKey も、まったく同じ条件で出し分ける。
+        const shown = present && bestState(f.row, me.id) === "best" && lookup ? lookup : null;
+        const label = shown ? buildingLabel(shown) : null;
+        const key = shown ? buildingKeyOf(shown) : null;
         return {
           userId: f.other.user_id,
           present,
           ...(label ? { building: label } : {}),
+          ...(key ? { buildingKey: key } : {}),
         };
       }),
       points: { awarded, notice, ...pointsView(repo, me) },

@@ -3,7 +3,7 @@
 import { useReducer } from 'react';
 import { useApp } from '../app/AppContext';
 import { device } from '../api/client';
-import { BUILDINGS, mockBackend } from '../api/mockBackend';
+import { BUILDINGS, buildingLabel, mockBackend } from '../api/mockBackend';
 import { config, useMockBackend } from '../config';
 
 const sim = mockBackend.sim;
@@ -57,8 +57,8 @@ export function DemoPanel() {
                   </button>
                 </td>
                 <td>
-                  <select value={p.building} aria-label={`${p.name}のいる建物`} onChange={(e) => { sim.setCampus(p.userId, { building: e.target.value }); hint(); }}>
-                    {BUILDINGS.map((b) => <option key={b}>{b}</option>)}
+                  <select value={p.buildingKey} aria-label={`${p.name}のいる建物`} onChange={(e) => { sim.setCampus(p.userId, { buildingKey: e.target.value as typeof BUILDINGS[number] }); hint(); }}>
+                    {BUILDINGS.map((b) => <option key={b} value={b}>{buildingLabel(b)}</option>)}
                   </select>
                 </td>
                 <td>

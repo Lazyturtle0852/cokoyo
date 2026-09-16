@@ -70,11 +70,13 @@ export interface FriendPresence {
   present: boolean;
   /** ベストフレンド同士のときだけ入る。 */
   building?: string;
+  /** 地図に置く場所。building と同じ条件でだけ入る。 */
+  buildingKey?: BuildingKey;
 }
 
 export interface CheckResponse {
   checkedAt: string;
-  me: { present: boolean; building: string | null; hidden: boolean };
+  me: { present: boolean; building: string | null; buildingKey: BuildingKey | null; hidden: boolean };
   weather: { condition: string; rainy: boolean };
   friends: FriendPresence[];
   points: PointsResponse & { awarded: PointItem[]; notice: string | null };

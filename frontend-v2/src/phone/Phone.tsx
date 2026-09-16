@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useApp, type Tab } from '../app/AppContext';
 import { AddFriendSheet } from './AddFriendSheet';
+import { CampusMap } from './CampusMap';
 import { FieldView } from './FieldView';
 import { Friends } from './Friends';
 import { Home } from './Home';
@@ -51,7 +52,7 @@ function AppScreens() {
 }
 
 export function Phone() {
-  const { view, error, screenRef, toast, restart, onboardingMode } = useApp();
+  const { view, error, screenRef, toast, restart, onboardingMode, mapOpen } = useApp();
   return (
     <div className="device-col">
       <div className="device">
@@ -75,6 +76,7 @@ export function Phone() {
             {view === 'onboarding' && <Onboarding key={onboardingMode} />}
             {view === 'app' && <AppScreens />}
           </div>
+          {view === 'app' && mapOpen && <CampusMap />}
           <AddFriendSheet />
           {toast && <div className="toast show" key={toast.id} role="status" aria-live="polite">{toast.message}</div>}
         </div>

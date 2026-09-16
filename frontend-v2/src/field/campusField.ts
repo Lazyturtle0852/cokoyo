@@ -159,7 +159,8 @@ function spriteSvg(rows: string[], fill: Record<string, string>, extraClass = ''
     ${rest}<g class="eyes-open">${open}</g><g class="eyes-closed">${closed}</g></svg>`;
 }
 
-const slimeSvg = (color: string) =>
+/** スライムのドット絵。地図（src/field/campusMap.ts）でも同じ絵を使う。 */
+export const slimeSvg = (color: string) =>
   spriteSvg(SLIME, { o: '#2E2A45', b: color, s: shade(color, -0.22), h: shade(color, 0.6), p: '#FF8FA8' });
 const ghostSvg = () =>
   spriteSvg(GHOST, { o: '#5E5885', b: '#F3F0FF', s: '#D9D3F2', h: '#FFFFFF', p: '#FFB3C4' }, 'ghost-sprite');

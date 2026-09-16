@@ -24,6 +24,7 @@ assert<Exact<App.FriendsResponse, Fe.FriendsResponse>>(true);
 assert<Exact<App.PointKind, Fe.PointKind>>(true);
 assert<Exact<App.PointItem, Fe.PointItem>>(true);
 assert<Exact<App.PointsResponse, Fe.PointsResponse>>(true);
+assert<Exact<App.BuildingKey, Fe.BuildingKey>>(true);
 assert<Exact<App.FriendPresence, Fe.FriendPresence>>(true);
 assert<Exact<App.CheckResponse, Fe.CheckResponse>>(true);
 assert<Exact<App.AddFriendResponse, Fe.AddFriendResponse>>(true);

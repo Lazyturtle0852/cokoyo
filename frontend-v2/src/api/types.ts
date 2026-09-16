@@ -59,11 +59,12 @@ export interface FriendPresence {
   userId: string;
   present: boolean;
   building?: string;
+  buildingKey?: BuildingKey;
 }
 
 export interface CheckResponse {
   checkedAt: string;
-  me: { present: boolean; building: string | null; hidden: boolean };
+  me: { present: boolean; building: string | null; buildingKey: BuildingKey | null; hidden: boolean };
   weather: { condition: string; rainy: boolean };
   friends: FriendPresence[];
   points: PointsResponse & { awarded: PointItem[]; notice: string | null };
@@ -105,3 +106,29 @@ export interface DbTable {
 export interface DebugDbResponse {
   tables: DbTable[];
 }
+
+/** DTC が返す buildingKey（api.dtc.wide.ad.jp の enum と一致させること）。 */
+export const BUILDING_KEYS = [
+  'kappa', 'epsilon', 'iota', 'omicron', 'delta', 'tau', 'mu',
+  'omega', 'alpha', 'theta', 'lambda', 'pe-buildings', 'sigma', 'lounge',
+] as const;
+
+export type BuildingKey = (typeof BUILDING_KEYS)[number];
+
+/** buildingKey を、画面にそのまま出す名前に直す。 */
+export const BUILDING_LABELS: Record<BuildingKey, string> = {
+  kappa: 'κ館',
+  epsilon: 'ε館',
+  iota: 'ι館',
+  omicron: 'ο館',
+  delta: 'δ館',
+  tau: 'τ館',
+  mu: 'μ館',
+  omega: 'ω館',
+  alpha: 'α館',
+  theta: 'θ館',
+  lambda: 'λ館',
+  'pe-buildings': '体育施設',
+  sigma: 'σ館',
+  lounge: 'ラウンジ',
+};
