@@ -91,11 +91,11 @@ describe("ポイント", () => {
 
     const first = await check(h, alice);
     expect(first.points.awarded.map((a) => a.kind)).toEqual(["base"]);
-    expect(first.points.total).toBe(250);
+    expect(first.points.total).toBe(20);
 
     const second = await check(h, alice);
     expect(second.points.awarded).toEqual([]);
-    expect(second.points.total).toBe(250);
+    expect(second.points.total).toBe(20);
   });
 
   it("雨の日は、その日はじめて押したときだけボーナスが入る", async () => {
@@ -107,10 +107,10 @@ describe("ポイント", () => {
     const body = await check(h, alice);
     expect(body.weather).toEqual({ condition: "rain", rainy: true });
     expect(body.points.awarded.map((a) => a.kind)).toEqual(["base", "rain"]);
-    expect(body.points.total).toBe(250 + 125);
+    expect(body.points.total).toBe(20 + 10);
   });
 
-  it("はじめてのマッチは750、同じ相手には1日1回だけ", async () => {
+  it("はじめてのマッチは70、同じ相手には1日1回だけ", async () => {
     const h = createHarness();
     const alice = await h.signUp("ゆうき", MAC.alice);
     const bob = await h.signUp("佐藤", MAC.bob);
@@ -120,7 +120,7 @@ describe("ポイント", () => {
 
     const first = await check(h, alice);
     const match = first.points.awarded.find((a) => a.kind === "first");
-    expect(match).toMatchObject({ pts: 750, label: "佐藤さんとはじめてマッチ", userId: bob.userId });
+    expect(match).toMatchObject({ pts: 70, label: "佐藤さんとはじめてマッチ", userId: bob.userId });
 
     const second = await check(h, alice);
     expect(second.points.awarded).toEqual([]);
@@ -164,8 +164,8 @@ describe("ポイント", () => {
     await check(h, alice);
 
     const body = await h.json<PointsResponse>(await alice.get("/v1/points"));
-    expect(body.total).toBe(250);
-    expect(body.today.total).toBe(250);
+    expect(body.total).toBe(20);
+    expect(body.today.total).toBe(20);
     expect(Object.keys(body).sort()).toEqual(["date", "today", "total"]);
   });
 });

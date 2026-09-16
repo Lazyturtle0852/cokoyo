@@ -2,14 +2,20 @@ import type { PointItem } from "../../shared/app-types.js";
 import { isWeekend, shiftDate } from "./lib/time.js";
 import type { Repo, User } from "./repo.js";
 
-/** 100pt ＝ 1円の感覚。 */
-const P = { BASE: 250, RAIN: 125, MATCH: 100, REUNION: 500, FIRST: 750, CAP: 10 } as const;
+/**
+ * 10pt ＝ 1円。
+ *
+ * 普通の日（フレンドが5人いて、雨でも「はじめて」でもない日）で
+ *   来校ベース 20 ＋ 連続 5〜20 ＋ マッチ 6×5人 ＝ 55〜70pt（5.5〜7円）。
+ * 月16日通うと 880〜1,120pt ＝ 88〜112円。「普通の日で月100円くらい」に合わせた値。
+ */
+const P = { BASE: 20, RAIN: 10, MATCH: 6, REUNION: 50, FIRST: 70, CAP: 10 } as const;
 
 /** [連続日数, 加算pt]。高いほうから見て、当てはまった1つだけ入る。 */
 const STREAK: ReadonlyArray<readonly [number, number]> = [
-  [14, 250],
-  [7, 125],
-  [3, 50],
+  [14, 20],
+  [7, 10],
+  [3, 5],
 ];
 
 const REUNION_DAYS = 30;

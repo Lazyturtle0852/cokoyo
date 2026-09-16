@@ -11,7 +11,8 @@ export const isToday = (iso: string) => dayKey(new Date(iso)) === dayKey(new Dat
 const hhmm = (iso: string) => { const d = new Date(iso); return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
 export const when = (iso: string) => { const d = new Date(iso); return isToday(iso) ? hhmm(iso) : `${d.getMonth() + 1}/${d.getDate()} ${hhmm(iso)}`; };
 export const fullDate = (iso: string) => { const d = new Date(iso); return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`; };
-export const yen = (pt: number) => (pt / 100).toLocaleString('ja-JP', { maximumFractionDigits: 1 });
+/** 10pt ＝ 1円 */
+export const yen = (pt: number) => (pt / 10).toLocaleString('ja-JP', { maximumFractionDigits: 1 });
 
 // ---------------------------------------------------------------
 // アイコン
