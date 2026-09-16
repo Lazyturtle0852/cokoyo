@@ -276,7 +276,8 @@ MACアドレスのハッシュにすると、総当たりで元のMACアドレ�
 - エラー：`404 share_key_not_found`、`404 mac_not_registered`、`400 self`（自分のキー・自分のMAC）、`400 invalid_mac`、`409 already_friends`、`409 blocked_by_you`（自分がブロック中）
 - **相手に自分がブロックされている場合**は、ブロックされていることが分からないよう、ふつうの申請と同じ202を返す（申請は相手に届けない）
 
-招待リンクの形は、今は `https://cokoyo.example/add/<shareKey>`（仮）。
+招待リンクの形は `<アプリのURL>?add=<shareKey>`（例 `https://cokoyo.lazyta-toru.net/?add=sk_xxxxxxxx`）。
+受け取った側は、開いた時点（未登録なら登録を終えた時点）で `via: "link"` として申請する。
 
 ### POST /v1/friend-requests/:requestId/accept — 申請を承認
 

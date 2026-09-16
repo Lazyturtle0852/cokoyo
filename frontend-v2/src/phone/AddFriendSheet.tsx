@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useApp } from '../app/AppContext';
 import { api } from '../api/client';
 import { mockBackend } from '../api/mockBackend';
-import { config, useMockBackend } from '../config';
+import { shareLink, useMockBackend } from '../config';
 import { Avatar } from './ui';
 
 export function AddFriendSheet() {
@@ -33,7 +33,7 @@ export function AddFriendSheet() {
     showToast(`${r.user.displayName}さんに申請しました`);
   });
 
-  const link = me ? config.shareLinkBase + me.shareKey : '';
+  const link = me ? shareLink(me.shareKey) : '';
   const copyLink = async () => {
     try { await navigator.clipboard.writeText(link); showToast('招待リンクをコピーしました'); }
     catch { showToast(link); }

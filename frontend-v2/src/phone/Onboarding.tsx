@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useApp } from '../app/AppContext';
+import { pendingInvite } from '../app/invite';
 import { api, callLog, device, type ApiError } from '../api/client';
 import { useMockBackend } from '../config';
 import { Icon } from './ui';
@@ -199,6 +200,9 @@ export function Onboarding() {
           <li><span className="ob-ico best"><Icon.Friends size={18} /></span><span><b>見せる範囲は相手ごと</b>ベストフレンドにだけ建物まで。ブロックした相手には見えません</span></li>
           <li><span className="ob-ico hide"><Icon.Hide /></span><span><b>いつでも隠れられます</b>かくれんぼ中は、フレンド全員から「いません」に見えます</span></li>
         </ul>
+        {pendingInvite() && (
+          <p className="row-note">招待リンクから開きました。登録が終わると、そのまま相手に申請します。</p>
+        )}
         <button className="btn btn-primary" onClick={() => go('name')}>はじめる</button>
         <button className="btn btn-quiet" onClick={() => go('restore')}>登録ずみの方はこちら</button>
       </div>
