@@ -253,6 +253,126 @@
   ol.q li b { color: var(--ink); }
 
   footer { font-size: 0.74rem; color: var(--faint); margin-top: 6px; }
+  /* stack — 層と、層の間を流れる値 */
+  .stack { margin-top: 16px; }
+  .slayer {
+    display: grid; grid-template-columns: 210px 1fr auto;
+    border: 1.5px solid; border-radius: 12px; overflow: hidden; background: var(--card);
+  }
+  .slayer .sname { padding: 12px 14px; border-right: 1.5px solid; }
+  .slayer .sname b { display: block; font-size: 0.9rem; }
+  .slayer .sname span { font-size: 0.7rem; color: var(--muted); }
+  .slayer .sbody { padding: 11px 14px; font-size: 0.78rem; color: var(--muted); }
+  .slayer .sbody .role b { color: var(--ink); }
+  .slayer .smac {
+    width: 128px; padding: 11px 12px; text-align: center;
+    border-left: 1.5px dashed rgba(0,0,0,0.12); display: flex;
+    flex-direction: column; justify-content: center; gap: 3px;
+  }
+  .slayer .smac .verdict { font-size: 0.74rem; font-weight: 700; }
+  .slayer .smac .why { font-size: 0.65rem; color: var(--faint); line-height: 1.35; }
+  .slayer.s-fe { border-color: var(--me-br); background: var(--me-bg); }
+  .slayer.s-fe .sname { border-right-color: var(--me-br); }
+  .slayer.s-fe .sname b, .slayer.s-fe .verdict { color: var(--me); }
+  .slayer.s-be { border-color: var(--be-br); background: var(--be-bg); }
+  .slayer.s-be .sname { border-right-color: var(--be-br); }
+  .slayer.s-be .sname b { color: var(--be); }
+  .slayer.s-api { border-color: var(--api-br); background: var(--api-bg); }
+  .slayer.s-api .sname { border-right-color: var(--api-br); }
+  .slayer.s-api .sname b { color: var(--api); }
+  .slayer.s-wifi { border-color: var(--line); background: #f7faf8; }
+  .slayer.s-wifi .sname { border-right-color: var(--line); }
+  .slayer.s-be .verdict, .slayer.s-api .verdict, .slayer.s-wifi .verdict { color: var(--mac); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .chip {
+    font-size: 0.68rem; font-weight: 600; color: var(--ink);
+    background: #fff; border: 1.5px solid rgba(0,0,0,0.08);
+    border-radius: 6px; padding: 2px 7px;
+  }
+  .chip.m { background: var(--mac-bg); border-color: var(--mac-br); color: var(--mac); }
+
+  /* hop — 2層の間の往復 */
+  .hop { display: grid; grid-template-columns: 210px 1fr; gap: 0; }
+  .hop .hname {
+    font-size: 0.7rem; font-weight: 700; color: var(--faint);
+    padding: 12px 14px 0; line-height: 1.35; text-align: right;
+  }
+  .hop .wires {
+    border-left: 2px dashed var(--line); margin-left: 8px;
+    padding: 10px 0 10px 16px; display: grid; gap: 6px;
+  }
+  .wire {
+    display: flex; align-items: center; gap: 8px; font-size: 0.76rem;
+    background: #fff; border: 1.5px solid var(--line);
+    border-radius: 9px; padding: 6px 10px; color: var(--ink);
+  }
+  .wire .ar { flex: 0 0 auto; font-weight: 700; font-size: 0.9rem; color: var(--faint); }
+  .wire .lbl {
+    flex: 0 0 auto; font-family: "IBM Plex Mono", monospace;
+    font-size: 0.7rem; font-weight: 600; color: var(--muted);
+  }
+  .wire .txt { flex: 1; color: var(--muted); }
+  .wire .txt b { color: var(--ink); }
+  .wire.mac { background: var(--mac-bg); border-color: var(--mac-br); }
+  .wire.mac .ar { color: var(--mac); }
+  .wire.own { background: var(--me-bg); border-color: var(--me-br); }
+  .wire.own .ar { color: var(--me); }
+  .wire.pub { background: var(--fr-bg); border-color: var(--fr-br); }
+  .wire.pub .ar { color: var(--fr); }
+  .wire.ret { background: #fbfcfb; }
+  .wire.never {
+    border-style: dashed; background: transparent;
+    color: var(--faint); font-size: 0.72rem;
+  }
+  .wire.never .txt { color: var(--faint); }
+
+  .wallbar {
+    margin: 8px 0; border-top: 2.5px dashed var(--mac);
+    text-align: center;
+  }
+  .wallbar span {
+    display: inline-block; transform: translateY(-11px);
+    background: var(--card); padding: 0 10px;
+    font-size: 0.7rem; font-weight: 700; color: var(--mac);
+  }
+
+  /* matrix */
+  table.matrix {
+    width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 12px;
+    font-size: 0.76rem; background: var(--card);
+    border: 1.5px solid var(--line); border-radius: 12px; overflow: hidden;
+  }
+  table.matrix th {
+    font-size: 0.68rem; font-weight: 700; padding: 7px 9px;
+    border-bottom: 1.5px solid var(--line); text-align: center; line-height: 1.3;
+  }
+  table.matrix th.c-me { background: var(--me-bg); color: var(--me); }
+  table.matrix th.c-fr { background: var(--fr-bg); color: var(--fr); }
+  table.matrix th.c-be { background: var(--be-bg); color: var(--be); }
+  table.matrix th.c-api { background: var(--api-bg); color: var(--api); }
+  table.matrix th.c-wifi { background: #eef2f0; color: var(--muted); }
+  table.matrix th.rowh { background: #f0f3f1; }
+  table.matrix td { padding: 7px 9px; border-bottom: 1px solid #e6ece9; text-align: center; color: var(--muted); }
+  table.matrix tr:last-child td { border-bottom: none; }
+  table.matrix td.name { text-align: left; color: var(--ink); font-weight: 600; white-space: nowrap; }
+  table.matrix td.name small { display: block; font-weight: 400; font-size: 0.68rem; color: var(--faint); }
+  table.matrix td.yes-me { background: var(--me-bg); color: var(--me); font-weight: 600; }
+  table.matrix td.yes-fr { background: var(--fr-bg); color: var(--fr); font-weight: 600; }
+  table.matrix td.yes-be { background: var(--be-bg); color: var(--be); font-weight: 600; }
+  table.matrix td.yes-api { background: var(--api-bg); color: var(--api); font-weight: 600; }
+  table.matrix td.yes-mac { background: var(--mac-bg); color: var(--mac); font-weight: 700; }
+  table.matrix td.no { color: var(--faint); }
+
+  @media (max-width: 900px) {
+    .layers, .dec { grid-template-columns: 1fr; }
+    .slayer { grid-template-columns: 1fr; }
+    .slayer .sname { border-right: none; border-bottom: 1.5px solid rgba(0,0,0,0.08); }
+    .slayer .smac { width: auto; border-left: none; border-top: 1.5px dashed rgba(0,0,0,0.12); }
+    .hop { grid-template-columns: 1fr; }
+    .hop .hname { text-align: left; padding: 10px 0 0; }
+    .matrix-scroll { overflow-x: auto; }
+  }
 </style>
 </head>
 <body>
@@ -315,11 +435,12 @@
 
 <!-- 01 -->
 <section>
-  <h2><span class="n">01</span>3層と、各層が知っていること</h2>
+  <h2><span class="n">01</span>3層と、層の間を流れる値</h2>
   <p class="note">
     設計の中心は <b>MACの壁をバックエンドの内側に引いたこと</b>。
     フロントは最後までMACを見ないし、DTC API は最後までkeyを見ない。
     ユーザーが自分のMACを入力するのは登録の一度だけで、以降どこにも出てこない。
+    まず各層が何を知っているかを並べ、そのあと<b>層の間を実際に往復する値</b>を矢印で置く。
   </p>
   <div class="layers">
     <div class="layer fe">
@@ -356,6 +477,217 @@
     MACを持っている人は、アプリを経由せず DTC API を直接叩けてしまう。
     ユーザーが扱う値をMACではなく key にすることで、<b>「見せる/見せない」の判断をアプリ側で必ず通る場所に置ける。</b>
     これがこの層の存在理由で、それゆえ <b>key の扱いを間違えると層ごと意味を失う</b>（→ 02）。
+  </div>
+
+  <div class="flow" style="margin-top:16px">
+    <h3>層の間を流れる値</h3>
+    <div class="sub">
+      上から アプリフロント / アプリBE(DB) / DTC API / 学内Wi‑Fi。
+      矢印は <b>▼ 行き（リクエスト）</b> と <b>▲ 帰り（レスポンス）</b>。
+      赤い破線が<b>MACの壁</b>で、MACは④で発生して②で止まる。
+    </div>
+
+    <div class="stack">
+
+      <div class="slayer s-fe">
+        <div class="sname">
+          <b>① アプリフロント</b>
+          <span>ブラウザ / localStorage</span>
+        </div>
+        <div class="sbody">
+          <div class="role"><b>持つ:</b> 自分の <code>secret</code>・自分と友達の <code>share_key</code>・友達の表示名。表示名は端末の中だけにある。</div>
+          <div class="chips">
+            <span class="chip">secret</span>
+            <span class="chip">share_key</span>
+            <span class="chip">表示名の対応表</span>
+            <span class="chip m">MAC（登録フォームの一度だけ）</span>
+          </div>
+        </div>
+        <div class="smac">
+          <div class="verdict">MAC 持たない</div>
+          <div class="why">入力して送ったら<br />そのまま捨てる</div>
+        </div>
+      </div>
+
+      <div class="hop">
+        <div class="hname">① ⇄ ②<br /><span style="font-weight:400">/api/v1/* · HTTPS</span></div>
+        <div class="wires">
+          <div class="wire mac"><span class="ar">▼</span><span class="lbl">POST /register</span><span class="txt"><b>MAC</b> ＋ 表示名（任意）。<b>壁を越えるのはここだけ</b></span></div>
+          <div class="wire own"><span class="ar">▲</span><span class="lbl">200</span><span class="txt"><b>share_key</b> と <b>secret</b>。MACは返さない</span></div>
+          <div class="wire own"><span class="ar">▼</span><span class="lbl">Authorization</span><span class="txt"><code>Bearer secret</code> — register以外のすべてに付く「誰が聞いているか」</span></div>
+          <div class="wire pub"><span class="ar">▼</span><span class="lbl">connections</span><span class="txt">相手の <b>share_key</b>（＋ <code>scope</code> / <code>blocked</code> の変更）</span></div>
+          <div class="wire pub"><span class="ar">▼</span><span class="lbl">presence</span><span class="txt">聞きたい相手の <b>share_key の配列</b></span></div>
+          <div class="wire ret"><span class="ar">▲</span><span class="lbl">presence 200</span><span class="txt">share_key ごとの <b>present</b> ／ <b>building</b>（scope=campus なら落とした後）／ <code>as_of</code></span></div>
+          <div class="wire ret"><span class="ar">▲</span><span class="lbl">GET /me 200</span><span class="txt">自分の share_key と <b>connections 一覧</b>（share_key・scope・blocked）</span></div>
+          <div class="wire never"><span class="ar">×</span><span class="txt">この向きに <b>MAC・他人のsecret・内部ID・表示名</b> は一切流れない</span></div>
+        </div>
+      </div>
+
+      <div class="wallbar"><span>▲ MACの壁 — 越えるのは register の1本だけ ▲</span></div>
+
+      <div class="slayer s-be">
+        <div class="sname">
+          <b>② アプリBE ＋ DB</b>
+          <span>persons / connections</span>
+        </div>
+        <div class="sbody">
+          <div class="role"><b>唯一 key と MAC の両方を知る層。</b> secret→自分、share_key→相手を引き、<code>connections</code> で scope と blocked を判定してから、通ったものだけMACに変換する。</div>
+          <div class="chips">
+            <span class="chip">secret の sha256</span>
+            <span class="chip">share_key ↔ person</span>
+            <span class="chip">connections（scope / blocked）</span>
+            <span class="chip m">persons.mac — 参加者全員のMAC</span>
+          </div>
+        </div>
+        <div class="smac">
+          <div class="verdict">MAC 保持</div>
+          <div class="why">key から引くが<br />外へは返さない</div>
+        </div>
+      </div>
+
+      <div class="hop">
+        <div class="hname">② ⇄ ③<br /><span style="font-weight:400">api.dtc.wide.ad.jp · 認証なし</span></div>
+        <div class="wires">
+          <div class="wire mac"><span class="ar">▼</span><span class="lbl">GET /wifi/clients/{mac}/connection</span><span class="txt"><b>MACだけ</b>（コロン区切り12桁に整形）。<b>時間範囲は渡さない</b> — 渡すと最大7日分の履歴が返る</span></div>
+          <div class="wire ret"><span class="ar">▲</span><span class="lbl">200</span><span class="txt">最新の観測 1件 — 時刻と <b>建物</b>（APが建物に紐づかないときは建物なしで在校だけ）</span></div>
+          <div class="wire ret"><span class="ar">▲</span><span class="lbl">404 / 503</span><span class="txt">観測なし ／ 取り込み中。どちらも <b>present:false</b> に潰して外には区別を見せない</span></div>
+          <div class="wire never"><span class="ar">×</span><span class="txt">この向きに <b>share_key・secret・誰と誰がフレンドか</b> は流れない。DTC は COKOYO を知らない</span></div>
+        </div>
+      </div>
+
+      <div class="slayer s-api">
+        <div class="sname">
+          <b>③ DTC API</b>
+          <span>大学側・既存</span>
+        </div>
+        <div class="sbody">
+          <div class="role"><b>MACを受け取って在校を返すだけ。</b> 認証が無いので、MACを知っている人は誰でも直接叩ける。だから「見せる/見せない」の判断は②に置く。</div>
+          <div class="chips">
+            <span class="chip m">MAC ↔ 観測</span>
+            <span class="chip">AP ↔ 建物の対応</span>
+            <span class="chip">スナップショットの履歴</span>
+          </div>
+        </div>
+        <div class="smac">
+          <div class="verdict">MAC 扱う</div>
+          <div class="why">問い合わせの<br />キーそのもの</div>
+        </div>
+      </div>
+
+      <div class="hop">
+        <div class="hname">③ ⇄ ④<br /><span style="font-weight:400">大学の内側</span></div>
+        <div class="wires">
+          <div class="wire ret"><span class="ar">▲</span><span class="lbl">SNMP</span><span class="txt">APごとの<b>接続中の端末MAC</b>を定期的に取り込む。COKOYO からは触らない</span></div>
+        </div>
+      </div>
+
+      <div class="slayer s-wifi">
+        <div class="sname">
+          <b>④ 学内Wi‑Fi</b>
+          <span>既存インフラ</span>
+        </div>
+        <div class="sbody">
+          <div class="role"><b>事実源。</b> 学内Wi‑Fiに接続中の端末のMACと、それがどのAPに繋がっているか。建物粒度の位置はここから出る。</div>
+          <div class="chips">
+            <span class="chip m">MACの発生源</span>
+            <span class="chip">AP単位の接続状態</span>
+          </div>
+        </div>
+        <div class="smac">
+          <div class="verdict">MAC 発生</div>
+          <div class="why">接続端末の<br />識別子そのもの</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <h3 style="font-size:0.97rem;margin:18px 0 4px">どの値がどこまで届くか</h3>
+  <p class="note">
+    列をフロント2種・BE・DTC・Wi‑Fi に分けると、持ち分がはっきりする。
+    <b>MACの行だけが②より下で止まり</b>、<b>share_key と secret の行は③に届かない</b>。
+  </p>
+  <div class="matrix-scroll">
+  <table class="matrix">
+    <tr>
+      <th class="rowh"></th>
+      <th class="c-me">自分のフロント</th>
+      <th class="c-fr">フレンドのフロント</th>
+      <th class="c-be">② アプリBE(DB)</th>
+      <th class="c-api">③ DTC API</th>
+      <th class="c-wifi">④ 学内Wi‑Fi</th>
+    </tr>
+    <tr>
+      <td class="name">MACアドレス<small>端末の識別子</small></td>
+      <td class="no">登録フォームの一度だけ</td>
+      <td class="no">届かない</td>
+      <td class="yes-mac">全員ぶん保持</td>
+      <td class="yes-mac">問い合わせキー</td>
+      <td class="yes-mac">発生</td>
+    </tr>
+    <tr>
+      <td class="name">key ↔ MAC の対応<small>persons の1行</small></td>
+      <td class="no">—</td>
+      <td class="no">—</td>
+      <td class="yes-mac">ここだけ</td>
+      <td class="no">知らない</td>
+      <td class="no">—</td>
+    </tr>
+    <tr>
+      <td class="name">secret<small>自分であることを示す値</small></td>
+      <td class="yes-me">持つ</td>
+      <td class="no">持てない</td>
+      <td class="yes-be">sha256で照合</td>
+      <td class="no">—</td>
+      <td class="no">—</td>
+    </tr>
+    <tr>
+      <td class="name">share_key<small>配る値・全員に同じ1本</small></td>
+      <td class="yes-me">配る</td>
+      <td class="yes-fr">保管・提示</td>
+      <td class="yes-be">人に解決する</td>
+      <td class="no">—</td>
+      <td class="no">—</td>
+    </tr>
+    <tr>
+      <td class="name">つながり<small>scope / blocked</small></td>
+      <td class="yes-me">GET /me で取れる</td>
+      <td class="yes-fr">GET /me で取れる</td>
+      <td class="yes-be">判定する</td>
+      <td class="no">知らない</td>
+      <td class="no">—</td>
+    </tr>
+    <tr>
+      <td class="name">表示名<small>誰のkeyか分かる唯一の手がかり</small></td>
+      <td class="yes-me">端末の中だけ</td>
+      <td class="yes-fr">端末の中だけ</td>
+      <td class="no">持たない</td>
+      <td class="no">—</td>
+      <td class="no">—</td>
+    </tr>
+    <tr>
+      <td class="name">在否<small>いる / いない</small></td>
+      <td class="yes-me">表示</td>
+      <td class="yes-fr">表示</td>
+      <td class="yes-be">中継・合成</td>
+      <td class="yes-api">整形して返す</td>
+      <td class="yes-wifi">元データ</td>
+    </tr>
+    <tr>
+      <td class="name">建物<small>scope=building のときだけ</small></td>
+      <td class="yes-me">許された相手のみ</td>
+      <td class="yes-fr">許された相手のみ</td>
+      <td class="yes-be">scopeで削る</td>
+      <td class="yes-api">APから解決</td>
+      <td class="yes-wifi">AP単位で存在</td>
+    </tr>
+  </table>
+  </div>
+  <div class="hint">
+    <b>削るのは②。</b> <code>scope=campus</code> の相手の <code>building</code> は、フロントに渡す前にバックエンドが落とす。
+    フロントで隠す実装にすると、APIのレスポンスを直接見れば読めてしまう。<br />
+    <b>表示名がBEに無いことの帰結。</b> 漏れても「keyとMACの対応表」であって「名前とMACの対応表」にはならない。
+    代わりに、端末を変えて <code>GET /me</code> で復元しても、戻るのは share_key だけで<b>友達の名前は戻らない</b>。
   </div>
 </section>
 
