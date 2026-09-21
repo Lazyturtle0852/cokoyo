@@ -76,6 +76,8 @@ export function Home() {
         })}
       </div>
 
+      {liveCount > 0 && <p className="footnote tap-hint">上のスライムを連打すると、そのフレンドに「つんつん」が届きます</p>}
+
       <div className="sec"><h3>今日の獲得</h3><span>約{yen(today.total)}円</span></div>
       <div className="card">
         <div className="pt-head"><span className="pt-label">今日</span><span className="pt-value">{today.total.toLocaleString()}<small>pt</small></span></div>
@@ -83,6 +85,17 @@ export function Home() {
           ? today.items.map((i, n) => <div className="pt-row" key={n}><span>{i.label}</span><span className="n">+{i.pts.toLocaleString()}</span></div>)
           : <div className="pt-empty">キャンパスで「ポイント獲得」を押すと入ります</div>}
         <div className="pt-foot"><span>累計</span><span>{points.total.toLocaleString()} pt（約{yen(points.total)}円）</span></div>
+        {points.gifts.length > 0 && (
+          <div className="gifts">
+            <p className="gifts-cap">フレンドとのやりとり</p>
+            {points.gifts.slice(0, 5).map((g) => (
+              <div className="pt-row" key={g.giftId}>
+                <span>{g.direction === 'in' ? `${g.displayName}さんから` : `${g.displayName}さんへ`}<small className="gift-when">{when(g.createdAt)}</small></span>
+                <span className={`n${g.direction === 'out' ? ' out' : ''}`}>{g.direction === 'in' ? '+' : '−'}{g.pts.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <HideCard />

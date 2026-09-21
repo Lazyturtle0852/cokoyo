@@ -79,6 +79,30 @@ CREATE TABLE IF NOT EXISTS visits (
   PRIMARY KEY (user_id, date)
 );
 
+-- フレンドとのポイントのやりとり。累計は point_events ＋ もらった分 − 贈った分。
+-- point_events に混ぜないのは、今日の獲得やマッチの判定（other_user_id を見ている）に入れないため。
+CREATE TABLE IF NOT EXISTS gifts (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  gift_id     TEXT NOT NULL UNIQUE,         -- gf_xxxx
+  from_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  to_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date        TEXT NOT NULL,                -- JST の YYYY-MM-DD。1日の上限に使う
+  pts         INTEGER NOT NULL CHECK (pts > 0),
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_gifts_from ON gifts(from_id, date);
+CREATE INDEX IF NOT EXISTS idx_gifts_to ON gifts(to_id);
+
+-- スライムを連打したリアクションの、まだ届いていない分。送り手→受け手ごとに1行へまとめる。
+-- 受け手の画面に送り手のスライムが出たとき（受け手の /v1/checks）に渡して消す。
+CREATE TABLE IF NOT EXISTS reactions (
+  from_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  to_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  count       INTEGER NOT NULL,
+  updated_at  TEXT NOT NULL,
+  PRIMARY KEY (from_id, to_id)
+);
+
 -- 最後にマッチした日。reunion と first の判定に使う。一方向。
 CREATE TABLE IF NOT EXISTS matches (
   user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

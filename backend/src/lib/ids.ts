@@ -11,6 +11,7 @@ function rand(bytes: number): string {
 export const newUserId = () => `u_${rand(8)}`;
 export const newShareKey = () => `sk_${rand(8)}`;
 export const newRequestId = () => `fr_${rand(8)}`;
+export const newGiftId = () => `gf_${rand(8)}`;
 /** 端末トークンだけは長くする。これが漏れると本人になれる。 */
 export const newDeviceToken = () => `dt_${rand(16)}`;
 

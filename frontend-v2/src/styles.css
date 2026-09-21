@@ -158,6 +158,20 @@ body.plain .sheet { border-radius: 28px 28px 0 0; padding-bottom: max(22px, env(
 @keyframes puff { 0% { transform: translate(0, 0) scale(.4); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(1.1); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .self-mark { animation: none; } .puff { display: none; } }
 
+/* スライムの連打 */
+.heart { position: absolute; left: -7px; bottom: 44px; pointer-events: none; animation: heart-up .9s ease-out forwards; opacity: 0; }
+.heart svg { display: block; }
+@keyframes heart-up { 0% { opacity: 0; transform: translate(0, 6px) scale(.6); } 15% { opacity: 1; transform: translate(calc(var(--dx) * .3), -4px) scale(1.1); }
+                      100% { opacity: 0; transform: translate(var(--dx), -46px) scale(.9); } }
+.tap-badge { position: absolute; left: 0; bottom: 74px; transform: translateX(-50%); white-space: nowrap; pointer-events: none; z-index: 1;
+             font-family: 'DotGothic16', ui-monospace, monospace; font-size: 13px; line-height: 1; padding: 4px 8px; border-radius: 999px;
+             background: #fff; color: var(--ink-2); box-shadow: 0 2px 6px rgba(28,25,23,.18); }
+.tap-badge.ready { background: #FF6F91; color: #fff; }
+.tap-badge.sent { background: var(--ink); color: #fff; }
+.tap-badge.incoming { background: #FF6F91; color: #fff; font-size: 14px; animation: badge-in .35s cubic-bezier(.3,1.6,.5,1) both; }
+@keyframes badge-in { from { transform: translateX(-50%) scale(.4); opacity: 0; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .heart { animation: fade-only .9s ease forwards; } .tap-badge.incoming { animation: none; } }
+
 /* 「+100pt」の文字 */
 .pop { position: absolute; z-index: 400; pointer-events: none; white-space: nowrap; transform: translate(-50%, 0);
        font-family: "DotGothic16", ui-monospace, "Hiragino Sans", monospace; font-size: 17px; color: #FFD43B;
@@ -522,3 +536,26 @@ body.plain .map-screen { border-radius: 0; }
   .map-screen, .map-pin { animation: none; }
   .map-slime.self { animation: none; }
 }
+
+/* ---------- ポイントを贈る ---------- */
+.gift { background: var(--line-soft); border-radius: 14px; padding: 12px; margin-bottom: 8px; }
+.gift-title { font-size: 13px; font-weight: 700; margin: 0 0 10px; }
+.gift-chips { display: flex; gap: 6px; }
+.gift-chip { flex: 1; border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 7px 0; font-size: 12.5px; font-weight: 700; color: var(--ink-2); cursor: pointer; }
+.gift-chip.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+.gift-chip:disabled { opacity: .4; cursor: default; }
+.gift-amount { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.gift-step { width: 38px; height: 38px; flex-shrink: 0; border-radius: 50%; border: 1px solid var(--line); background: var(--card); font-size: 18px; font-weight: 700; color: var(--ink-2); cursor: pointer; }
+.gift-step:disabled { opacity: .4; cursor: default; }
+.gift-input { flex: 1; display: flex; align-items: baseline; justify-content: center; gap: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 6px 10px; }
+.gift-input input { width: 100%; min-width: 0; border: none; outline: none; background: none; text-align: right; font: inherit; font-family: 'DotGothic16', ui-monospace, monospace; font-size: 22px; color: var(--ink); }
+.gift-input span { font-size: 13px; color: var(--muted); }
+.gift .row-note { margin: 8px 0 0; }
+.gift-send { margin-top: 10px; background: var(--brand); color: #fff; padding: 9px 18px; border-radius: 999px; }
+.gift-send:hover:not(:disabled) { color: #fff; background: var(--brand-dark); }
+.gift-send:disabled { opacity: .45; cursor: default; }
+.gifts { border-top: 1px solid var(--line-soft); margin-top: 10px; padding-top: 8px; }
+.gifts-cap { font-size: 11.5px; font-weight: 700; color: var(--muted); margin: 0 0 2px; }
+.gift-when { font-size: 11px; color: var(--faint); margin-left: 6px; }
+.pt-row .n.out { color: var(--muted); }
+.tap-hint { margin-top: 8px; }

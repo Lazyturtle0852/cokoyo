@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import type {
   AddFriendResponse, BestResponse, BestState, BlockResponse, BuildingKey, CheckResponse,
-  DebugDbResponse, FriendsResponse, Me, PointItem, PointsResponse, RegisterResponse, UserRef,
+  DebugDbResponse, FriendsResponse, Gift, GiftResponse, Me, PointItem, PointsResponse, Reaction,
+  ReactionResponse, RegisterResponse, UserRef,
 } from "../../shared/app-types.js";
 import { BUILDING_LABELS } from "../../shared/app-types.js";
 import { config } from "./config.js";
@@ -11,7 +12,7 @@ import { newDeviceToken } from "./lib/ids.js";
 import { maskMac, normalizeMac } from "./lib/mac.js";
 import { jstDate, sleep } from "./lib/time.js";
 import { awardPoints, isRainy, type VisibleFriend } from "./points.js";
-import type { FriendshipRow, Repo, User } from "./repo.js";
+import type { FriendshipRow, GiftRow, Repo, User } from "./repo.js";
 
 /** 地図に置く場所。APが建物に紐づいていなければ null。 */
 const buildingKeyOf = (lookup: Lookup): BuildingKey | null =>
@@ -69,6 +70,25 @@ function validMac(input: unknown): string {
   return mac;
 }
 
+/** ポイントを贈るときの決まり。10pt ＝ 1円。 */
+export const GIFT = { MIN: 10, MAX: 1000, STEP: 10, DAILY: 1000, RECENT: 20 } as const;
+
+/** 1組（送り手→受け手）にためておけるリアクションの数と、届かないまま捨てるまでの時間。 */
+export const REACTION = { MAX: 99, TTL_MS: 3 * 24 * 60 * 60 * 1000 } as const;
+
+const toGift = (repo: Repo, me: User, row: GiftRow): Gift => {
+  const out = row.from_id === me.id;
+  const other = repo.findById(out ? row.to_id : row.from_id);
+  return {
+    giftId: row.gift_id,
+    direction: out ? "out" : "in",
+    userId: other?.user_id ?? "",
+    displayName: other?.display_name ?? "（退会した人）",
+    pts: row.pts,
+    createdAt: row.created_at,
+  };
+};
+
 const pointsView = (repo: Repo, me: User): PointsResponse => {
   const date = jstDate();
   const items = repo.pointsOfDay(me.id, date).map((row): PointItem => {
@@ -85,8 +105,23 @@ const pointsView = (repo: Repo, me: User): PointsResponse => {
     date,
     today: { items, total: items.reduce((sum, i) => sum + i.pts, 0) },
     total: repo.pointsTotal(me.id),
+    gifts: repo.recentGifts(me.id, GIFT.RECENT).map((row) => toGift(repo, me, row)),
   };
 };
+
+/**
+ * フレンドへの操作（リアクション・ポイント）の相手を引く。
+ * フレンドでない・自分がブロックしている相手は 404。
+ * 相手にブロックされているかどうかは、ここでは区別しない（呼ぶ側が黙って扱う）。
+ */
+function friendTarget(repo: Repo, me: User, userId: string): User {
+  const other = repo.findByUserId(userId);
+  const row = other ? repo.getFriendship(me.id, other.id) : undefined;
+  if (!other || !row || row.status !== "friends" || repo.isBlocking(me.id, other.id)) {
+    fail(404, "friend_not_found", "フレンドが見つかりません");
+  }
+  return other;
+}
 
 /** /v1 の下に生やす。フロントは apiBaseUrl + "/v1/..." で叩く。 */
 export function createRoutes(repo: Repo, dtc: DtcClient) {
@@ -207,6 +242,19 @@ export function createRoutes(repo: Repo, dtc: DtcClient) {
       today,
     });
 
+    // 画面に出たフレンドのスライムから、届いていたリアクションを渡す。
+    // 在校が見えている＝相手の画面では自分のスライムが見えている、とは限らないが、
+    // 「送った人のスライムが、受け取る人の画面に出たとき」に届けばよいので、これで足りる。
+    const now = Date.now();
+    const reactions: Reaction[] = [];
+    visible.forEach((f) => {
+      if (!f.present) return;
+      const r = repo.takeReaction(f.user.id, me.id);
+      if (r && now - new Date(r.updated_at).getTime() <= REACTION.TTL_MS) {
+        reactions.push({ userId: f.user.user_id, count: r.count });
+      }
+    });
+
     const response: CheckResponse = {
       checkedAt: new Date().toISOString(),
       me: {
@@ -233,6 +281,7 @@ export function createRoutes(repo: Repo, dtc: DtcClient) {
         };
       }),
       points: { awarded, notice, ...pointsView(repo, me) },
+      reactions,
     };
 
     await floor;
@@ -412,6 +461,55 @@ export function createRoutes(repo: Repo, dtc: DtcClient) {
     repo.removeBlock(me.id, other.id);
     const response: BlockResponse = { userId: other.user_id, blocked: false };
     return c.json(response);
+  });
+
+  // ── スライムへのリアクション ─────────────────────────────
+  /**
+   * フレンドのスライムを連打した回数を送る。すぐには届けず、ためておく。
+   * 相手がボタンを押して、こちらのスライムが相手の画面に出たときに届く（/v1/checks）。
+   *
+   * 相手にブロックされていても、ふつうと同じ 202 を返して黙って捨てる。
+   */
+  app.post("/v1/friends/:userId/reactions", async (c) => {
+    const me = requireUser(c, repo);
+    const other = friendTarget(repo, me, c.req.param("userId"));
+    const count = (await c.req.json().catch(() => null))?.count;
+    if (!Number.isInteger(count) || count < 1 || count > REACTION.MAX) {
+      fail(400, "invalid_count", `回数は1〜${REACTION.MAX}で送ってください`);
+    }
+
+    if (!repo.isBlocking(other.id, me.id)) repo.addReaction(me.id, other.id, count as number, REACTION.MAX);
+    const response: ReactionResponse = { userId: other.user_id, count: count as number };
+    return c.json(response, 202);
+  });
+
+  // ── ポイントを贈る ────────────────────────────────────────
+  /**
+   * フレンドにポイントを贈る。10pt 単位で 10〜1,000pt、1日に贈れるのは合計 1,000pt まで。
+   * 自分の累計より多くは贈れない。
+   *
+   * 相手にブロックされていても贈れる（ブロックは在校の見え方の話で、ここで断ると
+   * ブロックされていることが分かってしまうため）。
+   */
+  app.post("/v1/friends/:userId/gifts", async (c) => {
+    const me = requireUser(c, repo);
+    const other = friendTarget(repo, me, c.req.param("userId"));
+    const pts = (await c.req.json().catch(() => null))?.pts;
+    if (!Number.isInteger(pts) || pts < GIFT.MIN || pts > GIFT.MAX || pts % GIFT.STEP !== 0) {
+      fail(400, "invalid_pts", `${GIFT.MIN}〜${GIFT.MAX.toLocaleString()}pt を ${GIFT.STEP}pt 単位で指定してください`);
+    }
+
+    const today = jstDate();
+    const sent = repo.giftedOn(me.id, today);
+    if (sent + (pts as number) > GIFT.DAILY) {
+      fail(409, "daily_limit", `1日に贈れるのは ${GIFT.DAILY.toLocaleString()}pt までです（今日はあと ${Math.max(0, GIFT.DAILY - sent).toLocaleString()}pt）`);
+    }
+
+    const row = repo.addGift(me.id, other.id, today, pts as number);
+    if (!row) fail(409, "insufficient_points", "ポイントが足りません");
+
+    const response: GiftResponse = { gift: toGift(repo, me, row), total: repo.pointsTotal(me.id) };
+    return c.json(response, 201);
   });
 
   // ── 説明用 ────────────────────────────────────────────────

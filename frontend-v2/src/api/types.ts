@@ -52,7 +52,43 @@ export interface PointItem {
 export interface PointsResponse {
   date: string;
   today: { items: PointItem[]; total: number };
+  /** 獲得した分 ＋ もらった分 − 贈った分 */
   total: number;
+  /** フレンドとのポイントのやりとり。新しい順に20件まで。 */
+  gifts: Gift[];
+}
+
+/** フレンドとのポイントのやりとり1件。 */
+export interface Gift {
+  giftId: string;
+  /** in: もらった  out: 贈った */
+  direction: 'in' | 'out';
+  userId: string;
+  displayName: string;
+  pts: number;
+  createdAt: string;
+}
+
+/** POST /v1/friends/:userId/gifts の返事 */
+export interface GiftResponse {
+  gift: Gift;
+  /** 贈ったあとの累計 */
+  total: number;
+}
+
+/** スライムを連打して届いたリアクション。送った人のスライムが画面に出たときに届く。 */
+export interface Reaction {
+  /** 送ってきたフレンド */
+  userId: string;
+  /** 連打した回数（まとめて届く。99まで） */
+  count: number;
+}
+
+/** POST /v1/friends/:userId/reactions の返事 */
+export interface ReactionResponse {
+  userId: string;
+  /** 受け付けた回数 */
+  count: number;
 }
 
 export interface FriendPresence {
@@ -68,6 +104,8 @@ export interface CheckResponse {
   weather: { condition: string; rainy: boolean };
   friends: FriendPresence[];
   points: PointsResponse & { awarded: PointItem[]; notice: string | null };
+  /** 今回スライムが出たフレンドから、届いていたリアクション */
+  reactions: Reaction[];
 }
 
 export interface AddFriendResponse {

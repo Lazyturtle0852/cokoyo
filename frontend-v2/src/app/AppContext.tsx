@@ -58,6 +58,8 @@ interface AppActions {
   run(name: string, fn: () => Promise<void>): Promise<boolean>;
   check(): Promise<void>;
   toggleHide(): Promise<void>;
+  /** フレンドにポイントを贈る。成功したら true */
+  gift(userId: string, name: string, pts: number): Promise<boolean>;
   reloadFriends(): Promise<void>;
   setMe(me: Me): void;
 
@@ -90,6 +92,24 @@ const writeLastCheck = (uid: string, v: CheckResponse) => {
   try { localStorage.setItem(LASTCHECK_KEY(uid), JSON.stringify(v)); } catch { /* 保存できない環境 */ }
 };
 
+// もらったポイントを、どこまで知らせたか（いちばん新しく知らせた giftId）
+const GIFTSEEN_KEY = (uid: string) => `cokoyo-gifts-seen:v1:${uid}`;
+
+/** まだ知らせていない「もらった」ポイント。はじめての端末では、今あるものは知らせない。 */
+function unseenGifts(uid: string, p: PointsResponse) {
+  const incoming = p.gifts.filter((g) => g.direction === 'in');
+  let seen: string | null = null;
+  try { seen = localStorage.getItem(GIFTSEEN_KEY(uid)); } catch { return []; }
+  const newest = incoming[0]?.giftId;
+  if (newest) { try { localStorage.setItem(GIFTSEEN_KEY(uid), newest); } catch { /* 保存できない環境 */ } }
+  if (seen === null) return [];
+  const i = incoming.findIndex((g) => g.giftId === seen);
+  return i === -1 ? incoming : incoming.slice(0, i);
+}
+
+/** 「佐藤さん・田中さんから」のように、名前を並べる */
+const names = (list: string[]) => (list.length > 2 ? `${list.slice(0, 2).join('さん・')}さんほか${list.length - 2}人` : `${list.join('さん・')}さん`);
+
 // 招待リンクで開かれたなら、URLからキーを預かる（表示の前に一度だけ）
 takeInviteFromUrl();
 
@@ -120,11 +140,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const showToast = useCallback((message: string) => setToast({ id: Date.now() + Math.random(), message }), []);
 
+  // もらったポイントがあれば知らせる
+  const noticeGifts = useCallback((uid: string, p: PointsResponse) => {
+    const fresh = unseenGifts(uid, p);
+    if (!fresh.length) return;
+    const sum = fresh.reduce((n, g) => n + g.pts, 0);
+    const who = [...new Set(fresh.map((g) => g.displayName))];
+    showToast(`${names(who)}から ${sum.toLocaleString()}pt が届きました`);
+  }, [showToast]);
+
   const loadAll = useCallback(async () => {
     const [m, f, p] = await Promise.all([api.getMe(), api.getFriends(), api.getPoints()]);
     setMe(m); setFriends(f); setPoints(p);
     setLastCheck(readLastCheck(m.userId));
-  }, []);
+    noticeGifts(m.userId, p);
+  }, [noticeGifts]);
 
   const goOnboarding = useCallback(() => {
     field.clear();
@@ -223,14 +253,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const later = (ms: number, fn: () => void) => { timers.current.push(window.setTimeout(fn, ms)); };
 
     const list = friendsRef.current?.friends ?? [];
-    const present = r.friends.filter((f) => f.present)
-      .map((f) => ({ userId: f.userId, name: list.find((x) => x.userId === f.userId)?.displayName ?? '' }));
-    const landed = field.sync(present, { present: r.me.present, ghost: r.me.hidden });
+    const nameOf = (id: string) => list.find((x) => x.userId === id)?.displayName ?? '';
+    const present = r.friends.filter((f) => f.present).map((f) => ({ userId: f.userId, name: nameOf(f.userId) }));
+    let landed = field.sync(present, { present: r.me.present, ghost: r.me.hidden });
+
+    // 届いていたリアクション（つんつん）を、そのフレンドのスライムで見せてから、ポイントに移る
+    const reactions = r.reactions ?? [];
+    if (reactions.length) {
+      reactions.forEach((x, i) => later(landed + 150 + i * 700, () => { field.react(x.userId, x.count); }));
+      later(landed + 150, () => showToast(`${names(reactions.map((x) => nameOf(x.userId)))}から つんつんが届きました`));
+      landed += 150 + reactions.length * 700 + 900;
+    }
     const items = r.points.awarded;
 
     if (!items.length) {
       setDisplayTotal(null);
-      later(Math.min(landed, 400), () => showToast(r.points.notice ?? '今の分は獲得済みです'));
+      later(reactions.length ? landed : Math.min(landed, 400), () => showToast(r.points.notice ?? '今の分は獲得済みです'));
       return;
     }
     if (r.points.notice) later(landed + items.length * 460 + 300, () => showToast(r.points.notice as string));
@@ -258,7 +296,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         box.result = r;
         writeLastCheck(me.userId, r);
         setLastCheck(r);
-        setPoints({ date: r.points.date, today: r.points.today, total: r.points.total });
+        const p = { date: r.points.date, today: r.points.today, total: r.points.total, gifts: r.points.gifts };
+        setPoints(p);
+        noticeGifts(me.userId, p);
         setMe((m) => (m ? { ...m, hidden: r.me.hidden } : m));
         if (r.points.awarded.length) setDisplayTotal(before); // 演出で少しずつ足すので、いったん前の値のまま出す
       } finally {
@@ -266,7 +306,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     });
     if (box.result) celebrate(box.result, before);
-  }, [celebrate, me, points, run]);
+  }, [celebrate, me, noticeGifts, points, run]);
+
+  // フレンドのスライムを連打し終えたら送る。すぐには届かず、相手の画面にこちらのスライムが出たときに届く
+  useEffect(() => {
+    field.onReact((userId, count) => {
+      const name = friendsRef.current?.friends.find((f) => f.userId === userId)?.displayName ?? '';
+      callLog.begin('スライムを連打した');
+      api.react(userId, count)
+        .then(() => showToast(`${name}さんに つんつん×${count} を送りました`))
+        .catch((e: ApiError) => showToast(e.message));
+    });
+    return () => field.onReact(null);
+  }, [field, showToast]);
+
+  const gift = useCallback(async (userId: string, name: string, pts: number) => run('ポイントを贈る', async () => {
+    await api.gift(userId, pts);
+    setPoints(await api.getPoints());
+    showToast(`${name}さんに ${pts.toLocaleString()}pt 贈りました`);
+  }), [run, showToast]);
 
   const toggleHide = useCallback(async () => {
     if (!me) return;
@@ -308,6 +366,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     run,
     check,
     toggleHide,
+    gift,
     reloadFriends,
     setMe: (m) => setMe(m),
     completeRegistration: loadAll,
@@ -322,7 +381,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     restart,
     restartFromOnboarding: () => { device.clear(); setTabState('home'); goOnboarding(); },
   }), [view, error, tab, me, friends, points, lastCheck, checking, onboardingMode, sheet, mapOpen, displayTotal, toast,
-    field, showToast, run, check, toggleHide, reloadFriends, loadAll, refresh, restart, goOnboarding]);
+    field, showToast, run, check, toggleHide, gift, reloadFriends, loadAll, refresh, restart, goOnboarding]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

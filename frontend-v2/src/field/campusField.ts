@@ -25,8 +25,22 @@ export interface CampusField {
   setGhost(ghost: boolean): void;
   /** そのスライムの頭上に文字を出す。スライムがいなければ false */
   pop(userId: string, text: string): boolean;
+  /**
+   * フレンドのスライムを連打し終えたときに呼ぶ関数を決める。
+   * TAP_MIN 回以上たたいて、TAP_IDLE_MS 手を止めたら1回呼ばれる。
+   */
+  onReact(fn: ((userId: string, count: number) => void) | null): void;
+  /** 届いたリアクションを、そのフレンドのスライムで見せる。スライムがいなければ false */
+  react(userId: string, count: number): boolean;
   clear(): void;
 }
+
+/** これだけ続けてたたくと、相手に届く */
+export const TAP_MIN = 3;
+/** 手を止めてから送るまで */
+const TAP_IDLE_MS = 900;
+/** 1回に送れる数（バックエンドの上限と同じ） */
+const TAP_MAX = 99;
 
 // フィールドの座標（SVGの viewBox と同じ単位）
 const VW = 368;
@@ -185,7 +199,14 @@ interface Slime {
   from: { x: number; y: number }; to: { x: number; y: number };
   moving: boolean;
   phase: number; blinkAt: number; nameTimer?: number;
+  /** 連打の途中の回数と、送るまでのタイマー */
+  taps: number; tapTimer?: number;
 }
+
+// ハート（ドット絵）
+const HEART = ['.hh.hh.', 'hhhhhhh', 'hhhhhhh', '.hhhhh.', '..hhh..', '...h...'];
+const heartSvg = (fill: string) => `<svg width="14" height="12" viewBox="0 0 7 6" shape-rendering="crispEdges" aria-hidden="true">${
+  HEART.map((row, y) => [...row].map((ch, x) => (ch === 'h' ? `<rect x="${x}" y="${y}" width="1" height="1" fill="${fill}"/>` : '')).join('')).join('')}</svg>`;
 
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 const onLawn = (x: number, y: number) => ((x - LAWN.cx) / LAWN.rx) ** 2 + ((y - LAWN.cy) / LAWN.ry) ** 2 <= 0.82 && x > 26 && x < VW - 26;
@@ -200,6 +221,7 @@ export function createCampusField(): CampusField {
   const layer = el.querySelector('.slimes') as HTMLDivElement;
   const slimes = new Map<string, Slime>();
   let raf = 0;
+  let reactHandler: ((userId: string, count: number) => void) | null = null;
 
   function freeSpot() {
     for (let i = 0; i < 60; i++) {
@@ -243,18 +265,66 @@ export function createCampusField(): CampusField {
       x: spot.x, y: spot.y, dir: Math.random() < 0.5 ? -1 : 1, hop: 0, sx: 1, sy: 1,
       mode: ghost ? 'float' : reduceMotion() ? 'idle' : 'drop', t0: now, landedAt: -1e9, nextAt: now + rnd(700, 1600), hopsLeft: 0,
       from: spot, to: spot, moving: false, phase: rnd(0, 6.28), blinkAt: now + rnd(1500, 4000),
+      taps: 0,
     };
     drawBody(s);
     if (ghost) puff(s);
-    // タップすると名前が少しだけ出る
+    // タップすると名前が少しだけ出る。フレンドのスライムは、連打するとリアクションが届く
     node.addEventListener('click', () => {
       node.classList.add('named');
       window.clearTimeout(s.nameTimer);
       s.nameTimer = window.setTimeout(() => node.classList.remove('named'), 1600);
+      if (!s.self && s.mode !== 'leave') tapped(s);
     });
     slimes.set(id, s);
     place(s);
     start();
+  }
+
+  // ハートを1つ、スライムの頭上から浮かせる
+  function heart(s: Slime, fill: string, delay = 0) {
+    const h = document.createElement('span');
+    h.className = 'heart';
+    h.innerHTML = heartSvg(fill);
+    h.style.setProperty('--dx', `${rnd(-26, 26).toFixed(0)}px`);
+    h.style.animationDelay = `${delay}ms`;
+    s.node.appendChild(h);
+    window.setTimeout(() => h.remove(), 1000 + delay);
+  }
+
+  // 頭上の「×3」。連打の途中と、届いたときに使う
+  function badge(s: Slime, text: string, cls: string) {
+    let b = s.node.querySelector('.tap-badge') as HTMLSpanElement | null;
+    if (!b) { b = document.createElement('span'); s.node.appendChild(b); }
+    b.className = `tap-badge ${cls}`;
+    b.textContent = text;
+    return b;
+  }
+
+  // 相手のスライムの反応：その場で小さく跳ねる
+  function bounce(s: Slime) {
+    if (!reduceMotion() && (s.mode === 'idle' || s.mode === 'hop')) {
+      s.hopsLeft = 0; s.mode = 'hop'; s.t0 = performance.now(); s.from = { x: s.x, y: s.y }; s.to = { x: s.x, y: s.y };
+      start();
+    }
+  }
+
+  function tapped(s: Slime) {
+    s.taps = Math.min(s.taps + 1, TAP_MAX);
+    heart(s, '#FF6F91');
+    bounce(s);
+    if (s.taps >= 2) badge(s, `×${s.taps}`, s.taps >= TAP_MIN ? 'ready' : '');
+    window.clearTimeout(s.tapTimer);
+    s.tapTimer = window.setTimeout(() => {
+      const n = s.taps;
+      s.taps = 0;
+      const b = s.node.querySelector('.tap-badge');
+      if (n >= TAP_MIN && reactHandler) {
+        badge(s, '送った！', 'sent');
+        reactHandler(s.id, n);
+      } else b?.remove();
+      window.setTimeout(() => { if (!s.taps) s.node.querySelector('.tap-badge')?.remove(); }, 900);
+    }, TAP_IDLE_MS);
   }
 
   // 切り替わるときの「ぽん」という煙
@@ -430,8 +500,29 @@ export function createCampusField(): CampusField {
       return true;
     },
 
+    onReact(fn) { reactHandler = fn; },
+
+    react(userId, count) {
+      const s = slimes.get(userId);
+      if (!s || !el.isConnected || s.mode === 'leave') return false;
+      const n = Math.min(count, 12);
+      for (let i = 0; i < n; i++) heart(s, i % 3 === 2 ? '#FFB3C6' : '#FF6F91', i * 110);
+      badge(s, `つんつん×${count}`, 'incoming');
+      s.node.classList.add('named');
+      window.clearTimeout(s.nameTimer);
+      s.nameTimer = window.setTimeout(() => {
+        s.node.classList.remove('named');
+        s.node.querySelector('.tap-badge.incoming')?.remove();
+      }, 2200);
+      // うれしくて何度か跳ねる
+      if (!reduceMotion()) {
+        [0, 420, 840].forEach((ms) => window.setTimeout(() => bounce(s), ms));
+      }
+      return true;
+    },
+
     clear() {
-      for (const s of slimes.values()) s.node.remove();
+      for (const s of slimes.values()) { window.clearTimeout(s.tapTimer); s.node.remove(); }
       slimes.clear();
       layer.querySelectorAll('.pop').forEach((p) => p.remove());
     },

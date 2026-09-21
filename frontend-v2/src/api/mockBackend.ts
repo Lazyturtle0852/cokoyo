@@ -7,7 +7,7 @@
 // 中身は「バックエンドのデータ」と「大学側APIの模擬（キャンパスの様子）」の2つ。
 // 状態はブラウザに保存するので、ページを開き直しても続きから使える。
 
-import type { BestState, BuildingKey, PointItem, PointKind } from './types';
+import type { BestState, BuildingKey, Gift, PointItem, PointKind, Reaction } from './types';
 import { BUILDING_KEYS, BUILDING_LABELS } from './types';
 
 // v2：建物をラベルの文字列ではなく buildingKey で持つようにしたので、古い保存は捨てる
@@ -20,6 +20,9 @@ const STORE_KEY = 'cokoyo-mock-backend:v2';
 // 月16日通って 88〜112円になる値。backend/src/points.ts と同じ値にすること。
 // ---------------------------------------------------------------
 const P = { BASE: 20, RAIN: 10, MATCH: 6, REUNION: 50, FIRST: 70, CAP: 10 };
+// ポイントを贈るときの決まりと、リアクションをためておける数。backend/src/routes.ts と同じ値にすること。
+const GIFT = { MIN: 10, MAX: 1000, STEP: 10, DAILY: 1000, RECENT: 20 };
+const REACTION = { MAX: 99, TTL_MS: 3 * 24 * 60 * 60 * 1000 };
 const STREAK: [number, number][] = [[14, 20], [7, 10], [3, 5]]; // [連続日数, 加算pt]
 const REUNION_DAYS = 30;
 const RAINY = ['drizzle', 'rain', 'shower', 'thunderstorm', 'sleet', 'snow'];
@@ -48,6 +51,10 @@ interface Db {
   blocks: { by: string; target: string; at: string }[];
   weather: string;
   points: Record<string, Ledger>;
+  /** フレンドとのポイントのやりとり（古い順） */
+  gifts: { id: string; from: string; to: string; date: string; pts: number; at: string }[];
+  /** まだ届いていないリアクション。送り手→受け手ごとに1つ */
+  reactions: { from: string; to: string; count: number; at: string }[];
 }
 
 export interface MockResult { status: number; json: unknown }
@@ -130,13 +137,15 @@ function seed(): Db {
     weather: 'mainly_clear',
     points: {
       u_me: {
-        total: 640,
+        total: 610, // ＋ 田中さんからもらった 30pt で、画面の累計は 640pt
         visitDays: wd.map(fmt),
         lastMatch: { u_sato: fmt(wd[1]), u_tanaka: fmt(addDays(today, -45)), u_suzuki: fmt(addDays(today, -20)), u_ito: fmt(addDays(today, -60)) },
         days: {},
       },
-      u_sato: empty(), u_tanaka: empty(), u_suzuki: empty(), u_yamada: empty(), u_takahashi: empty(), u_ito: empty(),
+      u_sato: empty(), u_tanaka: { ...empty(), total: 30 }, u_suzuki: empty(), u_yamada: empty(), u_takahashi: empty(), u_ito: empty(),
     },
+    gifts: [{ id: 'gf_seed', from: 'u_tanaka', to: 'u_me', date: fmt(addDays(today, -3)), pts: 30, at: ago(3) }],
+    reactions: [],
   };
 }
 
@@ -191,11 +200,26 @@ function meView(uid: string) {
   return { userId: uid, displayName: u.name, shareKey: u.shareKey, hidden: u.hidden, macMasked: maskMac(u.mac), macRegisteredAt: u.macRegisteredAt };
 }
 
+/** 獲得した分 ＋ もらった分 − 贈った分 */
+function totalOf(uid: string) {
+  const g = db.gifts ?? [];
+  return db.points[uid].total
+    + g.filter((x) => x.to === uid).reduce((n, x) => n + x.pts, 0)
+    - g.filter((x) => x.from === uid).reduce((n, x) => n + x.pts, 0);
+}
+
+function giftView(uid: string, x: Db['gifts'][number]): Gift {
+  const out = x.from === uid;
+  const other = out ? x.to : x.from;
+  return { giftId: x.id, direction: out ? 'out' : 'in', userId: other, displayName: db.users[other]?.name ?? '（退会した人）', pts: x.pts, createdAt: x.at };
+}
+
 function pointsView(uid: string) {
   const pts = db.points[uid];
   const t = fmt(startOfDay(new Date()));
   const items = pts.days[t]?.items ?? [];
-  return { date: t, today: { items, total: items.reduce((s, i) => s + i.pts, 0) }, total: pts.total };
+  const gifts = (db.gifts ?? []).filter((x) => x.from === uid || x.to === uid).slice(-GIFT.RECENT).reverse().map((x) => giftView(uid, x));
+  return { date: t, today: { items, total: items.reduce((s, i) => s + i.pts, 0) }, total: totalOf(uid), gifts };
 }
 
 // POST /v1/users — はじめての登録（ログインなし。端末トークンを返す）
@@ -400,6 +424,17 @@ function check(uid: string) {
     pts.total += awarded.reduce((s, i) => s + i.pts, 0);
   }
 
+  // 画面に出たフレンドのスライムから、届いていたリアクションを渡す
+  const reactions: Reaction[] = [];
+  db.reactions ??= [];
+  for (const f of friends) {
+    if (!f.present) continue;
+    const r = db.reactions.find((x) => x.from === f.userId && x.to === uid);
+    if (!r) continue;
+    db.reactions = db.reactions.filter((x) => x !== r);
+    if (now.getTime() - new Date(r.at).getTime() <= REACTION.TTL_MS) reactions.push({ userId: f.userId, count: r.count });
+  }
+
   return ok({
     checkedAt: now.toISOString(),
     me: {
@@ -411,7 +446,45 @@ function check(uid: string) {
     weather: { condition: db.weather, rainy },
     friends,
     points: { awarded, notice, ...pointsView(uid) },
+    reactions,
   });
+}
+
+// フレンドへの操作の相手。フレンドでない・自分がブロックしている相手は 404
+const friendTarget = (uid: string, other: string) =>
+  (!db.users[other] || !isFriend(uid, other) || blockedBy(uid, other) ? E(404, 'friend_not_found', 'フレンドが見つかりません') : null);
+
+// POST /v1/friends/:id/reactions — スライムを連打した回数を送る（相手の画面にこちらのスライムが出たときに届く）
+function sendReaction(uid: string, other: string, body: Body) {
+  const err = friendTarget(uid, other); if (err) return err;
+  const count = body.count;
+  if (typeof count !== 'number' || !Number.isInteger(count) || count < 1 || count > REACTION.MAX) return E(400, 'invalid_count', `回数は1〜${REACTION.MAX}で送ってください`);
+  // 相手にブロックされていても、同じ返事をして黙って捨てる
+  if (!blockedBy(other, uid)) {
+    db.reactions ??= [];
+    const r = db.reactions.find((x) => x.from === uid && x.to === other);
+    const at = new Date().toISOString();
+    if (r) { r.count = Math.min(r.count + count, REACTION.MAX); r.at = at; }
+    else db.reactions.push({ from: uid, to: other, count, at });
+  }
+  return ok({ userId: other, count }, 202);
+}
+
+// POST /v1/friends/:id/gifts — ポイントを贈る
+function sendGift(uid: string, other: string, body: Body) {
+  const err = friendTarget(uid, other); if (err) return err;
+  const pts = body.pts;
+  if (typeof pts !== 'number' || !Number.isInteger(pts) || pts < GIFT.MIN || pts > GIFT.MAX || pts % GIFT.STEP !== 0) {
+    return E(400, 'invalid_pts', `${GIFT.MIN}〜${GIFT.MAX.toLocaleString()}pt を ${GIFT.STEP}pt 単位で指定してください`);
+  }
+  db.gifts ??= [];
+  const t = fmt(startOfDay(new Date()));
+  const sent = db.gifts.filter((x) => x.from === uid && x.date === t).reduce((n, x) => n + x.pts, 0);
+  if (sent + pts > GIFT.DAILY) return E(409, 'daily_limit', `1日に贈れるのは ${GIFT.DAILY.toLocaleString()}pt までです（今日はあと ${Math.max(0, GIFT.DAILY - sent).toLocaleString()}pt）`);
+  if (totalOf(uid) < pts) return E(409, 'insufficient_points', 'ポイントが足りません');
+  const g = { id: rand('gf_', 8), from: uid, to: other, date: t, pts, at: new Date().toISOString() };
+  db.gifts.push(g);
+  return ok({ gift: giftView(uid, g), total: totalOf(uid) }, 201);
 }
 
 // ---------------------------------------------------------------
@@ -441,8 +514,10 @@ function route(method: string, path: string, headers: Record<string, string>, bo
   let m = /^\/v1\/friend-requests\/([\w-]+)\/(accept|decline)$/.exec(path);
   if (m && method === 'POST') return answerRequest(uid, m[1], m[2] === 'accept');
 
-  m = /^\/v1\/friends\/([\w-]+)\/(best|block)$/.exec(path);
+  m = /^\/v1\/friends\/([\w-]+)\/(best|block|reactions|gifts)$/.exec(path);
   if (m) {
+    if (m[2] === 'reactions' && method === 'POST') return sendReaction(uid, m[1], body);
+    if (m[2] === 'gifts' && method === 'POST') return sendGift(uid, m[1], body);
     if (m[2] === 'best' && method === 'POST') return requestBest(uid, m[1]);
     if (m[2] === 'best' && method === 'DELETE') return endBest(uid, m[1]);
     if (m[2] === 'block' && method === 'POST') return block(uid, m[1]);
@@ -497,6 +572,16 @@ const sim = {
   openMyLink(from: string, currentUid: string) { addFriend(from, { shareKey: db.users[currentUid].shareKey, via: 'link' }); save(); },
   // 相手がベストフレンドを申請した
   requestBestFrom(from: string, currentUid: string) { requestBest(from, currentUid); save(); },
+  // 相手がこちらのスライムを連打した（相手のスライムがこちらの画面に出たときに届く）
+  reactFrom(from: string, currentUid: string, count: number) { sendReaction(from, currentUid, { count }); save(); },
+  // 相手がポイントを贈ってきた。デモなので、相手の残高は足りることにする
+  giftFrom(from: string, currentUid: string, pts: number) {
+    db.gifts ??= [];
+    const t = fmt(startOfDay(new Date()));
+    db.points[from].total += pts;
+    db.gifts.push({ id: rand('gf_', 8), from, to: currentUid, date: t, pts, at: new Date().toISOString() });
+    save();
+  },
   userIdForToken(token: string | null) { return token ? Object.keys(db.users).find((id) => db.users[id].token === token) ?? null : null; },
   reset() { db = seed(); save(); },
 };
