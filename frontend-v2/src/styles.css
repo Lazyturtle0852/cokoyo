@@ -374,7 +374,26 @@ body.plain .sheet { border-radius: 28px 28px 0 0; padding-bottom: max(22px, env(
 .qr-fallback { font-size: 11.5px; color: var(--muted); padding: 12px; text-align: center; }
 .sharekey { text-align: center; font-size: 11.5px; color: var(--muted); margin: 8px 0 0; }
 .sharekey .mono { color: var(--ink-2); }
-.camera { position: relative; height: 176px; border-radius: 18px; background: #1F1B17; display: flex; align-items: flex-end; justify-content: center; }
+.camera { position: relative; height: 220px; border-radius: 18px; background: #1F1B17; display: flex; align-items: flex-end; justify-content: center; overflow: hidden; }
+.camera video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; }
+.camera.live video { opacity: 1; }
+.camera-ask { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 0 26px; text-align: center; z-index: 1; }
+.camera-ask .btn { margin: 0; width: auto; padding-left: 26px; padding-right: 26px; }
+.camera-ask p { margin: 0; font-size: 11.5px; line-height: 1.6; color: #D6D3D1; }
+.camera-ask b { color: #fff; }
+.camera .camera-text { position: relative; z-index: 1; background: rgba(0,0,0,.45); padding: 4px 10px; border-radius: 999px; }
+.scan-msg { font-size: 12px; color: var(--ink-2); line-height: 1.65; margin: 12px 0 0; }
+.scan-help { margin-top: 14px; background: var(--brand-tint); border-radius: 14px; padding: 12px 14px; }
+.scan-help-title { font-size: 13px; font-weight: 700; margin: 0; color: var(--brand-dark); }
+.scan-help .steps { margin-top: 10px; }
+.scan-help .btn { margin-top: 12px; }
+.linkish { border: none; background: none; padding: 0; color: var(--brand); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+.btn-icon { display: flex; align-items: center; justify-content: center; gap: 6px; }
+.linkbox { background: var(--line-soft); border-radius: 12px; padding: 10px 12px; font-size: 11.5px; color: var(--ink-2); word-break: break-all; line-height: 1.5; }
+.keybox { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 16px; border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; }
+.keybox-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.keybox-cap { font-size: 11px; color: var(--muted); font-weight: 600; }
+.keybox-key { font-size: 14px; color: var(--ink); word-break: break-all; }
 .corner { position: absolute; width: 30px; height: 30px; border: 3px solid #fff; opacity: .9; }
 .corner.tl { top: 30px; left: calc(50% - 64px); border-right: none; border-bottom: none; border-radius: 8px 0 0 0; }
 .corner.tr { top: 30px; right: calc(50% - 64px); border-left: none; border-bottom: none; border-radius: 0 8px 0 0; }

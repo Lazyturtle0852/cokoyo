@@ -13,7 +13,8 @@ import { clearPendingInvite, pendingInvite, takeInviteFromUrl } from './invite';
 
 export type View = 'loading' | 'onboarding' | 'app' | 'error';
 export type Tab = 'home' | 'friends' | 'settings';
-export type AddMode = 'show' | 'scan';
+/** show: 自分のQR  scan: 相手のQRを読む（どちらも「QR」タブ）  link: リンクで共有 */
+export type AddMode = 'show' | 'scan' | 'link';
 
 /** 右上の累計ポイント（src/phone/TotalPoints.tsx）が登録する操作 */
 export interface CounterHandle {
