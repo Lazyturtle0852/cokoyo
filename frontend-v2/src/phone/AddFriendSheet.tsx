@@ -11,7 +11,7 @@ import { api } from '../api/client';
 import { mockBackend } from '../api/mockBackend';
 import { shareLink, useMockBackend } from '../config';
 import { QrScanner } from './QrScanner';
-import { drawStory, shareStory, tweetUrl } from './share';
+import { appUrl, drawStory, shareStory, tweetUrl } from './share';
 import { Avatar } from './ui';
 
 export function AddFriendSheet() {
@@ -63,7 +63,7 @@ export function AddFriendSheet() {
     const qr = qrBox.current?.querySelector('canvas');
     if (!qr || !me) { showToast('画像を作れませんでした'); return; }
     try {
-      const message = await shareStory(drawStory(qr, me.displayName, new URL(link).host), link);
+      const message = await shareStory(drawStory(qr, me.displayName, new URL(appUrl(link)).host), link);
       if (message) showToast(message);
     } catch (e) {
       showToast((e as Error).message);
@@ -143,7 +143,7 @@ export function AddFriendSheet() {
                 <p className="note">リンクが開けない相手には、このキーを伝えて「相手の共有キーを入力」から申請してもらえます。</p>
 
                 <div className="sns">
-                  <p className="sns-cap">SNSで誘う</p>
+                  <p className="sns-cap">SNSでアプリを知らせる</p>
                   <div className="sns-row">
                     <button className="sns-btn x" onClick={() => window.open(tweetUrl(link), '_blank', 'noopener')}>
                       <XIcon />Xで共有
@@ -153,13 +153,14 @@ export function AddFriendSheet() {
                     </button>
                   </div>
                   <p className="row-note">
-                    受け取った人は、リンクを開いて登録するだけでフレンドの申請が飛びます（あなたが承認するとフレンドになります）。
-                    「ストーリーズ」を押すと、貼るだけの画像（9:16）を作ります。QRコードが入っているので、画面を写してもらっても大丈夫です。
+                    出すのは<b>アプリのページだけ</b>で、上の招待リンクは入れません。
+                    ストーリーズやXは知らない人も見るので、そこから直接フレンドになれる形にはしていません。
+                    見た人が登録してDMをくれたら、QRか招待リンクでつないでください。
                   </p>
                 </div>
-                {/* 画像を作るときだけ使うQRコード。画面には出さない */}
+                {/* 画像を作るときだけ使うQRコード（アプリのページ。招待リンクではない）。画面には出さない */}
                 <div ref={qrBox} className="qr-hidden" aria-hidden="true">
-                  <QRCodeCanvas value={link} size={480} level="M" marginSize={2} fgColor="#1C1917" bgColor="#FFFFFF" />
+                  <QRCodeCanvas value={appUrl(link)} size={480} level="M" marginSize={2} fgColor="#1C1917" bgColor="#FFFFFF" />
                 </div>
 
                 <details className="manual">

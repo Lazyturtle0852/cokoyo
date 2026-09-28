@@ -1,11 +1,15 @@
-// SNSへの招待
+// SNSでアプリを知らせる
 //
-//   X          … 文字数の上限に収まる短い文と、招待リンク
+//   X          … 文字数の上限に収まる短い文と、アプリのページのURL
 //   ストーリーズ … 1080×1920（9:16）の画像を作って、共有シートに渡す
 //
-// どちらも渡すのは招待リンク（?add=<共有キー>）。まだ登録していない人が開いても、
-// 登録が終わった時点でそのまま申請が飛ぶ（src/app/invite.ts）ので、
-// 受け取った人は「リンクを開く → 登録する」だけでフレンドになれる。
+// どちらにも**招待リンク（?add=<共有キー>）は入れない**。
+// ストーリーズやXは不特定多数が見るので、そこに招待リンクを出すと知らない人にも
+// フレンド申請の入り口を配ることになる。インスタの中のブラウザで開かれると、
+// すでに登録している人でも登録し直しになってしまう、という問題もある。
+//
+// 出すのは「アプリのページ」だけにして、フレンドになるのは今までどおり、
+// DMで声をかけあってから QR・招待リンク・共有キーでつなぐ（2026-09-28 グループで決定）。
 
 import { COLORS, SELF_COLOR, shade, SLIME } from '../field/campusField';
 
@@ -15,15 +19,29 @@ const H = 1920;
 const FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif';
 
 /**
+ * 招待リンクからキーを外した、ただのアプリのページ。SNSに出すのはこちら。
+ * 手元で動かしているときは localhost のままになるが、それで構わない。
+ */
+export function appUrl(link: string): string {
+  try {
+    const url = new URL(link);
+    url.search = '';
+    url.hash = '';
+    return url.toString();
+  } catch { return link; }
+}
+
+/**
  * Xに出す文。
  *
  * Xの上限は280「重み」で、日本語は1文字＝2。URLは何文字でも23として数えられる。
- * 下の文は51文字（COKOYOの6文字は1ずつなので重み 96）＋URL（23）で、上限280の半分ほど。
+ * 下の文は日本語62文字（重み124）＋URL（23）で、上限280の半分ほど。
  */
-export const tweetText = 'キャンパスにいるフレンドが分かるアプリ、COKOYOを使っています。よかったらフレンドになりませんか？';
+export const tweetText = 'キャンパスにいるフレンドが分かるアプリ、COKOYOを使っています。'
+  + '気になる人はここから登録してみてください。登録したらDMをもらえれば、フレンドになれます。';
 
 export const tweetUrl = (link: string) =>
-  `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(link)}`;
+  `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(appUrl(link))}`;
 
 // ---------------------------------------------------------------
 // ストーリーズ用の画像
@@ -80,8 +98,29 @@ const centered = (ctx: CanvasRenderingContext2D, text: string, cx: number, y: nu
 };
 
 /**
- * 招待のストーリーズ画像を作る。
- * qr は画面のどこかに描いてある QRコードの canvas（qrcode.react の QRCodeCanvas）。
+ * 見出しの行。1行に収まればそのまま、収まらなければ「〇〇と」で改行する。
+ * 名前が長いときは、はみ出さないところまで字を小さくする。
+ */
+function headlineLines(ctx: CanvasRenderingContext2D, displayName: string, maxWidth: number) {
+  const whole = `${displayName}とキャンパスでつながろう`;
+  for (let size = 62; size >= 40; size -= 4) {
+    ctx.font = `800 ${size}px ${FONT}`;
+    if (ctx.measureText(whole).width <= maxWidth) return { size, lines: [whole] };
+    const split = [`${displayName}と`, 'キャンパスでつながろう'];
+    if (split.every((line) => ctx.measureText(line).width <= maxWidth)) return { size, lines: split };
+  }
+  return { size: 40, lines: [`${displayName}と`, 'キャンパスでつながろう'] };
+}
+
+/**
+ * ストーリーズ用の画像を作る。
+ *
+ * 出すのは「アプリの紹介」と「アプリのページのQRコード」まで。
+ * 招待リンクは入れない（見た人が勝手にフレンドになれてしまうため）。
+ * フレンドになるのは、見た人からDMをもらってから。
+ *
+ * qr は画面のどこかに描いてある QRコードの canvas（qrcode.react の QRCodeCanvas）で、
+ * 中身はアプリのページのURL。
  */
 export function drawStory(qr: HTMLCanvasElement, displayName: string, host: string): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
@@ -96,9 +135,9 @@ export function drawStory(qr: HTMLCanvasElement, displayName: string, host: stri
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
 
-  // 上下の余白はインスタの操作ボタンに隠れるので、中身は中央に寄せる
-  const cardY = 300;
-  const cardH = 1320;
+  // 上下はインスタの操作ボタンに隠れるので、中身は中央に寄せる
+  const cardY = 250;
+  const cardH = 1420;
   ctx.save();
   ctx.shadowColor = 'rgba(60,20,0,.28)';
   ctx.shadowBlur = 60;
@@ -108,12 +147,20 @@ export function drawStory(qr: HTMLCanvasElement, displayName: string, host: stri
   ctx.fill();
   ctx.restore();
 
-  drawWordmark(ctx, W / 2, cardY + 150, 92);
-  centered(ctx, 'フレンドが今キャンパスにいるか、', W / 2, cardY + 232, `500 36px ${FONT}`, '#57534E');
-  centered(ctx, 'ボタンひとつで分かる', W / 2, cardY + 286, `500 36px ${FONT}`, '#57534E');
+  drawWordmark(ctx, W / 2, cardY + 140, 84);
+
+  // 「〇〇とキャンパスでつながろう」
+  const headline = headlineLines(ctx, displayName, W - 260);
+  let y = cardY + 262;
+  for (const line of headline.lines) {
+    centered(ctx, line, W / 2, y, `800 ${headline.size}px ${FONT}`, '#1C1917');
+    y += headline.size + 14;
+  }
+  centered(ctx, 'フレンドが今キャンパスにいるか、', W / 2, y + 22, `500 34px ${FONT}`, '#57534E');
+  centered(ctx, 'ボタンひとつで分かるアプリ', W / 2, y + 72, `500 34px ${FONT}`, '#57534E');
 
   // 芝生とスライム（アプリのホームと同じ絵）
-  const fieldY = cardY + 470;
+  const fieldY = y + 250;
   ctx.fillStyle = '#7EBF5D';
   ctx.beginPath();
   ctx.ellipse(W / 2, fieldY + 16, 380, 92, 0, 0, Math.PI * 2);
@@ -126,25 +173,30 @@ export function drawStory(qr: HTMLCanvasElement, displayName: string, host: stri
   drawSlime(ctx, W / 2, fieldY + 52, 9, SELF_COLOR);
   drawSlime(ctx, W / 2 + 205, fieldY + 18, 7, COLORS[3]);
 
-  // QRコード（白い下じきの上に置く）
-  const qrSize = 400;
+  // アプリのページのQRコード（白い下じきの上に置く）
+  const qrSize = 330;
   const qrX = (W - qrSize) / 2;
-  const qrY = cardY + 640;
+  const qrY = fieldY + 150;
   ctx.fillStyle = '#F2EFEB';
-  roundRect(ctx, qrX - 28, qrY - 28, qrSize + 56, qrSize + 56, 36);
+  roundRect(ctx, qrX - 26, qrY - 26, qrSize + 52, qrSize + 52, 34);
   ctx.fill();
   ctx.fillStyle = '#FFFFFF';
-  roundRect(ctx, qrX - 16, qrY - 16, qrSize + 32, qrSize + 32, 26);
+  roundRect(ctx, qrX - 14, qrY - 14, qrSize + 28, qrSize + 28, 24);
   ctx.fill();
   ctx.imageSmoothingEnabled = false; // QRはぼかさない
   ctx.drawImage(qr, qrX, qrY, qrSize, qrSize);
   ctx.imageSmoothingEnabled = true;
+  centered(ctx, 'カメラで読み取ると、登録の画面がひらきます', W / 2, qrY + qrSize + 64, `500 30px ${FONT}`, '#8B8580');
 
-  centered(ctx, `${displayName}さんから招待`, W / 2, qrY + qrSize + 110, `700 46px ${FONT}`, '#1C1917');
-  centered(ctx, 'カメラで読み取って、登録するだけ。', W / 2, qrY + qrSize + 168, `500 32px ${FONT}`, '#57534E');
-  centered(ctx, 'そのままフレンドになれます。', W / 2, qrY + qrSize + 216, `500 32px ${FONT}`, '#57534E');
+  // いちばん言いたいこと：登録したらDMをください
+  const pillY = cardY + cardH - 150;
+  ctx.fillStyle = '#FFF4ED';
+  roundRect(ctx, 150, pillY, W - 300, 108, 54);
+  ctx.fill();
+  centered(ctx, '登録したら、DMで', W / 2, pillY + 46, `700 38px ${FONT}`, '#C2410C');
+  centered(ctx, 'フレンド追加をお願いします', W / 2, pillY + 90, `700 38px ${FONT}`, '#C2410C');
 
-  centered(ctx, host, W / 2, cardY + cardH + 86, `600 34px ${FONT}`, 'rgba(255,255,255,.92)');
+  centered(ctx, host, W / 2, cardY + cardH + 82, `600 34px ${FONT}`, 'rgba(255,255,255,.92)');
   return canvas;
 }
 
@@ -158,12 +210,13 @@ const toBlob = (canvas: HTMLCanvasElement) =>
 export async function shareStory(canvas: HTMLCanvasElement, link: string): Promise<string> {
   const blob = await toBlob(canvas);
   if (!blob) return '画像を作れませんでした';
-  const file = new File([blob], 'cokoyo-invite.png', { type: 'image/png' });
+  const file = new File([blob], 'cokoyo.png', { type: 'image/png' });
 
   if (navigator.canShare?.({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], text: link });
-      return 'インスタのストーリーズに貼って、リンクも添えてください';
+      // 渡すのはアプリのページ。招待リンクは載せない
+      await navigator.share({ files: [file], text: appUrl(link) });
+      return 'ストーリーズに貼ってください。フレンド追加はDMで';
     } catch (e) {
       if ((e as DOMException).name === 'AbortError') return '';
       // 共有できなければ保存に切り替える
@@ -173,7 +226,7 @@ export async function shareStory(canvas: HTMLCanvasElement, link: string): Promi
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'cokoyo-invite.png';
+  a.download = 'cokoyo.png';
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
   return '画像を保存しました。ストーリーズに貼ってください';

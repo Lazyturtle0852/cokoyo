@@ -45,7 +45,7 @@ npm run typecheck
 | `src/phone/QrScanner.tsx` | QRの読み取り。カメラの許可の取り方と、「許可しない」にしたときの戻し方もここ |
 | `src/app/install.ts` / `src/phone/Install.tsx` | ホーム画面に追加（PWA）の判定と案内 |
 | `src/phone/AvatarPicker.tsx` | アイコンの写真。端末の中で正方形に切って128pxに縮めてから送る |
-| `src/phone/share.ts` | SNSへの招待。Xの文と、ストーリーズ用の1080×1920の画像 |
+| `src/phone/share.ts` | SNSでアプリを知らせる。Xの文と、ストーリーズ用の1080×1920の画像。**招待リンクは載せない**（不特定多数が見るため。フレンドになるのはDMで声をかけあってから） |
 | `src/field/campusMap.ts` | 地図のかたち。建物の位置は DTC の `GET /areas`（2026-09-16 取得）の緯度経度から起こしてある。ブラウザから DTC は呼ばない |
 | `src/demo/` | 右側のデモ操作と通信ログ。本番のアプリには要らない |
 | `src/config.ts` | 接続先 |
