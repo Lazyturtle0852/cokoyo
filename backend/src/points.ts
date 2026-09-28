@@ -3,11 +3,9 @@ import { isWeekend, shiftDate } from "./lib/time.js";
 import type { Repo, User } from "./repo.js";
 
 /**
- * 10pt ＝ 1円。
- *
  * 普通の日（フレンドが5人いて、雨でも「はじめて」でもない日）で
- *   来校ベース 20 ＋ 連続 5〜20 ＋ マッチ 6×5人 ＝ 55〜70pt（5.5〜7円）。
- * 月16日通うと 880〜1,120pt ＝ 88〜112円。「普通の日で月100円くらい」に合わせた値。
+ *   来校ベース 20 ＋ 連続 5〜20 ＋ マッチ 6×5人 ＝ 55〜70pt。
+ * 月16日通うと 880〜1,120pt。
  */
 const P = { BASE: 20, RAIN: 10, MATCH: 6, REUNION: 50, FIRST: 70, CAP: 10 } as const;
 

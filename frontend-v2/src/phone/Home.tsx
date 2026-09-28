@@ -4,7 +4,7 @@
 import { useApp } from '../app/AppContext';
 import { HideCard } from './HideCard';
 import { InstallCard } from './Install';
-import { Avatar, isToday, when, yen } from './ui';
+import { Avatar, isToday, when } from './ui';
 
 export function Home() {
   const { me, friends, points, lastCheck: lc, checking, check, openAddSheet } = useApp();
@@ -81,13 +81,13 @@ export function Home() {
 
       {liveCount > 0 && <p className="footnote tap-hint">上のスライムを連打すると、そのフレンドに「つんつん」が届きます</p>}
 
-      <div className="sec"><h3>今日の獲得</h3><span>約{yen(today.total)}円</span></div>
+      <div className="sec"><h3>今日の獲得</h3></div>
       <div className="card">
         <div className="pt-head"><span className="pt-label">今日</span><span className="pt-value">{today.total.toLocaleString()}<small>pt</small></span></div>
         {today.items.length
           ? today.items.map((i, n) => <div className="pt-row" key={n}><span>{i.label}</span><span className="n">+{i.pts.toLocaleString()}</span></div>)
           : <div className="pt-empty">キャンパスで「ポイント獲得」を押すと入ります</div>}
-        <div className="pt-foot"><span>累計</span><span>{points.total.toLocaleString()} pt（約{yen(points.total)}円）</span></div>
+        <div className="pt-foot"><span>累計</span><span>{points.total.toLocaleString()} pt</span></div>
       </div>
 
       <HideCard />
