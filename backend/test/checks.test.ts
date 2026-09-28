@@ -31,7 +31,7 @@ describe("在校の見え方", () => {
     await alice.patch("/v1/me", { hidden: true });
 
     const body = await check(h, alice);
-    expect(body.me).toEqual({ present: true, building: "κ館", buildingKey: "kappa", hidden: true });
+    expect(body.me).toEqual({ presence: "present", building: "κ館", buildingKey: "kappa", hidden: true });
   });
 
   it("かくれんぼ中・ブロック中・不在は、すべて同じ present:false で区別できない", async () => {

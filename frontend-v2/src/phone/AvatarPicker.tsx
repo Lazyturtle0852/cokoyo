@@ -73,7 +73,7 @@ export function AvatarPicker() {
           <button className="mini-btn primary" disabled={busy} onClick={() => file.current?.click()}>
             {busy ? '準備しています…' : me.avatar ? '写真を変える' : '写真を選ぶ'}
           </button>
-          {me.avatar && <button className="mini-btn" onClick={() => void remove()}>元に戻す</button>}
+          {me.avatar && <button className="mini-btn" onClick={() => void remove()}>写真を削除</button>}
         </div>
       </div>
       <input ref={file} className="hidden-file" type="file" accept="image/*" aria-label="アイコンにする写真"

@@ -16,7 +16,7 @@ const assert = <T extends true>(_: T) => undefined;
 assert<Exact<App.BestState, Fe.BestState>>(true);
 assert<Exact<App.UserRef, Fe.UserRef>>(true);
 assert<Exact<App.Me, Fe.Me>>(true);
-assert<Exact<App.RegisterResponse, Fe.RegisterResponse>>(true);
+assert<Exact<App.MacAddressView, Fe.MacAddressView>>(true);
 assert<Exact<App.Friend, Fe.Friend>>(true);
 assert<Exact<App.FriendRequest, Fe.FriendRequest>>(true);
 assert<Exact<App.BlockedUser, Fe.BlockedUser>>(true);

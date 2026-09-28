@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { GoogleProvider } from "./auth.js";
 import type { DtcClient } from "./dtc.js";
 import { ApiFailure, errorResponse } from "./lib/errors.js";
 import type { Repo } from "./repo.js";
@@ -8,11 +9,11 @@ import { createRoutes } from "./routes.js";
  * CORS は設定しない。本番はフロントと同一オリジン（Caddy が /api だけ後ろに流す）、
  * 開発は Vite の dev proxy を通すので、ブラウザから見て常に同一オリジンになる。
  */
-export function createApp(repo: Repo, dtc: DtcClient) {
+export function createApp(repo: Repo, dtc: DtcClient, google: GoogleProvider | null = null) {
   const app = new Hono();
 
   // フロントは apiBaseUrl("/api") + "/v1/..." で叩く。
-  app.route("/api", createRoutes(repo, dtc));
+  app.route("/api", createRoutes(repo, dtc, google));
 
   app.notFound((c) => errorResponse(c, 404, "not_found", "見つかりません"));
 

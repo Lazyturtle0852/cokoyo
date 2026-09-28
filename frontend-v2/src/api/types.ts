@@ -14,14 +14,17 @@ export interface UserRef {
 }
 
 export interface Me extends UserRef {
+  email: string;
   shareKey: string;
   hidden: boolean;
-  macMasked: string;
-  macRegisteredAt: string;
+  macs: MacAddressView[];
 }
 
-export interface RegisterResponse extends Me {
-  deviceToken: string;
+export interface MacAddressView {
+  id: number;
+  label: string;
+  macMasked: string;
+  registeredAt: string;
 }
 
 export interface Friend extends UserRef {
@@ -84,7 +87,7 @@ export interface FriendPresence {
 
 export interface CheckResponse {
   checkedAt: string;
-  me: { present: boolean; building: string | null; buildingKey: BuildingKey | null; hidden: boolean };
+  me: { presence: 'present' | 'absent' | 'unknown'; building: string | null; buildingKey: BuildingKey | null; hidden: boolean };
   weather: { condition: string; rainy: boolean };
   friends: FriendPresence[];
   points: PointsResponse & { awarded: PointItem[]; notice: string | null };
@@ -113,13 +116,13 @@ export interface ApiErrorBody {
 }
 
 /**
- * /explain（説明用ページ）で中身を見せるための、DBの生の行。
- * アプリ本体は使わない。返すのは呼び出した本人に関係する行だけ。
+ * /explain（説明用ページ）で中身を見せるための全員分の行。
+ * アプリ本体は使わない。メール・認証情報・MAC原文・共有キーは返さない。
  */
 export interface DbTable {
   /** テーブル名（SQLite のものそのまま） */
   name: string;
-  /** 何のテーブルか、何を絞ったかの説明 */
+  /** テーブルの説明 */
   note: string;
   columns: string[];
   rows: Array<Array<string | number | null>>;

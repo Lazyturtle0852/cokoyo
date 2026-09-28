@@ -4,14 +4,12 @@
 // バックエンドとのやりとりは src/api/client.ts の api.* を通す。
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { api, ApiError, callLog, device } from '../api/client';
-import { mockBackend } from '../api/mockBackend';
+import { api, ApiError, callLog } from '../api/client';
 import type { CheckResponse, FriendsResponse, Me, PointsResponse } from '../api/types';
-import { useMockBackend } from '../config';
 import { createCampusField, type CampusField } from '../field/campusField';
 import { clearPendingInvite, pendingInvite, takeInviteFromUrl } from './invite';
 
-export type View = 'loading' | 'onboarding' | 'app' | 'error';
+export type View = 'loading' | 'login' | 'onboarding' | 'app' | 'error';
 export type Tab = 'home' | 'friends' | 'settings';
 /** show: 自分のQR  scan: 相手のQRを読む（どちらも「QR」タブ）  link: リンクで共有 */
 export type AddMode = 'show' | 'scan' | 'link';
@@ -31,8 +29,6 @@ interface AppState {
   points: PointsResponse | null;
   lastCheck: CheckResponse | null;
   checking: boolean;
-  /** はじめての登録か、MACアドレスの登録し直しか、この端末に引き継ぐか */
-  onboardingMode: 'new' | 'reregister' | 'restore';
   sheet: { open: boolean; mode: AddMode };
   /** キャンパスの地図をひらいているか */
   mapOpen: boolean;
@@ -64,10 +60,6 @@ interface AppActions {
   // 登録
   completeRegistration(): Promise<void>;
   finishOnboarding(tab: Tab): void;
-  startReregister(): void;
-  cancelReregister(): void;
-  /** ログアウト（この端末の覚えを消す。登録そのものは残る） */
-  logout(): Promise<void>;
 
   // デモ操作から使う
   refresh(): Promise<void>;
@@ -84,7 +76,7 @@ export function useApp() {
   return ctx;
 }
 
-const LASTCHECK_KEY = (uid: string) => `cokoyo-lastcheck:v1:${uid}`;
+const LASTCHECK_KEY = (uid: string) => `cokoyo-lastcheck:v2:${uid}`;
 const readLastCheck = (uid: string): CheckResponse | null => {
   try { const s = localStorage.getItem(LASTCHECK_KEY(uid)); return s ? (JSON.parse(s) as CheckResponse) : null; } catch { return null; }
 };
@@ -107,7 +99,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [points, setPoints] = useState<PointsResponse | null>(null);
   const [lastCheck, setLastCheck] = useState<CheckResponse | null>(null);
   const [checking, setChecking] = useState(false);
-  const [onboardingMode, setOnboardingMode] = useState<'new' | 'reregister' | 'restore'>('new');
   const [sheet, setSheet] = useState<{ open: boolean; mode: AddMode }>({ open: false, mode: 'show' });
   const [mapOpen, setMapOpen] = useState(false);
   const [displayTotal, setDisplayTotal] = useState<number | null>(null);
@@ -131,29 +122,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLastCheck(readLastCheck(m.userId));
   }, []);
 
-  const goOnboarding = useCallback((mode: 'new' | 'restore' = 'new') => {
+  const goOnboarding = useCallback(() => {
     field.clear();
     setDisplayTotal(null);
     setSheet({ open: false, mode: 'show' });
     setMapOpen(false);
-    setOnboardingMode(mode);
     setView('onboarding');
   }, [field]);
 
+  const goLogin = useCallback(() => {
+    setMe(null); setFriends(null); setPoints(null); setLastCheck(null);
+    field.clear();
+    setView('login');
+  }, [field]);
+
   const boot = useCallback(async () => {
-    // 模擬バックエンドでは、はじめて開いたときは登録済みのサンプル（ゆうき）から始める
-    if (useMockBackend && device.untouched) device.set(mockBackend.sim.demoToken);
-    if (!device.token) { goOnboarding(); return; }
     callLog.begin('アプリを開いた');
     try {
+      const session = await api.getSession();
+      if (session.status === 'onboarding') { goOnboarding(); return; }
       await loadAll();
       setView('app');
     } catch (e) {
       const err = e as ApiError;
-      if (err.status === 401) { device.clear(); goOnboarding(device.mac ? 'restore' : 'new'); }
+      if (err.status === 401) goLogin();
       else { setError(err.message); setView('error'); }
     }
-  }, [goOnboarding, loadAll]);
+  }, [goLogin, goOnboarding, loadAll]);
 
   const booted = useRef(false);
   useEffect(() => {
@@ -171,13 +166,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return true;
     } catch (e) {
       const err = e as ApiError;
-      if (err.status === 401) { device.clear(); goOnboarding(device.mac ? 'restore' : 'new'); }
+      if (err.status === 401) goLogin();
       showToast(err.message);
       return false;
     } finally {
       busy.current = false;
     }
-  }, [goOnboarding, showToast]);
+  }, [goLogin, showToast]);
 
   const reloadFriends = useCallback(async (silent = false) => { setFriends(await api.getFriends(silent)); }, []);
 
@@ -230,7 +225,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const list = friendsRef.current?.friends ?? [];
     const nameOf = (id: string) => list.find((x) => x.userId === id)?.displayName ?? '';
     const present = r.friends.filter((f) => f.present).map((f) => ({ userId: f.userId, name: nameOf(f.userId) }));
-    let landed = field.sync(present, { present: r.me.present, ghost: r.me.hidden });
+    let landed = field.sync(present, { present: r.me.presence === 'present', ghost: r.me.hidden });
 
     // 届いていたリアクション（つんつん）を、そのフレンドのスライムで見せてから、ポイントに移る
     const reactions = r.reactions ?? [];
@@ -344,7 +339,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [boot, field]);
 
   const value = useMemo<Ctx>(() => ({
-    view, error, tab, me, friends, points, lastCheck, checking, onboardingMode, sheet, mapOpen, displayTotal, toast,
+    view, error, tab, me, friends, points, lastCheck, checking, sheet, mapOpen, displayTotal, toast,
     field, counter, screenRef,
     // タブを移ると地図は閉じる
     setTab: (t) => { setMapOpen(false); setTabState(t); },
@@ -365,21 +360,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setTabState(t);
       if (t === 'friends') setSheet({ open: true, mode: 'show' });
     },
-    startReregister: () => { setOnboardingMode('reregister'); setView('onboarding'); },
-    logout: async () => {
-      callLog.begin('ログアウト');
-      try { await api.logout(); } catch { /* つながらなくても、この端末の覚えは消す */ }
-      device.forget();
-      setTabState('home');
-      goOnboarding('new');
-      showToast('ログアウトしました');
-    },
-    cancelReregister: () => setView('app'),
     refresh,
     restart,
-    restartFromOnboarding: () => { device.forget(); setTabState('home'); goOnboarding(); },
-  }), [view, error, tab, me, friends, points, lastCheck, checking, onboardingMode, sheet, mapOpen, displayTotal, toast,
-    field, showToast, run, check, toggleHide, reloadFriends, loadAll, refresh, restart, goOnboarding]);
+    restartFromOnboarding: () => { void api.logout().finally(() => { setTabState('home'); goLogin(); }); },
+  }), [view, error, tab, me, friends, points, lastCheck, checking, sheet, mapOpen, displayTotal, toast,
+    field, showToast, run, check, toggleHide, reloadFriends, loadAll, refresh, restart, goLogin]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

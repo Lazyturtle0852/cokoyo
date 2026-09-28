@@ -6,7 +6,7 @@
  * backend/test/contract.test-d.ts が型レベルで一致を検査している。
  *
  *   ベースURL: https://cokoyo.lazyta-toru.net/api  （パスの先頭は /v1）
- *   本人の判断: Authorization: Bearer <deviceToken>（POST /v1/users 以外は必須）
+ *   本人の判断: サーバー側セッションのHttpOnly Cookie
  */
 
 export type BestState = "none" | "outgoing" | "incoming" | "best";
@@ -22,16 +22,17 @@ export interface UserRef {
 }
 
 export interface Me extends UserRef {
+  email: string;
   shareKey: string;
   hidden: boolean;
-  /** MACそのものは返さない。登録し直しのときに見分けるための表示用。 */
-  macMasked: string;
-  macRegisteredAt: string;
+  macs: MacAddressView[];
 }
 
-export interface RegisterResponse extends Me {
-  /** 登録時に1回だけ返す秘密の値。 */
-  deviceToken: string;
+export interface MacAddressView {
+  id: number;
+  label: string;
+  macMasked: string;
+  registeredAt: string;
 }
 
 export interface Friend extends UserRef {
@@ -96,7 +97,7 @@ export interface FriendPresence {
 
 export interface CheckResponse {
   checkedAt: string;
-  me: { present: boolean; building: string | null; buildingKey: BuildingKey | null; hidden: boolean };
+  me: { presence: "present" | "absent" | "unknown"; building: string | null; buildingKey: BuildingKey | null; hidden: boolean };
   weather: { condition: string; rainy: boolean };
   friends: FriendPresence[];
   points: PointsResponse & { awarded: PointItem[]; notice: string | null };

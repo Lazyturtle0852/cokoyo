@@ -10,8 +10,11 @@ const HEX12 = /^[0-9a-f]{12}$/;
 
 /** 入力が何であれ、保存形式に揃える。揃えられなければ null。 */
 export function normalizeMac(input: string): string | null {
-  const stripped = input.trim().toLowerCase().replace(/[^0-9a-f]/g, "");
-  return HEX12.test(stripped) ? stripped : null;
+  const raw = input.trim().toLowerCase();
+  if (!HEX12.test(raw) && !/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(raw) &&
+      !/^([0-9a-f]{2}-){5}[0-9a-f]{2}$/.test(raw)) return null;
+  const stripped = raw.replace(/[:-]/g, "");
+  return HEX12.test(stripped) && stripped !== "020000000000" ? stripped : null;
 }
 
 /** 保存形式 → DTC が要求するコロン区切り。 */

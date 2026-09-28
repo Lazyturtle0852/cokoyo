@@ -43,10 +43,8 @@ export function DbPanel() {
     <section className="panel">
       <h2>バックエンドのDBの中身</h2>
       <p className="desc">
-        バックエンドの SQLite を、テーブルごと・全員ぶん、行の形のまま出しています（PoC なので）。
-        伏せてあるのは <span className="mono">mac</span> だけ。この仕組みでは MAC が事実上のパスワードで
-        （<span className="mono">POST /v1/sessions</span> は MAC を知っていれば端末を乗り換えられる）、
-        ここに平文で並べると全員のアカウントを渡すのと同じになるためです。
+        バックエンドの SQLite を、テーブルごと・全員ぶん、行の形で示します。
+        メールアドレス、Google の識別子、認証情報、MAC アドレス、共有キーは伏せています。
       </p>
 
       {error && <p className="empty">読めませんでした：{error}</p>}

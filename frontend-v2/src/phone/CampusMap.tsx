@@ -36,7 +36,7 @@ export function CampusMap() {
     else byBuilding.set(key, [pin]);
   };
 
-  if (lc?.me.present && lc.me.buildingKey) {
+  if (lc?.me.presence === 'present' && lc.me.buildingKey) {
     put(lc.me.buildingKey, { id: SELF_ID, name: 'あなた', color: SELF_COLOR, self: true });
   }
   const somewhere: Pin[] = [];
@@ -52,7 +52,7 @@ export function CampusMap() {
     else somewhere.push(pin);
   }
   // 自分が在校していて、建物までは分からないとき
-  if (lc?.me.present && !lc.me.buildingKey) {
+  if (lc?.me.presence === 'present' && !lc.me.buildingKey) {
     somewhere.unshift({ id: SELF_ID, name: 'あなた', color: SELF_COLOR, self: true });
   }
 

@@ -2,7 +2,7 @@
 //
 //   QR          … 自分のQRを出す。下の「QRを読み込む」で、相手のQRを読むカメラに切り替わる
 //   リンクで共有 … 招待リンクを送る・コピーする。共有キーも出しておく。
-//                  相手のキーやMACアドレスを入力して申請するのもここ
+//                  相手の共有キーを入力して申請するのもここ
 
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import { useEffect, useRef, useState } from 'react';
@@ -17,7 +17,6 @@ import { Avatar } from './ui';
 export function AddFriendSheet() {
   const { view, me, friends, sheet, closeSheet, setAddMode, run, reloadFriends, showToast } = useApp();
   const [manualKey, setManualKey] = useState('');
-  const [manualMac, setManualMac] = useState('');
   const open = view === 'app' && sheet.open && !!me;
 
   // ストーリーズの画像に貼るQRコード（画面には出さない）
@@ -27,30 +26,26 @@ export function AddFriendSheet() {
   const sheetRef = useRef<HTMLDivElement>(null);
   useEffect(() => { sheetRef.current?.scrollTo({ top: 0 }); }, [sheet.mode, sheet.open]);
 
-  // ---------------------------------------------------------------
-  // 自分のQRを出しているあいだは、フレンドが増えていないか裏で見にいく。
-  // 読み取ってもらった側の画面は、自分では何も操作しないので、
-  // これが無いと古いまま（相手だけフレンド、自分は「承認待ち」）に見えてしまう。
-  // ---------------------------------------------------------------
+  // QR を見せている間は、読み取った相手との成立を裏で確認する。
   const known = useRef<Set<string> | null>(null);
   const showingQr = open && sheet.mode === 'show';
   useEffect(() => {
     if (!showingQr) { known.current = null; return; }
-    const t = window.setInterval(() => { void reloadFriends(true); }, 3000);
-    return () => window.clearInterval(t);
+    const timer = window.setInterval(() => { void reloadFriends(true); }, 3000);
+    return () => window.clearInterval(timer);
   }, [showingQr, reloadFriends]);
 
   useEffect(() => {
     if (!showingQr || !friends) return;
-    if (!known.current) { known.current = new Set(friends.friends.map((f) => f.userId)); return; }
-    const added = friends.friends.filter((f) => !known.current?.has(f.userId));
+    if (!known.current) { known.current = new Set(friends.friends.map((friend) => friend.userId)); return; }
+    const added = friends.friends.filter((friend) => !known.current?.has(friend.userId));
     if (!added.length) return;
-    known.current = new Set(friends.friends.map((f) => f.userId));
+    known.current = new Set(friends.friends.map((friend) => friend.userId));
     showToast(`${added[0].displayName}さんとフレンドになりました`);
     closeSheet();
   }, [showingQr, friends, showToast, closeSheet]);
 
-  const reset = () => { setManualKey(''); setManualMac(''); };
+  const reset = () => { setManualKey(''); };
 
   const add = (shareKey: string, via: 'qr' | 'link', name: string) => run(name, async () => {
     const r = await api.addFriend(shareKey, via);
@@ -58,15 +53,6 @@ export function AddFriendSheet() {
     closeSheet();
     reset();
     showToast(r.status === 'friends' ? `${r.user.displayName}さんとフレンドになりました` : `${r.user.displayName}さんに申請しました`);
-  });
-
-  // 共有キーもQRも渡せないとき用。相手が登録したMACアドレスで申請する。
-  const addByMac = () => run('MACアドレスで申請', async () => {
-    const r = await api.addFriendByMac(manualMac.trim().toLowerCase().replace(/-/g, ':'));
-    await reloadFriends();
-    closeSheet();
-    reset();
-    showToast(`${r.user.displayName}さんに申請しました`);
   });
 
   const link = me ? shareLink(me.shareKey) : '';
@@ -195,24 +181,6 @@ export function AddFriendSheet() {
                     <button className="mini-btn primary" onClick={() => void add(manualKey.trim(), 'link', '共有キーで申請')}>申請</button>
                   </div>
                   <p className="row-note">入力した場合は、相手の承認でフレンドになります。</p>
-                </details>
-                <details className="manual">
-                  <summary>高度な設定：MACアドレスで追加</summary>
-                  <p className="row-note">
-                    共有キーも渡せないとき用です。相手が登録したMACアドレス（相手の設定アプリに出ている値）を入力すると、
-                    相手に申請が届きます。共有キーのときと同じで、相手が承認するとフレンドになります。
-                  </p>
-                  <div className="field-row">
-                    <input className="field mono" placeholder="例）a2:3f:9c:1b:7e:44" value={manualMac}
-                      autoComplete="off" autoCapitalize="off" spellCheck={false}
-                      onChange={(e) => setManualMac(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') void addByMac(); }} />
-                    <button className="mini-btn primary" onClick={() => void addByMac()}>申請</button>
-                  </div>
-                  <p className="row-note warn">
-                    MACアドレスを渡すと、その人はあなたがキャンパスに居るかどうかを調べられるようになります。
-                    <b>仲のいい友達とだけ</b>交換してください。
-                  </p>
                 </details>
               </>
             )}

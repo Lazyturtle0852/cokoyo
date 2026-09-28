@@ -2,33 +2,27 @@ import { describe, expect, it } from "vitest";
 import type { AddFriendResponse, FriendsResponse } from "../../shared/app-types.js";
 import { createHarness, MAC } from "./helpers.js";
 
-describe("登録", () => {
+describe("登録とMAC管理", () => {
   it("同じMACは二度登録できない", async () => {
     const h = createHarness();
-    await h.signUp("ゆうき", MAC.alice);
-    const res = await h.call("/v1/users", {
-      method: "POST",
-      body: JSON.stringify({ displayName: "だれか", mac: "A2-B4-1C-9E-77-03" }),
-    });
+    const alice = await h.signUp("ゆうき", MAC.alice);
+    const res = await alice.post("/v1/me/macs", { label: "別の端末", mac: "A2-B4-1C-9E-77-03" });
     expect(res.status).toBe(409);
     expect((await h.json<{ error: { code: string } }>(res)).error.code).toBe("mac_taken");
   });
 
-  it("MACそのものは返さず、マスクした形だけ返す", async () => {
+  it("本人には一覧のMACをマスクして返す", async () => {
     const h = createHarness();
     const alice = await h.signUp("ゆうき", MAC.alice);
-    const me = await h.json<Record<string, string>>(await alice.get("/v1/me"));
-    expect(me.macMasked).toBe("a2:b4:••:••:••:03");
+    const me = await h.json<{ macs: { macMasked: string }[] }>(await alice.get("/v1/me"));
+    expect(me.macs[0]?.macMasked).toBe("a2:b4:••:••:••:03");
     expect(JSON.stringify(me)).not.toContain(MAC.alice);
   });
 
   it("表示名は1〜20文字", async () => {
     const h = createHarness();
-    const res = await h.call("/v1/users", {
-      method: "POST",
-      body: JSON.stringify({ displayName: "", mac: MAC.bob }),
-    });
-    expect(res.status).toBe(400);
+    const alice = await h.signUp("ゆうき", MAC.alice);
+    expect((await alice.patch("/v1/me", { displayName: "" })).status).toBe(400);
   });
 });
 
@@ -162,67 +156,20 @@ describe("認証", () => {
   });
 });
 
-describe("登録済みのMACを引き継ぐ", () => {
-  it("新しい端末トークンが出て、前のものは使えなくなる", async () => {
+describe("旧認証とMAC検索の廃止", () => {
+  it("MACだけではセッションを作れない", async () => {
     const h = createHarness();
-    const alice = await h.signUp("ゆうき", MAC.alice);
-
-    const res = await h.call("/v1/sessions", {
-      method: "POST",
-      body: JSON.stringify({ mac: "A2-B4-1C-9E-77-03" }),
-    });
-    expect(res.status).toBe(200);
-
-    const restored = await h.json<{ userId: string; shareKey: string; deviceToken: string }>(res);
-    // 同じ人。shareKey も変わらないので、フレンドに配り直す必要がない
-    expect(restored.userId).toBe(alice.userId);
-    expect(restored.shareKey).toBe(alice.shareKey);
-    expect(restored.deviceToken).not.toBe(alice.deviceToken);
-
-    expect((await h.call("/v1/me", { token: restored.deviceToken })).status).toBe(200);
-    expect((await h.call("/v1/me", { token: alice.deviceToken })).status).toBe(401);
+    await h.signUp("ゆうき", MAC.alice);
+    expect((await h.call("/v1/sessions", { method: "POST", body: JSON.stringify({ mac: MAC.alice }) })).status).toBe(404);
   });
 
-  it("未登録のMACは404", async () => {
-    const h = createHarness();
-    const res = await h.call("/v1/sessions", {
-      method: "POST",
-      body: JSON.stringify({ mac: MAC.carol }),
-    });
-    expect(res.status).toBe(404);
-    expect((await h.json<{ error: { code: string } }>(res)).error.code).toBe("mac_not_registered");
-  });
-});
-
-describe("MACアドレスでフレンド申請", () => {
-  it("共有キーの代わりにMACでも申請できる（承認は必要）", async () => {
+  it("MACでフレンドを検索できない", async () => {
     const h = createHarness();
     const alice = await h.signUp("ゆうき", MAC.alice);
-    const bob = await h.signUp("佐藤", MAC.bob);
-
-    // 表記ゆれは吸収する
-    const res = await alice.post("/v1/friends", { mac: "6E-0D-33-B1-C8-40", via: "mac" });
-    expect(res.status).toBe(202);
-    const added = await h.json<AddFriendResponse>(res);
-    expect(added.status).toBe("requested");
-    expect(added.user.displayName).toBe("佐藤");
-
-    // QRと違って即フレンドにはならない。相手が承認して初めて成立する。
-    await bob.post(`/v1/friend-requests/${added.requestId}/accept`);
-    const friends = await h.json<FriendsResponse>(await alice.get("/v1/friends"));
-    expect(friends.friends.map((f) => f.displayName)).toEqual(["佐藤"]);
-  });
-
-  it("未登録のMACは404、自分のMACは400", async () => {
-    const h = createHarness();
-    const alice = await h.signUp("ゆうき", MAC.alice);
-
-    const unknown = await alice.post("/v1/friends", { mac: MAC.carol, via: "mac" });
-    expect(unknown.status).toBe(404);
-    expect((await h.json<{ error: { code: string } }>(unknown)).error.code).toBe("mac_not_registered");
-
-    const self = await alice.post("/v1/friends", { mac: MAC.alice, via: "mac" });
-    expect(self.status).toBe(400);
+    await h.signUp("佐藤", MAC.bob);
+    const res = await alice.post("/v1/friends", { mac: MAC.bob, via: "mac" });
+    expect(res.status).toBe(400);
+    expect((await h.json<{ error: { code: string } }>(res)).error.code).toBe("unsupported_friend_method");
   });
 });
 

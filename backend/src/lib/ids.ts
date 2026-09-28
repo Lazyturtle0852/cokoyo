@@ -11,8 +11,5 @@ function rand(bytes: number): string {
 export const newUserId = () => `u_${rand(8)}`;
 export const newShareKey = () => `sk_${rand(8)}`;
 export const newRequestId = () => `fr_${rand(8)}`;
-/** 端末トークンだけは長くする。これが漏れると本人になれる。 */
-export const newDeviceToken = () => `dt_${rand(16)}`;
-
-/** 端末トークンは平文で保存しない。128bit乱数なのでストレッチングは不要。 */
+/** セッションの秘密値は平文で保存しない。256bit乱数なのでストレッチングは不要。 */
 export const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");

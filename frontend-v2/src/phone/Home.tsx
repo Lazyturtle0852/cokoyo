@@ -11,12 +11,13 @@ export function Home() {
   if (!me || !friends || !points) return null;
 
   const fresh = !!lc && isToday(lc.checkedAt);
-  const present = !!lc?.me.present;
+  const present = lc?.me.presence === 'present';
+  const unknown = lc?.me.presence === 'unknown';
   const today = points.today;
 
   const kick = lc ? `${when(lc.checkedAt)} に確認` : 'まだ確認していません';
-  const title = !lc ? 'キャンパスにいる？' : present ? 'キャンパスにいます' : 'キャンパス外です';
-  const sub = !lc ? 'ボタンで、あなたとフレンドの様子を確認' : present ? lc.me.building : 'キャンパスのWiFiにつながっていません';
+  const title = !lc ? 'キャンパスにいる？' : unknown ? '在校を判定できません' : present ? 'キャンパスにいます' : 'キャンパス外です';
+  const sub = !lc ? 'ボタンで、あなたとフレンドの様子を確認' : unknown ? '大学側の通信を確認できませんでした。もう一度お試しください' : present ? lc.me.building : 'キャンパスのWiFiにつながっていません';
   const hint = me.hidden
     ? 'かくれんぼ中は来校ポイントだけ入ります（マッチは入りません）'
     : 'キャンパス外でもフレンドの様子は見られます（ポイントはキャンパスでだけ）';
