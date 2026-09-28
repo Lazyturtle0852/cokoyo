@@ -539,3 +539,20 @@ body.plain .map-screen { border-radius: 0; }
 
 .tap-hint { margin-top: 8px; }
 
+/* ---------- ホーム画面に追加（PWA） ---------- */
+.inst-hero { padding: 30px 0 18px; }
+.inst-preview { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.inst-preview img { border-radius: 14px; box-shadow: 0 4px 14px rgba(28,25,23,.18); }
+.inst-preview span { font-size: 11px; font-weight: 600; color: var(--ink-2); letter-spacing: .02em; }
+.ob .inst-preview { margin: 4px 0 18px; }
+.ob .inst-preview img { width: 76px; height: 76px; border-radius: 18px; }
+.inst-ico { display: inline-flex; vertical-align: -5px; margin: 0 2px; color: var(--brand); }
+.inst-card { display: grid; gap: 10px; }
+.inst-head { display: flex; align-items: center; gap: 14px; }
+.inst-head .inst-preview img { width: 46px; height: 46px; border-radius: 11px; }
+.inst-head .inst-preview span { display: none; }
+.inst-title { font-size: 15px; font-weight: 700; }
+.inst-sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.inst-card .btn { margin-top: 0; }
+.inst-card .steps { margin-top: 2px; }
+.inst-skip { justify-self: center; color: var(--muted); font-size: 12px; }

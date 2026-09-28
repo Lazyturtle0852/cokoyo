@@ -3,6 +3,7 @@
 
 import { useApp } from '../app/AppContext';
 import { HideCard } from './HideCard';
+import { InstallCard } from './Install';
 import { Avatar, isToday, when, yen } from './ui';
 
 export function Home() {
@@ -29,6 +30,8 @@ export function Home() {
 
   return (
     <>
+      <InstallCard />
+
       <div className="card check-card">
         <div className="check-head">
           <div className="kick"><span className={`pulse${fresh && present ? ' live' : ''}`} /><span>{kick}</span></div>
