@@ -35,3 +35,14 @@ DTC の最新接続情報と天気だけを問い合わせます。履歴は取�
 ポイント計算は `src/points.ts`。来校ベース 20pt、連続来校・雨・フレンドとのマッチに加点します。
 
 本番の設定、確認、復旧は [切替手順](../deploy/cutover-v2.md) を参照してください。
+
+## ご意見・問い合わせ
+
+`POST /api/v1/feedback` を `feedback` テーブルに貯めます（1日5件、2〜1000文字）。自動通知はないので、ときどき見にいきます。公開 DB 表には出しません。
+
+```sh
+docker compose exec api node -e "const{DatabaseSync}=require('node:sqlite');const db=new DatabaseSync(process.env.DB_PATH);for(const r of db.prepare('SELECT created_at, message FROM feedback ORDER BY id DESC LIMIT 20').all())console.log(r.created_at, r.message)"
+```
+
+DB の形を変えるときは `src/db.ts` の `MIGRATIONS` に足します（`user_version` 管理、現在 3）。v2 の DB は起動時に `feedback` を足して v3 に上げます。
+
