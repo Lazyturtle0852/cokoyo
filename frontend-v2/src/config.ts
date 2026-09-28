@@ -29,8 +29,12 @@ export const shareLink = (shareKey: string) => {
     const url = new URL(window.location.href);
     url.hash = '';
     url.searchParams.set('add', shareKey);
+    // LINE はこれが付いていると、アプリの中の小さなブラウザではなく
+    // ふだん使っているブラウザで開いてくれる。登録ずみの人が
+    // 「はじめての登録」からやり直しになるのを防ぐ（src/app/browser.ts）。
+    url.searchParams.set('openExternalBrowser', '1');
     return url.toString();
-  } catch { return `?add=${shareKey}`; }
+  } catch { return `?add=${shareKey}&openExternalBrowser=1`; }
 };
 
 export const useMockBackend = !config.apiBaseUrl;
