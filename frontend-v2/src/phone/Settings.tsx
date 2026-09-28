@@ -1,15 +1,17 @@
-// 設定：表示名・MACアドレスの登録し直し・このアプリについて
+// 設定：表示名・アイコン・MACアドレスの登録し直し・ログアウト・このアプリについて
 
 import { useState } from 'react';
 import { useApp } from '../app/AppContext';
 import { api } from '../api/client';
 import { config, useMockBackend } from '../config';
+import { AvatarPicker } from './AvatarPicker';
 import { fullDate } from './ui';
 
 export function Settings() {
-  const { me, run, setMe, showToast, startReregister } = useApp();
+  const { me, run, setMe, showToast, startReregister, logout } = useApp();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState('');
+  const [armedLogout, setArmedLogout] = useState(false);
   if (!me) return null;
 
   const save = async () => {
@@ -38,6 +40,7 @@ export function Settings() {
           </div>
         )}
         <p className="row-note">フレンドの画面に表示されます</p>
+        <AvatarPicker />
       </div>
 
       <div className="sec"><h3>キャンパスの検知</h3></div>
@@ -47,9 +50,27 @@ export function Settings() {
         <button className="btn btn-quiet" onClick={startReregister}>MACアドレスを登録し直す</button>
       </div>
 
+      <div className="sec"><h3>この端末</h3></div>
+      <div className="card">
+        <p className="row-note">
+          一度登録すれば、同じ端末では入れたままになります。ログアウトすると、この端末の覚えを消します。
+          登録そのものは残るので、同じMACアドレスを入れればいつでも戻れます。
+        </p>
+        {armedLogout ? (
+          <div className="confirm">
+            <p>ログアウトしますか？ もう一度使うときは、MACアドレスの入力が必要です。</p>
+            <div className="confirm-actions">
+              <button className="mini-btn danger" onClick={() => void logout()}>ログアウトする</button>
+              <button className="mini-btn" onClick={() => setArmedLogout(false)}>やめる</button>
+            </div>
+          </div>
+        ) : (
+          <button className="btn btn-quiet" onClick={() => setArmedLogout(true)}>ログアウト</button>
+        )}
+      </div>
+
       <div className="sec"><h3>このアプリについて</h3></div>
       <div className="card about">
-        <p>COKOYOは仮の名前です。</p>
         <p>位置情報は使いません。キャンパスのWiFiにつながっているかどうかを、大学側のAPIに問い合わせて確認します。</p>
         <p className="muted">試作品・{useMockBackend ? 'バックエンドは模擬' : `接続先 ${config.apiBaseUrl}`}</p>
       </div>

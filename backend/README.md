@@ -80,6 +80,24 @@ DBは `DB_PATH` の SQLite ファイル1つ。起動時にテーブルを作る�
 
 かくれんぼ中の本人には `base` `streak` `rain` は入るが、マッチは入らない。
 
+## 端末の覚え（クッキー）
+
+登録・引き継ぎのときに、端末トークンを `cokoyo_device` クッキーにも入れる
+（`HttpOnly` / `SameSite=Lax` / 400日、https のときだけ `Secure`）。使うたびに期限を延ばす。
+
+アプリは localStorage にも同じ値を持っているが、iPhone の Safari は
+しばらく開かないでいると localStorage を消してしまう。消えるたびに
+MACアドレスの入れ直しになるので、サーバーが付けるクッキーを控えにしている。
+`Authorization` ヘッダが無ければクッキーを見る（`requireUser`）。
+
+`DELETE /v1/sessions` でクッキーを消す（ログアウト）。登録そのものは残る。
+
+## アイコンの写真
+
+`PUT /v1/me/avatar` で data URL のまま `users.avatar` に入れる（上限120KB、JPEG/PNG/WebP）。
+アプリが 128px四方の JPEG に縮めてから送る。フレンドの一覧などにも同じ値を入れて返す。
+画像ファイルを別に置かないので、バックアップはDBだけで済む。
+
 ## つんつん（スライムへのリアクション）
 
 `POST /v1/friends/:userId/reactions` で受け取った回数を `reactions` テーブルにためておき、

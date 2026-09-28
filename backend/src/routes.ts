@@ -1,4 +1,6 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type {
   AddFriendResponse, BestResponse, BestState, BlockResponse, BuildingKey, CheckResponse,
   DebugDbResponse, FriendsResponse, Me, PointItem, PointsResponse, Reaction, ReactionResponse,
@@ -23,7 +25,28 @@ const buildingLabel = (lookup: Lookup): string | null => {
   return key ? (BUILDING_LABELS[key] ?? null) : null;
 };
 
-const toRef = (u: User): UserRef => ({ userId: u.user_id, displayName: u.display_name });
+const toRef = (u: User): UserRef => ({
+  userId: u.user_id,
+  displayName: u.display_name,
+  ...(u.avatar ? { avatar: u.avatar } : {}),
+});
+
+/**
+ * アイコンの画像。アプリが 128px四方の JPEG に縮めてから送ってくる。
+ * 大きすぎるものは断る（DBに入れるので、1人ぶんの上限を決めておく）。
+ */
+const AVATAR = { MAX_BYTES: 120 * 1024, TYPES: ["image/jpeg", "image/png", "image/webp"] } as const;
+
+function validAvatar(input: unknown): string {
+  if (typeof input !== "string") fail(400, "invalid_avatar", "画像を送ってください");
+  const image = input as string;
+  const head = /^data:([a-z/+-]+);base64,([A-Za-z0-9+/=]+)$/.exec(image);
+  if (!head || !AVATAR.TYPES.includes(head[1] as (typeof AVATAR.TYPES)[number])) {
+    fail(400, "invalid_avatar", "画像の形式が正しくありません（JPEG・PNG・WebP）");
+  }
+  if (image.length > AVATAR.MAX_BYTES) fail(400, "avatar_too_large", "画像が大きすぎます");
+  return image;
+}
 
 const toMe = (u: User): Me => ({
   ...toRef(u),
@@ -46,11 +69,42 @@ function bestState(row: FriendshipRow, me: number): BestState {
 const otherIdOf = (row: FriendshipRow, me: number) =>
   row.user_low === me ? row.user_high : row.user_low;
 
-function requireUser(c: { req: { header: (n: string) => string | undefined } }, repo: Repo): User {
+/**
+ * 端末トークンの置き場所。
+ *
+ * アプリは localStorage にも持っているが、iPhone の Safari は
+ * しばらく開かないでいると localStorage を消してしまう。消えるたびに
+ * MACアドレスの入れ直しになるので、同じ値をクッキーにも入れておく。
+ * サーバーが付けるクッキーのほうが長生きするうえ、JavaScript から
+ * 読めない（HttpOnly）ので、置きっぱなしにしても取り出されにくい。
+ *
+ * 期限は約400日。使うたびに付け直すので、開き続けているかぎり切れない。
+ */
+const COOKIE = "cokoyo_device";
+const COOKIE_MAX_AGE = 400 * 24 * 60 * 60;
+
+type Ctx = Context;
+
+const putDeviceCookie = (c: Ctx, token: string) => {
+  setCookie(c, COOKIE, token, {
+    path: "/",
+    httpOnly: true,
+    sameSite: "Lax",
+    maxAge: COOKIE_MAX_AGE,
+    // 本番は https。手元の http://localhost では付けない（付けると保存されない）
+    secure: new URL(c.req.url).protocol === "https:"
+      || c.req.header("x-forwarded-proto") === "https",
+  });
+};
+
+function requireUser(c: Ctx, repo: Repo): User {
   const match = /^Bearer\s+(.+)$/i.exec((c.req.header("authorization") ?? "").trim());
-  if (!match?.[1]) fail(401, "unauthorized", "登録が必要です");
-  const user = repo.findByToken(match[1]);
+  const token = match?.[1] ?? getCookie(c, COOKIE) ?? "";
+  if (!token) fail(401, "unauthorized", "登録が必要です");
+  const user = repo.findByToken(token);
   if (!user) fail(401, "unauthorized", "登録が必要です");
+  // 使うたびに期限を延ばす
+  putDeviceCookie(c, token);
   return user;
 }
 
@@ -124,6 +178,7 @@ export function createRoutes(repo: Repo, dtc: DtcClient) {
 
     const deviceToken = newDeviceToken();
     const user = repo.createUser(displayName, mac, deviceToken);
+    putDeviceCookie(c, deviceToken);
     const response: RegisterResponse = { ...toMe(user), deviceToken };
     return c.json(response, 201);
   });
@@ -147,9 +202,16 @@ export function createRoutes(repo: Repo, dtc: DtcClient) {
     // 前の端末は使えなくなる。乗っ取られたときに気づけるよう、黙って両方は生かさない。
     const deviceToken = newDeviceToken();
     repo.rotateToken(user.id, deviceToken);
+    putDeviceCookie(c, deviceToken);
 
     const response: RegisterResponse = { ...toMe(user), deviceToken };
     return c.json(response);
+  });
+
+  /** ログアウト。この端末の覚えを消すだけで、登録そのものは残る。 */
+  app.delete("/v1/sessions", (c) => {
+    deleteCookie(c, COOKIE, { path: "/" });
+    return c.body(null, 204);
   });
 
   app.get("/v1/me", (c) => c.json(toMe(requireUser(c, repo))));
@@ -180,6 +242,21 @@ export function createRoutes(repo: Repo, dtc: DtcClient) {
     }
 
     repo.updateMac(me.id, mac);
+    return c.json(toMe(repo.findById(me.id) as User));
+  });
+
+  /** アイコンの画像を登録する。フレンドの一覧に出る。 */
+  app.put("/v1/me/avatar", async (c) => {
+    const me = requireUser(c, repo);
+    const image = validAvatar((await c.req.json().catch(() => null))?.image);
+    repo.updateAvatar(me.id, image);
+    return c.json(toMe(repo.findById(me.id) as User));
+  });
+
+  /** アイコンの画像を消して、名前の頭文字に戻す。 */
+  app.delete("/v1/me/avatar", (c) => {
+    const me = requireUser(c, repo);
+    repo.updateAvatar(me.id, null);
     return c.json(toMe(repo.findById(me.id) as User));
   });
 

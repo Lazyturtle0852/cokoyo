@@ -143,7 +143,8 @@ const SCENE = `<svg class="scene" viewBox="0 0 ${VW} ${VH}" aria-hidden="true" f
 // ドット絵（右向き）
 //   o 輪郭  b 体  s 影  h 光  e 目  p ほっぺ
 // ---------------------------------------------------------------
-const SLIME = [
+/** スライムのドット絵（右向き）。SNSに出す画像（src/phone/share.ts）でも使う */
+export const SLIME = [
   '....oooooo....',
   '..oobbbbbboo..',
   '.obhhbbbbbbbo.',
@@ -175,7 +176,8 @@ const GHOST = [
 
 const PX = 4;
 const SLIME_H = SLIME.length * PX;
-const COLORS = ['#5CD2E6', '#6CD47A', '#F26B5E', '#C6A0F2', '#FFD15A', '#FF9CC6', '#4FC3A1', '#7FA6FF'];
+/** フレンドのスライムの色 */
+export const COLORS = ['#5CD2E6', '#6CD47A', '#F26B5E', '#C6A0F2', '#FFD15A', '#FF9CC6', '#4FC3A1', '#7FA6FF'];
 /** 自分のスライムの色（フレンドの色には使わない） */
 export const SELF_COLOR = '#FF8A3D';
 const SELF_ID = '__self';

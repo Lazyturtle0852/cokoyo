@@ -11,6 +11,8 @@ export interface User {
   mac: string;
   hidden: number;
   mac_registered_at: string;
+  /** アイコンの画像（data URL）。未設定は null */
+  avatar: string | null;
 }
 
 export interface FriendshipRow {
@@ -35,7 +37,7 @@ export interface PointRow {
 }
 
 const USER_COLS =
-  "id, user_id, display_name, share_key, mac, hidden, mac_registered_at";
+  "id, user_id, display_name, share_key, mac, hidden, mac_registered_at, avatar";
 
 /** 常に (小さい方, 大きい方) の順に揃える。 */
 const pair = (a: number, b: number): [number, number] => (a < b ? [a, b] : [b, a]);
@@ -58,6 +60,7 @@ export function createRepo(db: Db) {
     updateProfile: db.prepare("UPDATE users SET display_name = ?, hidden = ? WHERE id = ?"),
     updateToken: db.prepare("UPDATE users SET device_token_hash = ? WHERE id = ?"),
     updateMac: db.prepare("UPDATE users SET mac = ?, mac_registered_at = ? WHERE id = ?"),
+    updateAvatar: db.prepare("UPDATE users SET avatar = ? WHERE id = ?"),
 
     friendship: db.prepare(
       "SELECT * FROM friendships WHERE user_low = ? AND user_high = ?",
@@ -170,6 +173,11 @@ export function createRepo(db: Db) {
       q.updateMac.run(mac, new Date().toISOString(), id);
     },
 
+    /** アイコンの画像。null で元の頭文字に戻す */
+    updateAvatar(id: number, avatar: string | null): void {
+      q.updateAvatar.run(avatar, id);
+    },
+
     // ── friendships ──────────────────────────────────────────
     getFriendship(a: number, b: number): FriendshipRow | undefined {
       const [low, high] = pair(a, b);
@@ -265,7 +273,7 @@ export function createRepo(db: Db) {
     dump(): DbTable[] {
       const uCols = [
         "id", "user_id", "display_name", "share_key", "device_token_hash",
-        "mac", "hidden", "mac_registered_at", "created_at",
+        "mac", "avatar", "hidden", "mac_registered_at", "created_at",
       ];
       const fCols = ["id", "user_low", "user_high", "status", "requested_by", "request_id",
         "best_low", "best_high", "created_at", "friends_since"];
@@ -276,13 +284,15 @@ export function createRepo(db: Db) {
       return [
         {
           name: "users",
-          note: "登録した人。share_key は配ってよい値。device_token_hash は sha256 の頭12文字（平文は保存していない）。MAC は伏せてある。",
+          note: "登録した人。share_key は配ってよい値。device_token_hash は sha256 の頭12文字（平文は保存していない）。MAC は伏せ、アイコンの画像は大きさだけにしてある。",
           columns: uCols,
           rows: (dumpQ.users.all() as Record<string, unknown>[]).map((r) => cells(
             {
               ...r,
               device_token_hash: `${String(r.device_token_hash).slice(0, 12)}…`,
               mac: maskMac(String(r.mac)),
+              // 画像そのものは長いので、大きさだけ出す
+              avatar: r.avatar ? `（画像 ${Math.round(String(r.avatar).length / 1024)}KB）` : null,
             },
             uCols,
           )),

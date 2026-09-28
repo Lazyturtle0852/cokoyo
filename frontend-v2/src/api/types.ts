@@ -6,6 +6,11 @@ export type BestState = 'none' | 'outgoing' | 'incoming' | 'best';
 export interface UserRef {
   userId: string;
   displayName: string;
+  /**
+   * アイコンの画像（data URL）。登録していない人は入らない。
+   * 128px四方の JPEG に縮めてから送る決まりで、だいたい 10〜30KB。
+   */
+  avatar?: string;
 }
 
 export interface Me extends UserRef {

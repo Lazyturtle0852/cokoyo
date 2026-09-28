@@ -31,8 +31,8 @@ interface AppState {
   points: PointsResponse | null;
   lastCheck: CheckResponse | null;
   checking: boolean;
-  /** はじめての登録か、MACアドレスの登録し直しか */
-  onboardingMode: 'new' | 'reregister';
+  /** はじめての登録か、MACアドレスの登録し直しか、この端末に引き継ぐか */
+  onboardingMode: 'new' | 'reregister' | 'restore';
   sheet: { open: boolean; mode: AddMode };
   /** キャンパスの地図をひらいているか */
   mapOpen: boolean;
@@ -66,6 +66,8 @@ interface AppActions {
   finishOnboarding(tab: Tab): void;
   startReregister(): void;
   cancelReregister(): void;
+  /** ログアウト（この端末の覚えを消す。登録そのものは残る） */
+  logout(): Promise<void>;
 
   // デモ操作から使う
   refresh(): Promise<void>;
@@ -105,7 +107,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [points, setPoints] = useState<PointsResponse | null>(null);
   const [lastCheck, setLastCheck] = useState<CheckResponse | null>(null);
   const [checking, setChecking] = useState(false);
-  const [onboardingMode, setOnboardingMode] = useState<'new' | 'reregister'>('new');
+  const [onboardingMode, setOnboardingMode] = useState<'new' | 'reregister' | 'restore'>('new');
   const [sheet, setSheet] = useState<{ open: boolean; mode: AddMode }>({ open: false, mode: 'show' });
   const [mapOpen, setMapOpen] = useState(false);
   const [displayTotal, setDisplayTotal] = useState<number | null>(null);
@@ -129,12 +131,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLastCheck(readLastCheck(m.userId));
   }, []);
 
-  const goOnboarding = useCallback(() => {
+  const goOnboarding = useCallback((mode: 'new' | 'restore' = 'new') => {
     field.clear();
     setDisplayTotal(null);
     setSheet({ open: false, mode: 'show' });
     setMapOpen(false);
-    setOnboardingMode('new');
+    setOnboardingMode(mode);
     setView('onboarding');
   }, [field]);
 
@@ -148,7 +150,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setView('app');
     } catch (e) {
       const err = e as ApiError;
-      if (err.status === 401) { device.clear(); goOnboarding(); }
+      if (err.status === 401) { device.clear(); goOnboarding(device.mac ? 'restore' : 'new'); }
       else { setError(err.message); setView('error'); }
     }
   }, [goOnboarding, loadAll]);
@@ -169,7 +171,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return true;
     } catch (e) {
       const err = e as ApiError;
-      if (err.status === 401) { device.clear(); goOnboarding(); }
+      if (err.status === 401) { device.clear(); goOnboarding(device.mac ? 'restore' : 'new'); }
       showToast(err.message);
       return false;
     } finally {
@@ -340,10 +342,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (t === 'friends') setSheet({ open: true, mode: 'show' });
     },
     startReregister: () => { setOnboardingMode('reregister'); setView('onboarding'); },
+    logout: async () => {
+      callLog.begin('ログアウト');
+      try { await api.logout(); } catch { /* つながらなくても、この端末の覚えは消す */ }
+      device.forget();
+      setTabState('home');
+      goOnboarding('new');
+      showToast('ログアウトしました');
+    },
     cancelReregister: () => setView('app'),
     refresh,
     restart,
-    restartFromOnboarding: () => { device.clear(); setTabState('home'); goOnboarding(); },
+    restartFromOnboarding: () => { device.forget(); setTabState('home'); goOnboarding(); },
   }), [view, error, tab, me, friends, points, lastCheck, checking, onboardingMode, sheet, mapOpen, displayTotal, toast,
     field, showToast, run, check, toggleHide, reloadFriends, loadAll, refresh, restart, goOnboarding]);
 

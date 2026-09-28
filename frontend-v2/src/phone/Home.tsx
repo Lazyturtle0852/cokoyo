@@ -68,7 +68,7 @@ export function Home() {
           const meta = !r ? '未確認' : r.present ? (r.building ? `${r.building}にいます` : 'キャンパスにいます') : 'いません';
           return (
             <div className="friend" key={f.userId}>
-              <Avatar userId={f.userId} name={f.displayName} on={!!r?.present} />
+              <Avatar userId={f.userId} name={f.displayName} avatar={f.avatar} on={!!r?.present} />
               <div className="fbody">
                 <div className="fname">{f.displayName}{f.best === 'best' && <span className="star">ベスト</span>}</div>
                 <div className={`fmeta${r?.present ? ' live' : ''}`}>{meta}</div>

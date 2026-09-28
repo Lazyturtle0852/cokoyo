@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS users (
   share_key          TEXT NOT NULL UNIQUE,  -- sk_xxxx 配ってよい値
   device_token_hash  TEXT NOT NULL UNIQUE,  -- dt_xxxx の sha256。平文は保存しない
   mac                TEXT NOT NULL UNIQUE,  -- 小文字16進12桁・区切りなし
+  avatar             TEXT,                  -- アイコンの画像（data URL）。未設定は NULL
   hidden             INTEGER NOT NULL DEFAULT 0,
   mac_registered_at  TEXT NOT NULL,
   created_at         TEXT NOT NULL
@@ -98,9 +99,26 @@ CREATE TABLE IF NOT EXISTS matches (
 );
 `;
 
+/**
+ * 動いているDBに、あとから足した列を入れる。
+ * SQLite には「無ければ足す」が無いので、今ある列を見てから足す。
+ */
+function addMissingColumns(db: Db): void {
+  const columns = (table: string) =>
+    (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((r) => r.name);
+
+  const later: [table: string, column: string, decl: string][] = [
+    ["users", "avatar", "TEXT"], // アイコンの画像（data URL）
+  ];
+  for (const [table, column, decl] of later) {
+    if (!columns(table).includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${decl}`);
+  }
+}
+
 export function openDb(path: string): Db {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
   const db = new Sqlite(path);
   db.exec(SCHEMA);
+  addMissingColumns(db);
   return db;
 }

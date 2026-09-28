@@ -251,6 +251,9 @@ body.plain .sheet { border-radius: 28px 28px 0 0; padding-bottom: max(22px, env(
 .av .ring { position: absolute; inset: -3px; border-radius: 50%; border: 2px solid var(--live); opacity: 0; }
 .av.on .ring { opacity: 1; }
 .av.off { filter: grayscale(1); opacity: .5; }
+.av.photo { background: var(--line-soft); overflow: hidden; }
+.av.photo img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+.av.photo .ring { z-index: 1; }
 .fbody { flex: 1; min-width: 0; display: block; }
 .fname { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .fmeta { display: block; font-size: 12px; color: var(--muted); }
@@ -307,11 +310,13 @@ body.plain .sheet { border-radius: 28px 28px 0 0; padding-bottom: max(22px, env(
 .demo-link { background: none; border: 1px dashed var(--faint); border-radius: 8px; padding: 3px 9px; font-size: 11.5px; color: var(--muted); cursor: pointer; margin-top: 8px; }
 
 /* ---------- はじめての登録 ---------- */
-.ob { padding: 8px 22px 26px; display: flex; flex-direction: column; }
+.ob { padding: 0 22px 26px; display: flex; flex-direction: column; }
 .ob > * { flex-shrink: 0; }
 .ob .demo-link { align-self: flex-start; }
 .ob > .btn:first-of-type { margin-top: 22px; }
-.ob-back { align-self: flex-start; display: flex; align-items: center; gap: 2px; background: none; border: none; padding: 4px 0; margin: 0 0 10px -4px;
+/* 「戻る」はスクロールしても上に貼りつけておく（下までスクロールすると押せなくなるため） */
+.ob-back { position: sticky; top: 0; z-index: 3; align-self: stretch; display: flex; align-items: center; justify-content: flex-start; gap: 2px;
+           background: var(--page); border: none; margin: 0 -22px 10px; padding: 14px 22px 10px 18px;
            font-size: 14px; font-weight: 600; color: var(--ink-2); cursor: pointer; }
 .ob-hero { padding: 40px 0 26px; }
 .wordmark.big { font-size: 34px; letter-spacing: .1em; line-height: 1.1; }
@@ -540,7 +545,7 @@ body.plain .map-screen { border-radius: 0; }
 .tap-hint { margin-top: 8px; }
 
 /* ---------- ホーム画面に追加（PWA） ---------- */
-.inst-hero { padding: 30px 0 18px; }
+.inst-hero { padding: 38px 0 18px; }
 .inst-preview { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .inst-preview img { border-radius: 14px; box-shadow: 0 4px 14px rgba(28,25,23,.18); }
 .inst-preview span { font-size: 11px; font-weight: 600; color: var(--ink-2); letter-spacing: .02em; }
@@ -556,3 +561,23 @@ body.plain .map-screen { border-radius: 0; }
 .inst-card .btn { margin-top: 0; }
 .inst-card .steps { margin-top: 2px; }
 .inst-skip { justify-self: center; color: var(--muted); font-size: 12px; }
+
+/* ---------- アイコンの写真 ---------- */
+.avatar-edit { display: flex; gap: 14px; align-items: flex-start; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.avatar-edit .av { width: 56px; height: 56px; font-size: 20px; }
+.avatar-edit-body { min-width: 0; }
+.avatar-edit .row-note { margin: 2px 0 8px; }
+.avatar-edit .inline-actions { margin: 0; }
+.hidden-file { display: none; }
+
+/* ---------- SNSで誘う ---------- */
+.sns { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.sns-cap { font-size: 12px; font-weight: 700; color: var(--muted); margin: 0 0 8px; }
+.sns-row { display: flex; gap: 8px; }
+.sns-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; border: none; border-radius: 14px;
+           padding: 13px 8px; font-size: 13px; font-weight: 700; color: #fff; cursor: pointer; }
+.sns-btn:active { transform: scale(.975); }
+.sns-btn.x { background: #1C1917; }
+.sns-btn.ig { background: linear-gradient(120deg, #F2711C 0%, #E1306C 55%, #A333C8 100%); }
+.sns .row-note { margin-top: 10px; }
+.qr-hidden { position: absolute; left: -9999px; top: 0; width: 0; height: 0; overflow: hidden; }
