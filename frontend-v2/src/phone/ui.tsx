@@ -47,13 +47,16 @@ export const Icon = {
 };
 
 // ---------------------------------------------------------------
-// アバター（そのフレンドのスライムと同じ色）
+// アバター（写真を登録していればその写真、していなければスライムと同じ色に頭文字）
 // ---------------------------------------------------------------
-export function Avatar({ userId, name, on = false, off = false, small = false }: { userId: string; name: string; on?: boolean; off?: boolean; small?: boolean }) {
+export function Avatar({ userId, name, avatar, on = false, off = false, small = false }:
+{ userId: string; name: string; avatar?: string; on?: boolean; off?: boolean; small?: boolean }) {
   const c = colorOf(userId);
   return (
-    <div className={`av${on ? ' on' : ''}${off ? ' off' : ''}${small ? ' small' : ''}`} style={{ background: shade(c, 0.72), color: shade(c, -0.5) }}>
-      <span className="ring" />{name.charAt(0)}
+    <div className={`av${on ? ' on' : ''}${off ? ' off' : ''}${small ? ' small' : ''}${avatar ? ' photo' : ''}`}
+      style={avatar ? undefined : { background: shade(c, 0.72), color: shade(c, -0.5) }}>
+      <span className="ring" />
+      {avatar ? <img src={avatar} alt="" /> : name.charAt(0)}
     </div>
   );
 }

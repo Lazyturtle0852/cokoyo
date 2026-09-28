@@ -50,7 +50,7 @@ export function Friends() {
           <div className="card">
             {requests.incoming.map((r) => (
               <div className="req" key={r.requestId}>
-                <Avatar userId={r.userId} name={r.displayName} />
+                <Avatar userId={r.userId} name={r.displayName} avatar={r.avatar} />
                 <div className="fbody"><div className="fname">{r.displayName}</div><div className="fmeta">リンクからフレンド申請</div></div>
                 <div className="req-actions">
                   <button className="mini-btn primary" onClick={() => void acceptRequest(r.requestId)}>承認</button>
@@ -60,7 +60,7 @@ export function Friends() {
             ))}
             {incomingBest.map((f) => (
               <div className="req" key={`best-${f.userId}`}>
-                <Avatar userId={f.userId} name={f.displayName} />
+                <Avatar userId={f.userId} name={f.displayName} avatar={f.avatar} />
                 <div className="fbody"><div className="fname">{f.displayName}</div><div className="fmeta best-meta">ベストフレンドの申請</div></div>
                 <div className="req-actions">
                   <button className="mini-btn best" onClick={() => void requestBest(f, '承認')}>承認</button>
@@ -82,7 +82,7 @@ export function Friends() {
             <div className={`frow${open ? ' open' : ''}`} key={f.userId}>
               <button className="frow-head" aria-expanded={open}
                 onClick={() => { setExpanded(open ? null : f.userId); setArmedBlock(null); }}>
-                <Avatar userId={f.userId} name={f.displayName} />
+                <Avatar userId={f.userId} name={f.displayName} avatar={f.avatar} />
                 <span className="fbody">
                   <span className="fname">
                     {f.displayName}
@@ -134,7 +134,7 @@ export function Friends() {
           <div className="card">
             {requests.outgoing.map((r) => (
               <div className="req" key={r.requestId}>
-                <Avatar userId={r.userId} name={r.displayName} off />
+                <Avatar userId={r.userId} name={r.displayName} avatar={r.avatar} off />
                 <div className="fbody"><div className="fname">{r.displayName}</div><div className="fmeta">相手の承認を待っています</div></div>
               </div>
             ))}
@@ -148,7 +148,7 @@ export function Friends() {
           <div className="card">
             {blocked.map((b) => (
               <div className="req" key={b.userId}>
-                <Avatar userId={b.userId} name={b.displayName} off />
+                <Avatar userId={b.userId} name={b.displayName} avatar={b.avatar} off />
                 <div className="fbody"><div className="fname">{b.displayName}</div><div className="fmeta">お互いの在校が見えません</div></div>
                 <div className="req-actions"><button className="mini-btn" onClick={() => void unblock(b.userId, b.displayName)}>解除</button></div>
               </div>
