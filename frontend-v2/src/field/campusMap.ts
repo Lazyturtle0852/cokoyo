@@ -63,7 +63,7 @@ const SOFT: BuildingKey[] = ['pe-buildings'];
 /** 奥にあるものが先。あとのものが上に重なる。 */
 const ORDER: BuildingKey[] = [
   'pe-buildings', 'tau', 'lambda', 'theta', 'omicron', 'iota', 'delta', 'alpha',
-  'mu', 'epsilon', 'kappa', 'omega', 'lounge', 'sigma',
+  'mu', 'epsilon', 'kappa', 'omega', 'sigma', 'lounge',
 ];
 
 export const MAP_BUILDINGS: MapBuilding[] = ORDER.map((key) => {
@@ -81,7 +81,7 @@ export const MAP_BUILDINGS: MapBuilding[] = ORDER.map((key) => {
     cx: X(c.x),
     cy: Y(c.y),
     top: Y(Math.max(...ys)),
-    size: glyph.length === 1 ? Math.min(20, Math.max(13, Math.min(w, h) * 0.6)) : Math.min(12, (w * 0.86) / glyph.length),
+    size: glyph.length === 1 ? Math.min(20, Math.max(13, Math.min(w, h) * 0.6)) : Math.max(8, Math.min(12, (w * 0.86) / glyph.length)),
     ...(SOFT.includes(key) ? { soft: true } : {}),
   };
 });

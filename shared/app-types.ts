@@ -171,5 +171,5 @@ export const BUILDING_LABELS: Record<BuildingKey, string> = {
   lambda: "λ館",
   "pe-buildings": "体育施設",
   sigma: "σ館",
-  lounge: "ラウンジ",
+  lounge: "鴨池ラウンジ",
 };
