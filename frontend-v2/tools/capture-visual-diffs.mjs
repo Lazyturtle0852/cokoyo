@@ -31,6 +31,18 @@ try {
   await page.getByRole('button', { name: 'ログアウト', exact: true }).click();
   await ready('Googleでログイン');
   await shot('05-login');
+  const embeddedContext = await browser.newContext({
+    viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, serviceWorkers: 'block',
+    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Line/14.0.0',
+  });
+  const embedded = await embeddedContext.newPage();
+  await embedded.goto(`${url}?shell=app`);
+  await embedded.locator('.tabs').getByRole('button', { name: '設定' }).click();
+  await embedded.getByRole('button', { name: 'ログアウト', exact: true }).click();
+  await embedded.getByText('LINEの中のブラウザで開いています').waitFor();
+  await embedded.screenshot({ path: new URL('05b-login-in-app-browser.png', out).pathname, animations: 'disabled' });
+  console.log('05b-login-in-app-browser');
+  await embeddedContext.close();
   await page.getByRole('button', { name: 'Googleでログイン' }).click();
   await page.getByRole('button', { name: /ポイント獲得/ }).waitFor();
 
