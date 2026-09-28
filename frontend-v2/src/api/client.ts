@@ -15,22 +15,37 @@ import type {
 // この端末に保存するもの：端末トークンだけ（ログインなし）
 // ---------------------------------------------------------------
 const DEVICE_KEY = 'cokoyo-device:v1';
-let memoryToken: string | null | undefined;
+interface Saved { token: string | null; mac?: string }
+let memory: Saved | undefined;
+
+const read = (): Saved | undefined => {
+  try { const s = localStorage.getItem(DEVICE_KEY); if (s !== null) return JSON.parse(s) as Saved; } catch { /* 保存できない環境 */ }
+  return memory;
+};
+const write = (v: Saved) => {
+  memory = v;
+  try { localStorage.setItem(DEVICE_KEY, JSON.stringify(v)); } catch { /* 保存できない環境 */ }
+};
 
 export const device = {
-  get token(): string | null {
-    try { const s = localStorage.getItem(DEVICE_KEY); if (s !== null) return (JSON.parse(s) as { token: string | null }).token; } catch { /* 保存できない環境 */ }
-    return memoryToken ?? null;
-  },
+  get token(): string | null { return read()?.token ?? null; },
+  /**
+   * 登録に使ったMACアドレス。
+   *
+   * 端末トークンが消えても（iPhone の Safari は、しばらく開かないと localStorage を消す）、
+   * これが残っていれば黙って登録し直せる。MACは持ち主の端末に置くだけで、外には出さない。
+   */
+  get mac(): string { return read()?.mac ?? ''; },
   // 一度も使っていない端末か（模擬バックエンドでは、登録済みのサンプルから始めるために使う）
   get untouched(): boolean {
-    try { return localStorage.getItem(DEVICE_KEY) === null && memoryToken === undefined; } catch { return memoryToken === undefined; }
+    try { return localStorage.getItem(DEVICE_KEY) === null && memory === undefined; } catch { return memory === undefined; }
   },
-  set(token: string | null) {
-    memoryToken = token;
-    try { localStorage.setItem(DEVICE_KEY, JSON.stringify({ token })); } catch { /* 保存できない環境 */ }
-  },
-  clear() { this.set(null); },
+  set(token: string | null) { write({ ...read(), token }); },
+  setMac(mac: string) { write({ token: read()?.token ?? null, mac }); },
+  /** 端末トークンだけ捨てる。MACは残すので、次の通信で黙って入り直せる */
+  clear() { write({ ...read(), token: null }); },
+  /** ログアウト。MACの覚えも消す */
+  forget() { write({ token: null }); },
 };
 
 // ---------------------------------------------------------------
@@ -70,7 +85,25 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * silent: 「バックエンドとの通信」に記録しない。
  * 説明用ページが裏で叩くもの（DBの中身）に使う。直前の操作の記録を汚さないため。
  */
-async function request<T>(method: string, path: string, body?: Record<string, unknown>, silent = false): Promise<T> {
+/**
+ * 端末トークンが効かなくなったとき、覚えているMACアドレスで黙って登録し直す。
+ * 一度でも登録した端末なら、MACアドレスの入れ直しを求めない。
+ */
+let recovering: Promise<boolean> | null = null;
+function recoverSession(): Promise<boolean> {
+  recovering ??= (async () => {
+    const mac = device.mac;
+    if (!mac || useMockBackend) return false;
+    try {
+      const r = await request<RegisterResponse>('POST', '/v1/sessions', { mac }, true, true);
+      device.set(r.deviceToken);
+      return true;
+    } catch { return false; } finally { setTimeout(() => { recovering = null; }, 0); }
+  })();
+  return recovering;
+}
+
+async function request<T>(method: string, path: string, body?: Record<string, unknown>, silent = false, noRetry = false): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const token = device.token;
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -84,12 +117,21 @@ async function request<T>(method: string, path: string, body?: Record<string, un
     try {
       const res = await fetch(config.apiBaseUrl.replace(/\/$/, '') + path, {
         method, headers, body: body ? JSON.stringify(body) : undefined,
+        // 端末トークンのクッキー（localStorage が消えても残る控え）を一緒に送る
+        credentials: 'include',
       });
       status = res.status;
       json = status === 204 ? null : await res.json().catch(() => null);
     } catch (e) {
       if (!silent) push({ method, path, body, status: 0, json: { error: { message: String((e as Error).message ?? e) } }, withToken: !!token });
       throw new ApiError('バックエンドに接続できません。URLとCORSの設定を確認してください', 0);
+    }
+  }
+
+  if (status >= 400) {
+    // 覚えているMACアドレスで登録し直せるなら、黙ってやり直す
+    if (status === 401 && !noRetry && await recoverSession()) {
+      return request<T>(method, path, body, silent, true);
     }
   }
 
@@ -109,9 +151,14 @@ export const api = {
   register: (displayName: string, mac: string) => request<RegisterResponse>('POST', '/v1/users', { displayName, mac }),
   // 登録済みのMACを、この端末に引き継ぐ（アプリを入れ直したとき）
   restore: (mac: string) => request<RegisterResponse>('POST', '/v1/sessions', { mac }),
+  /** ログアウト（この端末の覚えを消す。登録そのものは残る） */
+  logout: () => request<null>('DELETE', '/v1/sessions'),
   getMe: () => request<Me>('GET', '/v1/me'),
   updateMe: (patch: { displayName?: string; hidden?: boolean }) => request<Me>('PATCH', '/v1/me', patch),
   updateMac: (mac: string) => request<Me>('PUT', '/v1/me/mac', { mac }),
+  // アイコンの画像（128px四方に縮めた data URL）
+  updateAvatar: (image: string) => request<Me>('PUT', '/v1/me/avatar', { image }),
+  removeAvatar: () => request<Me>('DELETE', '/v1/me/avatar'),
 
   // 在校確認とポイント
   check: () => request<CheckResponse>('POST', '/v1/checks'),

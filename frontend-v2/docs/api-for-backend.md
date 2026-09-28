@@ -43,6 +43,7 @@ npm run dev          # http://localhost:5173
 | パスの先頭 | `/v1` |
 | 形式 | JSON（UTF-8） |
 | 本人の判断 | `Authorization: Bearer <deviceToken>`。`POST /v1/users` 以外はすべて必要 |
+| 端末の覚え | 登録・引き継ぎのとき、同じ端末トークンを `cokoyo_device` クッキー（`HttpOnly` / `SameSite=Lax` / 400日）にも入れる。ヘッダが無ければクッキーを見る。使うたびに期限を延ばす |
 | 日時 | ISO 8601（例：`2026-09-15T05:32:10.000Z`） |
 | エラー | `{ "error": { "code": "mac_taken", "message": "このMACアドレスはすでに登録されています" } }` |
 
@@ -63,6 +64,7 @@ npm run dev          # http://localhost:5173
 | `deviceToken` | 端末トークン。登録時に1回だけ返す。**秘密**。アプリだけが持つ |
 | `shareKey` | 共有キー。QRコードと招待リンクに入れる。フレンドに渡してよい値 |
 | `userId` | ユーザーのID。フレンド一覧などで相手を指すのに使う |
+| `avatar` | アイコンの写真（data URL）。登録していない人には入らない |
 
 `shareKey` は、MACアドレスから計算するのではなく**ランダムに作ってDBに保存する**ことをおすすめします。
 MACアドレスのハッシュにすると、総当たりで元のMACアドレスに戻せてしまうためです。
@@ -115,13 +117,20 @@ MACアドレスのハッシュにすると、総当たりで元のMACアドレ�
   登録できる）。ここだけ厳しくしても意味がないので揃えてある
 - エラー：`400 invalid_mac`、`404 mac_not_registered`
 
+### DELETE /v1/sessions — ログアウト
+
+`204`。`cokoyo_device` クッキーを消すだけで、登録そのものは残る。同じMACで `POST /v1/sessions` すれば戻れる。
+
 ### GET /v1/me — 自分の情報
 
 ```json
 // 200（POST /v1/users から deviceToken を除いた形）
 { "userId": "u_me", "displayName": "ゆうき", "shareKey": "sk_m8qe4tz2", "hidden": false,
-  "macMasked": "a2:3f:••:••:••:44", "macRegisteredAt": "2026-09-03T00:00:00.000Z" }
+  "macMasked": "a2:3f:••:••:••:44", "macRegisteredAt": "2026-09-03T00:00:00.000Z",
+  "avatar": "data:image/jpeg;base64,…" }
 ```
+
+`avatar` はアイコンの写真。登録していない人には入らない。
 
 ### PATCH /v1/me — 表示名の変更・かくれんぼ
 
@@ -142,6 +151,23 @@ MACアドレスのハッシュにすると、総当たりで元のMACアドレ�
 ```
 
 200で `GET /v1/me` と同じ形を返す。エラーは `POST /v1/users` と同じ。
+
+### PUT /v1/me/avatar — アイコンの写真
+
+アプリが端末の中で**正方形に切って 128px に縮め、JPEG にしてから** data URL で送る。
+
+```json
+{ "image": "data:image/jpeg;base64,…" }
+```
+
+- 受け付けるのは `image/jpeg` `image/png` `image/webp` の data URL だけ（`400 invalid_avatar`）
+- 大きさの上限は 120KB（`400 avatar_too_large`）
+- 200で `GET /v1/me` と同じ形を返す
+- フレンド・申請・ブロック中の一覧に出てくる相手にも、同じ `avatar` を入れて返す
+
+### DELETE /v1/me/avatar — アイコンの写真を消す
+
+200で `GET /v1/me` と同じ形（`avatar` なし）を返す。名前の頭文字の表示に戻る。
 
 ---
 

@@ -32,7 +32,7 @@ export const buildingLabel = (key: BuildingKey) => BUILDING_LABELS[key];
 // ---------------------------------------------------------------
 // データの形（バックエンドの中だけで使う）
 // ---------------------------------------------------------------
-interface DbUser { name: string; mac: string; shareKey: string; token: string | null; hidden: boolean; macRegisteredAt: string; createdAt: string }
+interface DbUser { name: string; mac: string; shareKey: string; token: string | null; hidden: boolean; macRegisteredAt: string; createdAt: string; avatar?: string }
 interface Campus { connected: boolean; buildingKey: BuildingKey }
 interface Ledger {
   total: number;
@@ -179,7 +179,7 @@ function visiblePresence(viewer: string, target: string): { present: boolean; bu
     : { present: true };
 }
 
-const publicUser = (uid: string) => ({ userId: uid, displayName: db.users[uid].name });
+const publicUser = (uid: string) => ({ userId: uid, displayName: db.users[uid].name, ...(db.users[uid].avatar ? { avatar: db.users[uid].avatar } : {}) });
 const maskMac = (mac: string) => { const p = mac.split(':'); return `${p[0]}:${p[1]}:••:••:••:${p[5]}`; };
 const normalizeMac = (s: unknown) => String(s ?? '').trim().toLowerCase().replace(/-/g, ':');
 const validMac = (s: string) => /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(s);
@@ -193,7 +193,21 @@ const ok = (json: unknown, status = 200): MockResult => ({ status, json });
 
 function meView(uid: string) {
   const u = db.users[uid];
-  return { userId: uid, displayName: u.name, shareKey: u.shareKey, hidden: u.hidden, macMasked: maskMac(u.mac), macRegisteredAt: u.macRegisteredAt };
+  return {
+    userId: uid, displayName: u.name, shareKey: u.shareKey, hidden: u.hidden,
+    macMasked: maskMac(u.mac), macRegisteredAt: u.macRegisteredAt,
+    ...(u.avatar ? { avatar: u.avatar } : {}),
+  };
+}
+
+// PUT / DELETE /v1/me/avatar — アイコンの画像（data URL）
+const AVATAR_MAX = 120 * 1024;
+function updateAvatar(uid: string, body: Body) {
+  const image = String(body.image ?? '');
+  if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(image)) return E(400, 'invalid_avatar', '画像の形式が正しくありません（JPEG・PNG・WebP）');
+  if (image.length > AVATAR_MAX) return E(400, 'avatar_too_large', '画像が大きすぎます');
+  db.users[uid].avatar = image;
+  return ok(meView(uid));
 }
 
 function pointsView(uid: string) {
@@ -470,6 +484,9 @@ function route(method: string, path: string, headers: Record<string, string>, bo
   if (method === 'GET' && path === '/v1/me') return ok(meView(uid));
   if (method === 'PATCH' && path === '/v1/me') return updateMe(uid, body);
   if (method === 'PUT' && path === '/v1/me/mac') return updateMac(uid, body);
+  if (method === 'PUT' && path === '/v1/me/avatar') return updateAvatar(uid, body);
+  if (method === 'DELETE' && path === '/v1/me/avatar') { delete db.users[uid].avatar; return ok(meView(uid)); }
+  if (method === 'DELETE' && path === '/v1/sessions') { db.users[uid].token = null; return { status: 204, json: null }; }
   if (method === 'GET' && path === '/v1/points') return ok(pointsView(uid));
   if (method === 'POST' && path === '/v1/checks') return check(uid);
   if (method === 'GET' && path === '/v1/friends') return listFriends(uid);
