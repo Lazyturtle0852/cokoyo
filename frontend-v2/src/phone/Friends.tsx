@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useApp } from '../app/AppContext';
 import { api } from '../api/client';
 import type { Friend } from '../api/types';
-import { GiftPanel } from './GiftPanel';
 import { HideCard } from './HideCard';
 import { Avatar, fullDate, Icon } from './ui';
 
@@ -12,7 +11,6 @@ export function Friends() {
   const { friends, run, reloadFriends, showToast, openAddSheet } = useApp();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [armedBlock, setArmedBlock] = useState<string | null>(null);
-  const [giftTo, setGiftTo] = useState<string | null>(null);
   if (!friends) return null;
 
   const { requests, blocked } = friends;
@@ -83,7 +81,7 @@ export function Friends() {
           return (
             <div className={`frow${open ? ' open' : ''}`} key={f.userId}>
               <button className="frow-head" aria-expanded={open}
-                onClick={() => { setExpanded(open ? null : f.userId); setArmedBlock(null); setGiftTo(null); }}>
+                onClick={() => { setExpanded(open ? null : f.userId); setArmedBlock(null); }}>
                 <Avatar userId={f.userId} name={f.displayName} />
                 <span className="fbody">
                   <span className="fname">
@@ -98,9 +96,6 @@ export function Friends() {
               </button>
               {open && (
                 <div className="frow-body">
-                  {giftTo === f.userId
-                    ? <GiftPanel friend={f} onDone={() => setGiftTo(null)} />
-                    : <button className="row-btn" onClick={() => setGiftTo(f.userId)}>ポイントを贈る</button>}
                   {f.best === 'none' && (
                     <>
                       <button className="row-btn" onClick={() => void requestBest(f, '申請')}>ベストフレンドを申請</button>

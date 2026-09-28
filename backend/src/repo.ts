@@ -1,6 +1,6 @@
 import type { DbTable } from "../../shared/app-types.js";
 import type { Db } from "./db.js";
-import { hashToken, newGiftId, newRequestId, newShareKey, newUserId } from "./lib/ids.js";
+import { hashToken, newRequestId, newShareKey, newUserId } from "./lib/ids.js";
 import { maskMac } from "./lib/mac.js";
 
 export interface User {
@@ -24,14 +24,6 @@ export interface FriendshipRow {
   best_high: number;
   created_at: string;
   friends_since: string | null;
-}
-
-export interface GiftRow {
-  gift_id: string;
-  from_id: number;
-  to_id: number;
-  pts: number;
-  created_at: string;
 }
 
 export interface PointRow {
@@ -108,20 +100,6 @@ export function createRepo(db: Db) {
       "SELECT COALESCE(SUM(pts), 0) AS total FROM point_events WHERE user_id = ?",
     ),
 
-    giftsIn: db.prepare("SELECT COALESCE(SUM(pts), 0) AS total FROM gifts WHERE to_id = ?"),
-    giftsOut: db.prepare("SELECT COALESCE(SUM(pts), 0) AS total FROM gifts WHERE from_id = ?"),
-    giftsOutOfDay: db.prepare(
-      "SELECT COALESCE(SUM(pts), 0) AS total FROM gifts WHERE from_id = ? AND date = ?",
-    ),
-    insertGift: db.prepare(
-      `INSERT INTO gifts (gift_id, from_id, to_id, date, pts, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-    ),
-    giftById: db.prepare("SELECT gift_id, from_id, to_id, pts, created_at FROM gifts WHERE gift_id = ?"),
-    recentGifts: db.prepare(
-      `SELECT gift_id, from_id, to_id, pts, created_at FROM gifts
-       WHERE from_id = ? OR to_id = ? ORDER BY id DESC LIMIT ?`,
-    ),
-
     addReaction: db.prepare(
       `INSERT INTO reactions (from_id, to_id, count, updated_at) VALUES (?, ?, ?, ?)
        ON CONFLICT(from_id, to_id) DO UPDATE SET
@@ -151,7 +129,6 @@ export function createRepo(db: Db) {
     points: db.prepare("SELECT * FROM (SELECT * FROM point_events ORDER BY id DESC LIMIT 100) ORDER BY id"),
     visits: db.prepare("SELECT * FROM visits ORDER BY date DESC, user_id LIMIT 100"),
     matches: db.prepare("SELECT * FROM matches ORDER BY user_id, other_user_id"),
-    gifts: db.prepare("SELECT * FROM (SELECT * FROM gifts ORDER BY id DESC LIMIT 100) ORDER BY id"),
     reactions: db.prepare("SELECT * FROM reactions ORDER BY updated_at"),
   };
 
@@ -252,33 +229,8 @@ export function createRepo(db: Db) {
     },
     pointsOfDay: (userId: number, date: string) =>
       many<PointRow>(q.pointsOfDay.all(userId, date)),
-    /** 獲得した分 ＋ もらった分 − 贈った分 */
-    pointsTotal(userId: number): number {
-      const sum = (row: unknown) => Number((one<{ total: number }>(row) ?? { total: 0 }).total);
-      return sum(q.pointsTotal.get(userId)) + sum(q.giftsIn.get(userId)) - sum(q.giftsOut.get(userId));
-    },
-
-    // ── gifts ────────────────────────────────────────────────
-    giftedOn: (userId: number, date: string) =>
-      Number((one<{ total: number }>(q.giftsOutOfDay.get(userId, date)) ?? { total: 0 }).total),
-    /** 残高の確認と記録を1つのトランザクションで行う。足りなければ null。 */
-    addGift(from: number, to: number, date: string, pts: number): GiftRow | null {
-      db.exec("BEGIN IMMEDIATE");
-      try {
-        const sum = (row: unknown) => Number((one<{ total: number }>(row) ?? { total: 0 }).total);
-        const balance = sum(q.pointsTotal.get(from)) + sum(q.giftsIn.get(from)) - sum(q.giftsOut.get(from));
-        if (balance < pts) { db.exec("ROLLBACK"); return null; }
-        const giftId = newGiftId();
-        q.insertGift.run(giftId, from, to, date, pts, new Date().toISOString());
-        db.exec("COMMIT");
-        return one<GiftRow>(q.giftById.get(giftId)) ?? null;
-      } catch (e) {
-        db.exec("ROLLBACK");
-        throw e;
-      }
-    },
-    recentGifts: (userId: number, limit: number) =>
-      many<GiftRow>(q.recentGifts.all(userId, userId, limit)),
+    pointsTotal: (userId: number) =>
+      Number((one<{ total: number }>(q.pointsTotal.get(userId)) ?? { total: 0 }).total),
 
     // ── reactions ────────────────────────────────────────────
     addReaction(from: number, to: number, count: number, max: number): void {
@@ -352,12 +304,6 @@ export function createRepo(db: Db) {
           note: "入ったポイント1件が1行。今日の分と累計はここを数えている。直近100件。",
           columns: pCols,
           rows: rows(dumpQ.points, pCols),
-        },
-        {
-          name: "gifts",
-          note: "フレンドに贈ったポイント。累計は point_events の合計 ＋ もらった分 − 贈った分。",
-          columns: ["id", "gift_id", "from_id", "to_id", "date", "pts", "created_at"],
-          rows: rows(dumpQ.gifts, ["id", "gift_id", "from_id", "to_id", "date", "pts", "created_at"]),
         },
         {
           name: "reactions",

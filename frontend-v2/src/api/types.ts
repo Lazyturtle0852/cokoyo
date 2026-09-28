@@ -52,27 +52,6 @@ export interface PointItem {
 export interface PointsResponse {
   date: string;
   today: { items: PointItem[]; total: number };
-  /** 獲得した分 ＋ もらった分 − 贈った分 */
-  total: number;
-  /** フレンドとのポイントのやりとり。新しい順に20件まで。 */
-  gifts: Gift[];
-}
-
-/** フレンドとのポイントのやりとり1件。 */
-export interface Gift {
-  giftId: string;
-  /** in: もらった  out: 贈った */
-  direction: 'in' | 'out';
-  userId: string;
-  displayName: string;
-  pts: number;
-  createdAt: string;
-}
-
-/** POST /v1/friends/:userId/gifts の返事 */
-export interface GiftResponse {
-  gift: Gift;
-  /** 贈ったあとの累計 */
   total: number;
 }
 

@@ -537,25 +537,5 @@ body.plain .map-screen { border-radius: 0; }
   .map-slime.self { animation: none; }
 }
 
-/* ---------- ポイントを贈る ---------- */
-.gift { background: var(--line-soft); border-radius: 14px; padding: 12px; margin-bottom: 8px; }
-.gift-title { font-size: 13px; font-weight: 700; margin: 0 0 10px; }
-.gift-chips { display: flex; gap: 6px; }
-.gift-chip { flex: 1; border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 7px 0; font-size: 12.5px; font-weight: 700; color: var(--ink-2); cursor: pointer; }
-.gift-chip.on { background: var(--brand); border-color: var(--brand); color: #fff; }
-.gift-chip:disabled { opacity: .4; cursor: default; }
-.gift-amount { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-.gift-step { width: 38px; height: 38px; flex-shrink: 0; border-radius: 50%; border: 1px solid var(--line); background: var(--card); font-size: 18px; font-weight: 700; color: var(--ink-2); cursor: pointer; }
-.gift-step:disabled { opacity: .4; cursor: default; }
-.gift-input { flex: 1; display: flex; align-items: baseline; justify-content: center; gap: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 6px 10px; }
-.gift-input input { width: 100%; min-width: 0; border: none; outline: none; background: none; text-align: right; font: inherit; font-family: 'DotGothic16', ui-monospace, monospace; font-size: 22px; color: var(--ink); }
-.gift-input span { font-size: 13px; color: var(--muted); }
-.gift .row-note { margin: 8px 0 0; }
-.gift-send { margin-top: 10px; background: var(--brand); color: #fff; padding: 9px 18px; border-radius: 999px; }
-.gift-send:hover:not(:disabled) { color: #fff; background: var(--brand-dark); }
-.gift-send:disabled { opacity: .45; cursor: default; }
-.gifts { border-top: 1px solid var(--line-soft); margin-top: 10px; padding-top: 8px; }
-.gifts-cap { font-size: 11.5px; font-weight: 700; color: var(--muted); margin: 0 0 2px; }
-.gift-when { font-size: 11px; color: var(--faint); margin-left: 6px; }
-.pt-row .n.out { color: var(--muted); }
 .tap-hint { margin-top: 8px; }
+

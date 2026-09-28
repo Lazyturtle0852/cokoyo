@@ -166,6 +166,6 @@ describe("ポイント", () => {
     const body = await h.json<PointsResponse>(await alice.get("/v1/points"));
     expect(body.total).toBe(20);
     expect(body.today.total).toBe(20);
-    expect(Object.keys(body).sort()).toEqual(["date", "gifts", "today", "total"]);
+    expect(Object.keys(body).sort()).toEqual(["date", "today", "total"]);
   });
 });

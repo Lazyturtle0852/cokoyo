@@ -8,7 +8,7 @@ import { config, useMockBackend } from '../config';
 import { mockBackend } from './mockBackend';
 import type {
   AddFriendResponse, ApiErrorBody, BestResponse, BlockResponse, CheckResponse,
-  DebugDbResponse, FriendsResponse, GiftResponse, Me, PointsResponse, ReactionResponse, RegisterResponse, UserRef,
+  DebugDbResponse, FriendsResponse, Me, PointsResponse, ReactionResponse, RegisterResponse, UserRef,
 } from './types';
 
 // ---------------------------------------------------------------
@@ -131,8 +131,6 @@ export const api = {
 
   // スライムの連打（相手の画面にあなたのスライムが出たときに届く）
   react: (userId: string, count: number) => request<ReactionResponse>('POST', `/v1/friends/${id(userId)}/reactions`, { count }),
-  // ポイントを贈る
-  gift: (userId: string, pts: number) => request<GiftResponse>('POST', `/v1/friends/${id(userId)}/gifts`, { pts }),
 
   // 説明用ページ（/explain）だけが使う。アプリ本体は使わない。
   debugDb: () => request<DebugDbResponse>('GET', '/v1/debug/db', undefined, true),

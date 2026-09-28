@@ -80,9 +80,6 @@ DBは `DB_PATH` の SQLite ファイル1つ。起動時にテーブルを作る�
 
 かくれんぼ中の本人には `base` `streak` `rain` は入るが、マッチは入らない。
 
-累計は `point_events` の合計 ＋ フレンドからもらった分 − 贈った分（`gifts` テーブル）。
-贈るのは 10pt 単位で 10〜1,000pt、1日に合計 1,000pt まで（`routes.ts` の `GIFT`）。
-
 ## つんつん（スライムへのリアクション）
 
 `POST /v1/friends/:userId/reactions` で受け取った回数を `reactions` テーブルにためておき、
