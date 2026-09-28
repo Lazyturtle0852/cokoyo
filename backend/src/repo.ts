@@ -10,6 +10,7 @@ export interface User {
   email: string;
   display_name: string | null;
   avatar: string | null;
+  avatar_source: "unset" | "google" | "custom" | "disabled";
   share_key: string | null;
   hidden: number;
   onboarding_completed_at: string | null;
@@ -45,7 +46,7 @@ export interface PointRow {
 }
 
 const USER_COLS =
-  "id, user_id, google_sub, email, display_name, avatar, share_key, hidden, onboarding_completed_at";
+  "id, user_id, google_sub, email, display_name, avatar, avatar_source, share_key, hidden, onboarding_completed_at";
 
 /** 常に (小さい方, 大きい方) の順に揃える。 */
 const pair = (a: number, b: number): [number, number] => (a < b ? [a, b] : [b, a]);
@@ -64,7 +65,8 @@ export function createRepo(db: Db) {
     updateEmail: db.prepare("UPDATE users SET email = ? WHERE id = ?"),
     completeUser: db.prepare("UPDATE users SET display_name = ?, share_key = ?, onboarding_completed_at = ? WHERE id = ?"),
     updateProfile: db.prepare("UPDATE users SET display_name = ?, hidden = ? WHERE id = ?"),
-    updateAvatar: db.prepare("UPDATE users SET avatar = ? WHERE id = ?"),
+    updateAvatar: db.prepare("UPDATE users SET avatar = ?, avatar_source = ? WHERE id = ?"),
+    setGoogleAvatar: db.prepare("UPDATE users SET avatar = ?, avatar_source = 'google' WHERE id = ? AND avatar_source = 'unset'"),
     macsOf: db.prepare("SELECT id, user_id, mac, label, registered_at FROM mac_addresses WHERE user_id = ? ORDER BY id"),
     macById: db.prepare("SELECT id, user_id, mac, label, registered_at FROM mac_addresses WHERE id = ?"),
     userByMac: db.prepare(`SELECT ${USER_COLS} FROM users WHERE id = (SELECT user_id FROM mac_addresses WHERE mac = ?)`),
@@ -241,7 +243,9 @@ export function createRepo(db: Db) {
     updateProfile(id: number, displayName: string, hidden: boolean): void {
       q.updateProfile.run(displayName, hidden ? 1 : 0, id);
     },
-    updateAvatar: (id: number, avatar: string | null) => void q.updateAvatar.run(avatar, id),
+    updateAvatar: (id: number, avatar: string | null) =>
+      void q.updateAvatar.run(avatar, avatar ? "custom" : "disabled", id),
+    setGoogleAvatarIfUnset: (id: number, avatar: string) => void q.setGoogleAvatar.run(avatar, id),
 
     transaction<T>(fn: () => T): T {
       db.exec("BEGIN IMMEDIATE");
@@ -336,7 +340,7 @@ export function createRepo(db: Db) {
     /** 公開説明画面用。行は全件表示し、認証情報とMAC原文は列単位で除外する。 */
     dump(): DbTable[] {
       const uCols = [
-        "id", "user_id", "display_name", "avatar", "hidden", "onboarding_completed_at", "created_at",
+        "id", "user_id", "display_name", "avatar", "avatar_source", "hidden", "onboarding_completed_at", "created_at",
       ];
       const mCols = ["id", "user_id", "mac", "label", "registered_at"];
       const fCols = ["id", "user_low", "user_high", "status", "requested_by", "request_id",

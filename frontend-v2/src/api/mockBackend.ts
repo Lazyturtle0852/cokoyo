@@ -11,7 +11,7 @@ import type { BestState, BuildingKey, PointItem, PointKind, Reaction } from './t
 import { BUILDING_KEYS, BUILDING_LABELS } from './types';
 
 // Google アカウントと複数MACの形に変わったため、旧デモの保存は使わない。
-const STORE_KEY = 'cokoyo-mock-backend:v4';
+const STORE_KEY = 'cokoyo-mock-backend:v5';
 
 // ---------------------------------------------------------------
 // ポイントの決まり
@@ -32,7 +32,7 @@ export const buildingLabel = (key: BuildingKey) => BUILDING_LABELS[key];
 // ---------------------------------------------------------------
 // データの形（バックエンドの中だけで使う）
 // ---------------------------------------------------------------
-interface DbUser { name: string; mac: string; shareKey: string; hidden: boolean; macRegisteredAt: string; createdAt: string; email?: string; avatar?: string; macs?: { id: number; mac: string; label: string; registeredAt: string }[]; onboarded?: boolean }
+interface DbUser { name: string; mac: string; shareKey: string; hidden: boolean; macRegisteredAt: string; createdAt: string; email?: string; avatar?: string; avatarSource?: 'google' | 'custom' | 'disabled'; macs?: { id: number; mac: string; label: string; registeredAt: string }[]; onboarded?: boolean }
 interface Campus { connected: boolean; buildingKey: BuildingKey; unavailable?: boolean }
 interface Ledger {
   total: number;
@@ -92,6 +92,8 @@ const rand = (prefix: string, n: number) => prefix + Array.from(crypto.getRandom
 // ---------------------------------------------------------------
 // 最初の状態
 // ---------------------------------------------------------------
+const DEMO_GOOGLE_AVATAR = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect width="128" height="128" fill="#d8e8f7"/><circle cx="64" cy="49" r="23" fill="#557da7"/><path d="M22 119c0-27 19-43 42-43s42 16 42 43" fill="#557da7"/></svg>')}`;
+
 function seed(): Db {
   const today = startOfDay(new Date());
   const wd = prevWeekdays(today, 4); // 昨日までの平日4日 → 今日来ると5日連続
@@ -105,7 +107,7 @@ function seed(): Db {
 
   return {
     users: {
-      u_me:        user('ゆうき', 'a2:3f:9c:1b:7e:44', 'sk_m8qe4tz2', { macRegisteredAt: ago(12) }),
+      u_me:        user('ゆうき', 'a2:3f:9c:1b:7e:44', 'sk_m8qe4tz2', { macRegisteredAt: ago(12), avatar: DEMO_GOOGLE_AVATAR, avatarSource: 'google' }),
       u_sato:      user('佐藤',   '5c:e1:08:77:3a:b2', 'sk_s3nv7kpa'),
       u_tanaka:    user('田中',   'd6:4b:92:0f:c8:13', 'sk_t9wd2hxe'),
       u_suzuki:    user('鈴木',   '7e:a0:5d:e6:21:9f', 'sk_z4rc8mfu', { hidden: true }),
@@ -151,7 +153,7 @@ let db: Db = (() => {
   return seed();
 })();
 const save = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(db)); } catch { /* 保存できない環境 */ } };
-const SESSION_KEY = 'cokoyo-mock-session:v2';
+const SESSION_KEY = 'cokoyo-mock-session:v3';
 let sessionUid: string | null = (() => {
   try { const saved = localStorage.getItem(SESSION_KEY); return saved === null ? 'u_me' : saved || null; }
   catch { return 'u_me'; }
@@ -227,6 +229,7 @@ function updateAvatar(uid: string, body: Body): MockResult {
   if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(image)) return E(400, 'invalid_avatar', '画像の形式が正しくありません（JPEG・PNG・WebP）');
   if (image.length > AVATAR_MAX) return E(400, 'avatar_too_large', '画像が大きすぎます');
   db.users[uid].avatar = image;
+  db.users[uid].avatarSource = 'custom';
   return ok(meView(uid));
 }
 
@@ -500,7 +503,7 @@ function route(method: string, path: string, _headers: Record<string, string>, b
   if (method === 'GET' && path === '/v1/me') return ok(meView(uid));
   if (method === 'PATCH' && path === '/v1/me') return updateMe(uid, body);
   if (method === 'PUT' && path === '/v1/me/avatar') return updateAvatar(uid, body);
-  if (method === 'DELETE' && path === '/v1/me/avatar') { delete db.users[uid].avatar; return ok(meView(uid)); }
+  if (method === 'DELETE' && path === '/v1/me/avatar') { delete db.users[uid].avatar; db.users[uid].avatarSource = 'disabled'; return ok(meView(uid)); }
   if (method === 'GET' && path === '/v1/me/macs') return ok({ macs: macsOf(uid).map(macView), limit: 5 });
   if (method === 'POST' && path === '/v1/me/macs') return addMac(uid, body);
   const macMatch = /^\/v1\/me\/macs\/(\d+)$/.exec(path);
@@ -561,7 +564,7 @@ const sim = {
   },
   startNewAccount() {
     const now = new Date().toISOString();
-    db.users.u_new = { name: '', mac: '', shareKey: '', hidden: false,
+    db.users.u_new = { name: '', mac: '', shareKey: '', hidden: false, avatar: DEMO_GOOGLE_AVATAR, avatarSource: 'google',
       macRegisteredAt: now, createdAt: now, email: 'new@keio.jp', macs: [], onboarded: false };
     db.campus.u_new = { connected: false, buildingKey: 'kappa' };
     db.points.u_new = { total: 0, visitDays: [], lastMatch: {}, days: {} };

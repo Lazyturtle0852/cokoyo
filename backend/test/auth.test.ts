@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
-import { validateGoogleIdentity, type GoogleProvider } from "../src/auth.js";
+import { downloadGoogleAvatar, validateGoogleIdentity, type GoogleProvider } from "../src/auth.js";
 import { openDb } from "../src/db.js";
 import { createRepo } from "../src/repo.js";
 import { StubDtc, MAC } from "./helpers.js";
 
-const make = () => {
+const make = (avatar?: string) => {
   const repo = createRepo(openDb(":memory:"));
   const provider: GoogleProvider = {
     async authorizationUrl(_verifier, state) { return new URL(`https://accounts.google.com/auth?state=${state}`); },
-    async exchange() { return { sub: "google-user-1", email: "student@keio.jp" }; },
+    async exchange() { return { sub: "google-user-1", email: "student@keio.jp", avatar }; },
   };
   const app = createApp(repo, new StubDtc(), provider);
   return { app, repo };
@@ -19,6 +19,44 @@ const cookieValue = (header: string | null, name: string) =>
   new RegExp(`${name}=([^;]+)`).exec(header ?? "")?.[1] ?? "";
 
 describe("Google login", () => {
+  it("Googleの画像URLだけを小さなdata URLとして読み、失敗時はアイコンなしで続ける", async () => {
+    const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    const fetcher = async () => new Response(png, { headers: { "content-type": "image/png" } });
+    expect(await downloadGoogleAvatar("https://lh3.googleusercontent.com/a/example", fetcher as typeof fetch))
+      .toBe(`data:image/png;base64,${Buffer.from(png).toString("base64")}`);
+    let called = false;
+    const rejected = async () => { called = true; return new Response(png); };
+    expect(await downloadGoogleAvatar("http://127.0.0.1/private", rejected as typeof fetch)).toBeNull();
+    expect(called).toBe(false);
+    const large = async () => new Response(png, { headers: { "content-type": "image/png", "content-length": "100000" } });
+    expect(await downloadGoogleAvatar("https://lh3.googleusercontent.com/a/example", large as typeof fetch)).toBeNull();
+  });
+
+  it("Google写真は初期値にだけ使い、手動変更・削除を次のログインで上書きしない", async () => {
+    const google = "data:image/png;base64,AAAA";
+    const { app, repo } = make(google);
+    const login = async () => {
+      const start = await app.request("/api/v1/auth/google");
+      const state = new URL(start.headers.get("location") as string).searchParams.get("state") as string;
+      const callback = await app.request(`/api/v1/auth/google/callback?state=${state}&code=ok`, {
+        headers: { cookie: `cokoyo_oauth=${state}` },
+      });
+      expect(callback.status).toBe(302);
+    };
+    await login();
+    const user = repo.findBySub("google-user-1");
+    expect(user?.avatar).toBe(google);
+    expect(user?.avatar_source).toBe("google");
+    if (!user) throw new Error("user missing");
+    repo.updateAvatar(user.id, "data:image/png;base64,BBBB");
+    await login();
+    expect(repo.findBySub("google-user-1")?.avatar).toBe("data:image/png;base64,BBBB");
+    repo.updateAvatar(user.id, null);
+    await login();
+    expect(repo.findBySub("google-user-1")?.avatar).toBeNull();
+    expect(repo.findBySub("google-user-1")?.avatar_source).toBe("disabled");
+  });
+
   it("Workspaceの検証済みkeio.jpアカウントだけを受け入れる", () => {
     const base = { sub: "stable-sub", email: "student@keio.jp", hd: "keio.jp", email_verified: true };
     expect(validateGoogleIdentity(base)).toEqual({ sub: "stable-sub", email: "student@keio.jp" });

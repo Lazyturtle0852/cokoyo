@@ -217,6 +217,7 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
       fail(409, "email_conflict", "このメールアドレスの登録を確認できませんでした。運営に連絡してください");
     }
     const user = repo.findOrCreateGoogleUser(identity.sub, identity.email);
+    if (identity.avatar) repo.setGoogleAvatarIfUnset(user.id, identity.avatar);
     const token = newSecret();
     repo.createSession(user.id, token);
     setCookie(c, sessionCookie, token, { ...cookieOptions, maxAge: 14 * 86400 });

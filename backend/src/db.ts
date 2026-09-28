@@ -20,6 +20,7 @@ CREATE TABLE users (
   email TEXT NOT NULL UNIQUE,
   display_name TEXT,
   avatar TEXT,
+  avatar_source TEXT NOT NULL DEFAULT 'unset' CHECK (avatar_source IN ('unset', 'google', 'custom', 'disabled')),
   share_key TEXT UNIQUE,
   hidden INTEGER NOT NULL DEFAULT 0,
   onboarding_completed_at TEXT,

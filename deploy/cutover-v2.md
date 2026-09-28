@@ -12,7 +12,7 @@ v2 は Google ログインを必須とし、旧アカウント・交友・ポイ
 ## 切替確認
 
 - `/`、`/explain/`、`/test/`、`/api/health` が 200、未ログインの `/api/v1/auth/session` が 401。
-- 実際の `keio.jp` Google アカウントでログインし、初回登録、2 台目の追加、在校確認、ログアウト、再ログインで同じデータを確認する。`@gmail.com` は登録できないことを確認する。
+- 実際の `keio.jp` Google アカウントでログインし、初回登録、2 台目の追加、在校確認、ログアウト、再ログインで同じデータを確認する。Google の写真があるアカウントでは初期アイコンと手動変更・削除後の保持を確認する。`@gmail.com` は登録できないことを確認する。
 - `/explain/` の DB 表にメール、Google ID、セッション、OAuth state、MAC 原文、共有キーが出ないことを確認する。
 - 確認後 GitHub Actions 変数 `COKOYO_V2_CUTOVER_DONE=true` を設定し、以後の main push 自動 deploy を再開する。
 

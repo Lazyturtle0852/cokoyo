@@ -24,6 +24,8 @@ try {
   await page.locator('.tabs').getByRole('button', { name: '設定' }).click();
   await ready('キャンパスの検知');
   await shot('03-settings-one-mac-top');
+  await page.getByRole('button', { name: '写真を削除' }).click();
+  await shot('03b-settings-avatar-removed');
   await page.locator('.content').evaluate((e) => { e.scrollTop = e.scrollHeight; });
   await shot('04-settings-account-logout');
   await page.getByRole('button', { name: 'ログアウト', exact: true }).click();
