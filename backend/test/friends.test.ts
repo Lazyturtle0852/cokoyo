@@ -225,3 +225,40 @@ describe("MACアドレスでフレンド申請", () => {
     expect(self.status).toBe(400);
   });
 });
+
+describe("QRは、申請が残っていてもその場でフレンドにする", () => {
+  it("自分が出した申請が残っていても、QRを読み取ればフレンドになる（両方から見て）", async () => {
+    const h = createHarness();
+    const alice = await h.signUp("ゆうき", MAC.alice);
+    const bob = await h.signUp("佐藤", MAC.bob);
+
+    // リンクで申請しておく（alice → bob の申請が残っている状態）
+    const requested = await alice.post("/v1/friends", { shareKey: bob.shareKey, via: "link" });
+    expect(requested.status).toBe(202);
+
+    // そのうえで目の前で bob のQRを読み取る
+    const scanned = await alice.post("/v1/friends", { shareKey: bob.shareKey, via: "qr" });
+    expect(scanned.status).toBe(201);
+    expect((await h.json<{ status: string }>(scanned)).status).toBe("friends");
+
+    // 片方に「承認待ち」が残らない
+    for (const who of [alice, bob]) {
+      const list = await h.json<FriendsResponse>(await who.get("/v1/friends"));
+      expect(list.friends).toHaveLength(1);
+      expect(list.requests.incoming).toHaveLength(0);
+      expect(list.requests.outgoing).toHaveLength(0);
+    }
+  });
+
+  it("相手から申請が届いているときも、QRでその場でフレンドになる", async () => {
+    const h = createHarness();
+    const alice = await h.signUp("ゆうき", MAC.alice);
+    const bob = await h.signUp("佐藤", MAC.bob);
+    await bob.post("/v1/friends", { shareKey: alice.shareKey, via: "link" });
+
+    expect((await alice.post("/v1/friends", { shareKey: bob.shareKey, via: "qr" })).status).toBe(201);
+    const list = await h.json<FriendsResponse>(await bob.get("/v1/friends"));
+    expect(list.friends).toHaveLength(1);
+    expect(list.requests.outgoing).toHaveLength(0);
+  });
+});
