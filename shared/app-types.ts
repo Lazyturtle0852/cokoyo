@@ -65,6 +65,21 @@ export interface PointsResponse {
   total: number;
 }
 
+/** スライムを連打して届いたリアクション。送った人のスライムが画面に出たときに届く。 */
+export interface Reaction {
+  /** 送ってきたフレンド */
+  userId: string;
+  /** 連打した回数（まとめて届く。99まで） */
+  count: number;
+}
+
+/** POST /v1/friends/:userId/reactions の返事 */
+export interface ReactionResponse {
+  userId: string;
+  /** 受け付けた回数 */
+  count: number;
+}
+
 export interface FriendPresence {
   userId: string;
   present: boolean;
@@ -80,6 +95,8 @@ export interface CheckResponse {
   weather: { condition: string; rainy: boolean };
   friends: FriendPresence[];
   points: PointsResponse & { awarded: PointItem[]; notice: string | null };
+  /** 今回スライムが出たフレンドから、届いていたリアクション */
+  reactions: Reaction[];
 }
 
 export interface AddFriendResponse {

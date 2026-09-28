@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import type {
   AddFriendResponse, BestResponse, BestState, BlockResponse, BuildingKey, CheckResponse,
-  DebugDbResponse, FriendsResponse, Me, PointItem, PointsResponse, RegisterResponse, UserRef,
+  DebugDbResponse, FriendsResponse, Me, PointItem, PointsResponse, Reaction, ReactionResponse,
+  RegisterResponse, UserRef,
 } from "../../shared/app-types.js";
 import { BUILDING_LABELS } from "../../shared/app-types.js";
 import { config } from "./config.js";
@@ -69,6 +70,9 @@ function validMac(input: unknown): string {
   return mac;
 }
 
+/** 1組（送り手→受け手）にためておけるリアクションの数と、届かないまま捨てるまでの時間。 */
+export const REACTION = { MAX: 99, TTL_MS: 3 * 24 * 60 * 60 * 1000 } as const;
+
 const pointsView = (repo: Repo, me: User): PointsResponse => {
   const date = jstDate();
   const items = repo.pointsOfDay(me.id, date).map((row): PointItem => {
@@ -87,6 +91,20 @@ const pointsView = (repo: Repo, me: User): PointsResponse => {
     total: repo.pointsTotal(me.id),
   };
 };
+
+/**
+ * リアクションを送る相手を引く。
+ * フレンドでない・自分がブロックしている相手は 404。
+ * 相手にブロックされているかどうかは、ここでは区別しない（呼ぶ側が黙って扱う）。
+ */
+function friendTarget(repo: Repo, me: User, userId: string): User {
+  const other = repo.findByUserId(userId);
+  const row = other ? repo.getFriendship(me.id, other.id) : undefined;
+  if (!other || !row || row.status !== "friends" || repo.isBlocking(me.id, other.id)) {
+    fail(404, "friend_not_found", "フレンドが見つかりません");
+  }
+  return other;
+}
 
 /** /v1 の下に生やす。フロントは apiBaseUrl + "/v1/..." で叩く。 */
 export function createRoutes(repo: Repo, dtc: DtcClient) {
@@ -207,6 +225,19 @@ export function createRoutes(repo: Repo, dtc: DtcClient) {
       today,
     });
 
+    // 画面に出たフレンドのスライムから、届いていたリアクションを渡す。
+    // 在校が見えている＝相手の画面では自分のスライムが見えている、とは限らないが、
+    // 「送った人のスライムが、受け取る人の画面に出たとき」に届けばよいので、これで足りる。
+    const now = Date.now();
+    const reactions: Reaction[] = [];
+    visible.forEach((f) => {
+      if (!f.present) return;
+      const r = repo.takeReaction(f.user.id, me.id);
+      if (r && now - new Date(r.updated_at).getTime() <= REACTION.TTL_MS) {
+        reactions.push({ userId: f.user.user_id, count: r.count });
+      }
+    });
+
     const response: CheckResponse = {
       checkedAt: new Date().toISOString(),
       me: {
@@ -233,6 +264,7 @@ export function createRoutes(repo: Repo, dtc: DtcClient) {
         };
       }),
       points: { awarded, notice, ...pointsView(repo, me) },
+      reactions,
     };
 
     await floor;
@@ -412,6 +444,26 @@ export function createRoutes(repo: Repo, dtc: DtcClient) {
     repo.removeBlock(me.id, other.id);
     const response: BlockResponse = { userId: other.user_id, blocked: false };
     return c.json(response);
+  });
+
+  // ── スライムへのリアクション ─────────────────────────────
+  /**
+   * フレンドのスライムを連打した回数を送る。すぐには届けず、ためておく。
+   * 相手がボタンを押して、こちらのスライムが相手の画面に出たときに届く（/v1/checks）。
+   *
+   * 相手にブロックされていても、ふつうと同じ 202 を返して黙って捨てる。
+   */
+  app.post("/v1/friends/:userId/reactions", async (c) => {
+    const me = requireUser(c, repo);
+    const other = friendTarget(repo, me, c.req.param("userId"));
+    const count = (await c.req.json().catch(() => null))?.count;
+    if (!Number.isInteger(count) || count < 1 || count > REACTION.MAX) {
+      fail(400, "invalid_count", `回数は1〜${REACTION.MAX}で送ってください`);
+    }
+
+    if (!repo.isBlocking(other.id, me.id)) repo.addReaction(me.id, other.id, count as number, REACTION.MAX);
+    const response: ReactionResponse = { userId: other.user_id, count: count as number };
+    return c.json(response, 202);
   });
 
   // ── 説明用 ────────────────────────────────────────────────

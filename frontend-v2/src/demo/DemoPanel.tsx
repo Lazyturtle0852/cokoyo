@@ -81,6 +81,11 @@ export function DemoPanel() {
             {p.name}さんが招待リンクを開く
           </button>
         ))}
+        {uid && (app.friends?.friends ?? []).slice(0, 2).map((f) => (
+          <button className="ghost" key={`react-${f.userId}`} onClick={() => { sim.reactFrom(f.userId, uid, 7); rerender(); app.showToast(`${f.displayName}さんのスライムがキャンパスにいれば、次の「ポイント獲得」で届きます`); }}>
+            {f.displayName}さんがあなたのスライムを連打
+          </button>
+        ))}
         {uid && bestCandidates.map((f) => (
           <button className="ghost" key={f.userId} onClick={async () => { sim.requestBestFrom(f.userId, uid); await app.refresh(); rerender(); app.showToast('ベストフレンドの申請が届きました'); }}>
             {f.displayName}さんがベストフレンドを申請

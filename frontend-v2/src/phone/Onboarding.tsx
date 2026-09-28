@@ -2,12 +2,14 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useApp } from '../app/AppContext';
+import { useInstall } from '../app/install';
 import { pendingInvite } from '../app/invite';
 import { api, callLog, device, type ApiError } from '../api/client';
 import { useMockBackend } from '../config';
+import { InstallStep } from './Install';
 import { Icon } from './ui';
 
-type Step = 'welcome' | 'name' | 'mac' | 'restore' | 'done';
+type Step = 'install' | 'welcome' | 'name' | 'mac' | 'restore' | 'done';
 type Os = 'ios' | 'android' | 'mac' | 'windows';
 
 /**
@@ -104,7 +106,9 @@ const validMac = (s: string) => /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(s);
 export function Onboarding() {
   const { onboardingMode, cancelReregister, completeRegistration, finishOnboarding, setMe, showToast, setTab } = useApp();
   const reRegister = onboardingMode === 'reregister';
-  const [step, setStep] = useState<Step>(reRegister ? 'mac' : 'welcome');
+  // ホーム画面に追加できる端末なら、いちばん最初にその案内を出す
+  const { canOffer } = useInstall();
+  const [step, setStep] = useState<Step>(reRegister ? 'mac' : canOffer ? 'install' : 'welcome');
   const [name, setName] = useState('');
   const [mac, setMac] = useState('');
   const [os, setOs] = useState<Os>('ios');
@@ -186,6 +190,10 @@ export function Onboarding() {
       setBusy(false);
     }
   };
+
+  if (step === 'install') {
+    return <InstallStep onNext={() => go('welcome')} />;
+  }
 
   if (step === 'welcome') {
     return (

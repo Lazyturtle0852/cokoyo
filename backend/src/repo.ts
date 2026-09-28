@@ -100,6 +100,14 @@ export function createRepo(db: Db) {
       "SELECT COALESCE(SUM(pts), 0) AS total FROM point_events WHERE user_id = ?",
     ),
 
+    addReaction: db.prepare(
+      `INSERT INTO reactions (from_id, to_id, count, updated_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT(from_id, to_id) DO UPDATE SET
+         count = MIN(reactions.count + excluded.count, ?), updated_at = excluded.updated_at`,
+    ),
+    reaction: db.prepare("SELECT count, updated_at FROM reactions WHERE from_id = ? AND to_id = ?"),
+    deleteReaction: db.prepare("DELETE FROM reactions WHERE from_id = ? AND to_id = ?"),
+
     visit: db.prepare("SELECT 1 FROM visits WHERE user_id = ? AND date = ?"),
     insertVisit: db.prepare("INSERT OR IGNORE INTO visits (user_id, date) VALUES (?, ?)"),
 
@@ -121,6 +129,7 @@ export function createRepo(db: Db) {
     points: db.prepare("SELECT * FROM (SELECT * FROM point_events ORDER BY id DESC LIMIT 100) ORDER BY id"),
     visits: db.prepare("SELECT * FROM visits ORDER BY date DESC, user_id LIMIT 100"),
     matches: db.prepare("SELECT * FROM matches ORDER BY user_id, other_user_id"),
+    reactions: db.prepare("SELECT * FROM reactions ORDER BY updated_at"),
   };
 
   type Cell = string | number | null;
@@ -223,6 +232,17 @@ export function createRepo(db: Db) {
     pointsTotal: (userId: number) =>
       Number((one<{ total: number }>(q.pointsTotal.get(userId)) ?? { total: 0 }).total),
 
+    // ── reactions ────────────────────────────────────────────
+    addReaction(from: number, to: number, count: number, max: number): void {
+      q.addReaction.run(from, to, count, new Date().toISOString(), max);
+    },
+    /** 届いていないリアクションを受け取って消す。無ければ null。 */
+    takeReaction(from: number, to: number): { count: number; updated_at: string } | null {
+      const row = one<{ count: number; updated_at: string }>(q.reaction.get(from, to));
+      if (row) q.deleteReaction.run(from, to);
+      return row ?? null;
+    },
+
     hasVisited: (userId: number, date: string) => Boolean(q.visit.get(userId, date)),
     recordVisit: (userId: number, date: string) => void q.insertVisit.run(userId, date),
 
@@ -284,6 +304,12 @@ export function createRepo(db: Db) {
           note: "入ったポイント1件が1行。今日の分と累計はここを数えている。直近100件。",
           columns: pCols,
           rows: rows(dumpQ.points, pCols),
+        },
+        {
+          name: "reactions",
+          note: "スライムを連打したリアクションの、まだ届いていない分。受け手の画面に送り手のスライムが出たら消える。",
+          columns: ["from_id", "to_id", "count", "updated_at"],
+          rows: rows(dumpQ.reactions, ["from_id", "to_id", "count", "updated_at"]),
         },
         {
           name: "visits",

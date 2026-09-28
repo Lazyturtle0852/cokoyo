@@ -25,7 +25,7 @@ const TABS: { id: Tab; label: string; icon: () => React.JSX.Element }[] = [
 ];
 
 function AppScreens() {
-  const { tab, setTab, friends } = useApp();
+  const { tab, setTab, friends, mapOpen } = useApp();
   const badge = friends ? friends.requests.incoming.length + friends.friends.filter((f) => f.best === 'incoming').length : 0;
   return (
     <>
@@ -34,7 +34,8 @@ function AppScreens() {
         <TotalPoints />
       </div>
       {/* ホームのフィールドはスクロールさせず、下のカードだけをスクロールする */}
-      {tab === 'home' && <FieldView />}
+      {/* 地図を開いている間は外す（右上の「地図」ボタンが地図の上に残るため） */}
+      {tab === 'home' && !mapOpen && <FieldView />}
       {/* タブごとに作り直して、スクロール位置を一番上に戻す */}
       <div className={`content${tab === 'home' ? ' under-field' : ''}`} key={tab}>
         {tab === 'home' ? <Home /> : tab === 'friends' ? <Friends /> : <Settings />}

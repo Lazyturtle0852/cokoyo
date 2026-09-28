@@ -25,8 +25,22 @@ export interface CampusField {
   setGhost(ghost: boolean): void;
   /** そのスライムの頭上に文字を出す。スライムがいなければ false */
   pop(userId: string, text: string): boolean;
+  /**
+   * フレンドのスライムを連打し終えたときに呼ぶ関数を決める。
+   * TAP_MIN 回以上たたいて、TAP_IDLE_MS 手を止めたら1回呼ばれる。
+   */
+  onReact(fn: ((userId: string, count: number) => void) | null): void;
+  /** 届いたリアクションを、そのフレンドのスライムで見せる。スライムがいなければ false */
+  react(userId: string, count: number): boolean;
   clear(): void;
 }
+
+/** これだけ続けてたたくと、相手に届く */
+export const TAP_MIN = 3;
+/** 手を止めてから送るまで */
+const TAP_IDLE_MS = 900;
+/** 1回に送れる数（バックエンドの上限と同じ） */
+const TAP_MAX = 99;
 
 // フィールドの座標（SVGの viewBox と同じ単位）
 const VW = 368;
@@ -37,40 +51,77 @@ const POND = { cx: 70, cy: 166, rx: 62, ry: 24 };
 const reduceMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
 // ---------------------------------------------------------------
-// 背景：SFCのキャンパスを平面的にしたもの
+// 背景：鴨池のほとりから見たSFC
+//   左   … κ ε ι ο 館のような、白いパネルに横長の窓が走る研究棟（2棟が渡り廊下でつながる）
+//   中   … 格子窓の白い高層棟
+//   右   … 縦のスリット窓が並ぶ白い円筒（本館の塔）と、うしろの箱
+// 手前は芝生の斜面と鴨池。
 // ---------------------------------------------------------------
 const mullions = (x0: number, x1: number, step: number, y: number, h: number, fill: string) => {
   let s = '';
-  for (let x = x0 + step; x < x1; x += step) s += `<rect x="${x}" y="${y}" width="2" height="${h}" fill="${fill}"/>`;
+  for (let x = x0 + step; x < x1; x += step) s += `<rect x="${x}" y="${y}" width="1.6" height="${h}" fill="${fill}"/>`;
   return s;
 };
 const grid = (xs: number[], ys: number[], w: number, h: number, fill: string) =>
-  xs.map((x) => ys.map((y) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="1" fill="${fill}"/>`).join('')).join('');
-const tree = (x: number, y: number, r: number) => `<rect x="${x - 1.5}" y="${y}" width="3" height="${r + 6}" fill="#8A6B4E"/>
-  <circle cx="${x}" cy="${y}" r="${r}" fill="#63B452"/><circle cx="${x - r * 0.3}" cy="${y - r * 0.3}" r="${r * 0.45}" fill="#7FC76A"/>`;
+  xs.map((x) => ys.map((y) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx=".6" fill="${fill}"/>`).join('')).join('');
+const tree = (x: number, y: number, r: number, leaf = '#63B452', light = '#7FC76A') => `<rect x="${x - 1.5}" y="${y}" width="3" height="${r + 6}" fill="#8A6B4E"/>
+  <circle cx="${x}" cy="${y}" r="${r}" fill="${leaf}"/><circle cx="${x - r * 0.3}" cy="${y - r * 0.3}" r="${r * 0.45}" fill="${light}"/>`;
+
+/** 屋上の鉄骨のフレーム（SFCの研究棟の屋上にある格子） */
+const roofFrame = (x0: number, x1: number, y: number) =>
+  `<g stroke="#B9C0C6" stroke-width="1.3" fill="none"><path d="M${x0} ${y - 7} H${x1}"/>${
+    Array.from({ length: Math.floor((x1 - x0) / 10) + 1 }, (_, i) => `<path d="M${x0 + i * 10} ${y - 7} V${y}"/>`).join('')}</g>`;
+
+/** 研究棟1つ。横長の窓の帯が2段と、1階のピロティ */
+const lab = (x: number, w: number, top: number) => `
+  ${roofFrame(x + 6, x + w - 6, top)}
+  <rect x="${x}" y="${top}" width="${w}" height="${116 - top}" fill="#F3F2EF"/>
+  <rect x="${x}" y="${top}" width="${w}" height="3" fill="#D6D3CD"/>
+  <rect x="${x + 5}" y="${top + 9}" width="${w - 10}" height="7" rx="1" fill="#687785"/>
+  <rect x="${x + 5}" y="${top + 22}" width="${w - 10}" height="7" rx="1" fill="#687785"/>
+  ${mullions(x + 5, x + w - 5, 8, top + 9, 7, '#F3F2EF')}${mullions(x + 5, x + w - 5, 8, top + 22, 7, '#F3F2EF')}
+  <rect x="${x + 3}" y="${top + 34}" width="${w - 6}" height="${116 - top - 34}" fill="#A9B0B7"/>
+  ${Array.from({ length: Math.floor((w - 6) / 16) + 1 }, (_, i) => `<rect x="${x + 3 + i * 16}" y="${top + 34}" width="3.5" height="${116 - top - 34}" fill="#F3F2EF"/>`).join('')}`;
+
+/** 本館の塔：白い円筒に縦のスリット窓。端ほど細く見せて丸みを出す */
+function drum(cx: number, r: number, top: number) {
+  let slits = '';
+  for (let a = -75; a <= 75; a += 13) {
+    const t = (a * Math.PI) / 180;
+    const x = cx + Math.sin(t) * (r - 3);
+    const w = 4.2 * Math.cos(t);
+    slits += `<rect x="${(x - w / 2).toFixed(1)}" y="${top + 10}" width="${w.toFixed(1)}" height="${116 - top - 18}" rx=".8" fill="#5F6C78"/>`;
+  }
+  return `
+  <defs><linearGradient id="drum-shade" x1="0" x2="1">
+    <stop offset="0" stop-color="#FFFFFF"/><stop offset=".45" stop-color="#F4F3F0"/><stop offset="1" stop-color="#D9D6D0"/>
+  </linearGradient></defs>
+  <rect x="${cx - r}" y="${top}" width="${r * 2}" height="${116 - top}" fill="url(#drum-shade)"/>
+  ${slits}
+  <ellipse cx="${cx}" cy="${top}" rx="${r}" ry="4.5" fill="#E2DFD9"/>
+  <rect x="${cx - r - 1.5}" y="${top - 1}" width="${r * 2 + 3}" height="2.4" rx="1" fill="#CFCBC4"/>`;
+}
 
 const SCENE = `<svg class="scene" viewBox="0 0 ${VW} ${VH}" aria-hidden="true" focusable="false">
-  ${tree(20, 94, 15)}${tree(348, 92, 16)}
-  <!-- 左：窓の帯が横に走る研究棟（ピロティつき） -->
-  <rect x="34" y="70" width="120" height="46" rx="2" fill="#E6E2DB"/>
-  <rect x="34" y="70" width="120" height="4" fill="#C9C2B7"/>
-  <rect x="42" y="80" width="104" height="8" rx="1" fill="#5E6D7B"/>
-  <rect x="42" y="94" width="104" height="8" rx="1" fill="#5E6D7B"/>
-  ${mullions(42, 146, 13, 80, 8, '#E6E2DB')}${mullions(42, 146, 13, 94, 8, '#E6E2DB')}
-  <rect x="40" y="107" width="108" height="9" fill="#9AA3AC"/>
-  ${[48, 72, 96, 120, 142].map((x) => `<rect x="${x}" y="107" width="4" height="9" fill="#E6E2DB"/>`).join('')}
-  <!-- 中央：大きな庇の塔 -->
-  <rect x="158" y="42" width="60" height="74" fill="#EDEFF1"/>
-  <rect x="150" y="36" width="76" height="7" rx="1" fill="#C3C9CF"/>
-  ${grid([166, 182, 198], [52, 64, 76, 88], 11, 7, '#687887')}
-  <rect x="178" y="101" width="20" height="15" fill="#52606C"/>
-  <!-- 右：ガラスの建物（メディアセンター風） -->
-  <rect x="224" y="64" width="106" height="5" rx="1" fill="#C3C9CF"/>
-  <rect x="228" y="69" width="98" height="47" fill="#A7D1E2"/>
-  ${mullions(228, 326, 14, 69, 47, '#88BFD4')}
-  <rect x="228" y="90" width="98" height="2" fill="#88BFD4"/>
-  <path d="M236 74 l10 0 l-14 14 l0 -10z" fill="#C8E4EF"/>
-  ${tree(150, 102, 10)}${tree(218, 104, 9)}
+  <!-- 右奥：円筒のうしろの箱 -->
+  <rect x="232" y="68" width="112" height="48" fill="#E9E8E4"/>
+  <rect x="232" y="68" width="112" height="3" fill="#D3D0CA"/>
+  <rect x="238" y="80" width="100" height="6" rx="1" fill="#7B8894"/>
+  ${mullions(238, 338, 9, 80, 6, '#E9E8E4')}
+  <!-- 中：格子窓の高層棟 -->
+  <rect x="196" y="30" width="6" height="8" fill="#C9CDD1"/>
+  <rect x="176" y="36" width="54" height="80" fill="#F6F6F4"/>
+  <rect x="176" y="36" width="54" height="3" fill="#D6D3CD"/>
+  ${grid([182, 194, 206, 218], [46, 58, 70, 82, 94], 7, 6, '#6E7C89')}
+  ${tree(12, 96, 14)}${tree(356, 94, 15)}
+  <!-- 左：研究棟が2つ、渡り廊下でつながる -->
+  ${lab(20, 70, 74)}
+  <rect x="90" y="90" width="14" height="9" fill="#E3E2DE"/><rect x="92" y="92" width="10" height="4" fill="#687785"/>
+  ${lab(104, 64, 70)}
+  ${tree(172, 100, 11, '#D9723F', '#EE9460')}
+  <!-- 右：本館の塔 -->
+  ${drum(286, 30, 44)}
+  ${tree(232, 104, 9)}
   <!-- 芝生 -->
   <ellipse cx="184" cy="156" rx="200" ry="50" fill="#7EBF5D"/>
   <ellipse cx="184" cy="150" rx="198" ry="47" fill="#99D476"/>
@@ -185,7 +236,14 @@ interface Slime {
   from: { x: number; y: number }; to: { x: number; y: number };
   moving: boolean;
   phase: number; blinkAt: number; nameTimer?: number;
+  /** 連打の途中の回数と、送るまでのタイマー */
+  taps: number; tapTimer?: number;
 }
+
+// ハート（ドット絵）
+const HEART = ['.hh.hh.', 'hhhhhhh', 'hhhhhhh', '.hhhhh.', '..hhh..', '...h...'];
+const heartSvg = (fill: string) => `<svg width="14" height="12" viewBox="0 0 7 6" shape-rendering="crispEdges" aria-hidden="true">${
+  HEART.map((row, y) => [...row].map((ch, x) => (ch === 'h' ? `<rect x="${x}" y="${y}" width="1" height="1" fill="${fill}"/>` : '')).join('')).join('')}</svg>`;
 
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 const onLawn = (x: number, y: number) => ((x - LAWN.cx) / LAWN.rx) ** 2 + ((y - LAWN.cy) / LAWN.ry) ** 2 <= 0.82 && x > 26 && x < VW - 26;
@@ -200,6 +258,7 @@ export function createCampusField(): CampusField {
   const layer = el.querySelector('.slimes') as HTMLDivElement;
   const slimes = new Map<string, Slime>();
   let raf = 0;
+  let reactHandler: ((userId: string, count: number) => void) | null = null;
 
   function freeSpot() {
     for (let i = 0; i < 60; i++) {
@@ -243,18 +302,66 @@ export function createCampusField(): CampusField {
       x: spot.x, y: spot.y, dir: Math.random() < 0.5 ? -1 : 1, hop: 0, sx: 1, sy: 1,
       mode: ghost ? 'float' : reduceMotion() ? 'idle' : 'drop', t0: now, landedAt: -1e9, nextAt: now + rnd(700, 1600), hopsLeft: 0,
       from: spot, to: spot, moving: false, phase: rnd(0, 6.28), blinkAt: now + rnd(1500, 4000),
+      taps: 0,
     };
     drawBody(s);
     if (ghost) puff(s);
-    // タップすると名前が少しだけ出る
+    // タップすると名前が少しだけ出る。フレンドのスライムは、連打するとリアクションが届く
     node.addEventListener('click', () => {
       node.classList.add('named');
       window.clearTimeout(s.nameTimer);
       s.nameTimer = window.setTimeout(() => node.classList.remove('named'), 1600);
+      if (!s.self && s.mode !== 'leave') tapped(s);
     });
     slimes.set(id, s);
     place(s);
     start();
+  }
+
+  // ハートを1つ、スライムの頭上から浮かせる
+  function heart(s: Slime, fill: string, delay = 0) {
+    const h = document.createElement('span');
+    h.className = 'heart';
+    h.innerHTML = heartSvg(fill);
+    h.style.setProperty('--dx', `${rnd(-26, 26).toFixed(0)}px`);
+    h.style.animationDelay = `${delay}ms`;
+    s.node.appendChild(h);
+    window.setTimeout(() => h.remove(), 1000 + delay);
+  }
+
+  // 頭上の「×3」。連打の途中と、届いたときに使う
+  function badge(s: Slime, text: string, cls: string) {
+    let b = s.node.querySelector('.tap-badge') as HTMLSpanElement | null;
+    if (!b) { b = document.createElement('span'); s.node.appendChild(b); }
+    b.className = `tap-badge ${cls}`;
+    b.textContent = text;
+    return b;
+  }
+
+  // 相手のスライムの反応：その場で小さく跳ねる
+  function bounce(s: Slime) {
+    if (!reduceMotion() && (s.mode === 'idle' || s.mode === 'hop')) {
+      s.hopsLeft = 0; s.mode = 'hop'; s.t0 = performance.now(); s.from = { x: s.x, y: s.y }; s.to = { x: s.x, y: s.y };
+      start();
+    }
+  }
+
+  function tapped(s: Slime) {
+    s.taps = Math.min(s.taps + 1, TAP_MAX);
+    heart(s, '#FF6F91');
+    bounce(s);
+    if (s.taps >= 2) badge(s, `×${s.taps}`, s.taps >= TAP_MIN ? 'ready' : '');
+    window.clearTimeout(s.tapTimer);
+    s.tapTimer = window.setTimeout(() => {
+      const n = s.taps;
+      s.taps = 0;
+      const b = s.node.querySelector('.tap-badge');
+      if (n >= TAP_MIN && reactHandler) {
+        badge(s, '送った！', 'sent');
+        reactHandler(s.id, n);
+      } else b?.remove();
+      window.setTimeout(() => { if (!s.taps) s.node.querySelector('.tap-badge')?.remove(); }, 900);
+    }, TAP_IDLE_MS);
   }
 
   // 切り替わるときの「ぽん」という煙
@@ -430,8 +537,29 @@ export function createCampusField(): CampusField {
       return true;
     },
 
+    onReact(fn) { reactHandler = fn; },
+
+    react(userId, count) {
+      const s = slimes.get(userId);
+      if (!s || !el.isConnected || s.mode === 'leave') return false;
+      const n = Math.min(count, 12);
+      for (let i = 0; i < n; i++) heart(s, i % 3 === 2 ? '#FFB3C6' : '#FF6F91', i * 110);
+      badge(s, `つんつん×${count}`, 'incoming');
+      s.node.classList.add('named');
+      window.clearTimeout(s.nameTimer);
+      s.nameTimer = window.setTimeout(() => {
+        s.node.classList.remove('named');
+        s.node.querySelector('.tap-badge.incoming')?.remove();
+      }, 2200);
+      // うれしくて何度か跳ねる
+      if (!reduceMotion()) {
+        [0, 420, 840].forEach((ms) => window.setTimeout(() => bounce(s), ms));
+      }
+      return true;
+    },
+
     clear() {
-      for (const s of slimes.values()) s.node.remove();
+      for (const s of slimes.values()) { window.clearTimeout(s.tapTimer); s.node.remove(); }
       slimes.clear();
       layer.querySelectorAll('.pop').forEach((p) => p.remove());
     },

@@ -1,4 +1,8 @@
-// フレンド追加のシート（QRを見せる／QRを読み取る）
+// フレンド追加のシート
+//
+//   QR          … 自分のQRを出す。下の「QRを読み込む」で、相手のQRを読むカメラに切り替わる
+//   リンクで共有 … 招待リンクを送る・コピーする。共有キーも出しておく。
+//                  相手のキーやMACアドレスを入力して申請するのもここ
 
 import { QRCodeSVG } from 'qrcode.react';
 import { useState } from 'react';
@@ -6,6 +10,7 @@ import { useApp } from '../app/AppContext';
 import { api } from '../api/client';
 import { mockBackend } from '../api/mockBackend';
 import { shareLink, useMockBackend } from '../config';
+import { QrScanner } from './QrScanner';
 import { Avatar } from './ui';
 
 export function AddFriendSheet() {
@@ -14,12 +19,13 @@ export function AddFriendSheet() {
   const [manualMac, setManualMac] = useState('');
   const open = view === 'app' && sheet.open && !!me;
 
+  const reset = () => { setManualKey(''); setManualMac(''); };
+
   const add = (shareKey: string, via: 'qr' | 'link', name: string) => run(name, async () => {
     const r = await api.addFriend(shareKey, via);
     await reloadFriends();
     closeSheet();
-    setManualKey('');
-    setManualMac('');
+    reset();
     showToast(r.status === 'friends' ? `${r.user.displayName}さんとフレンドになりました` : `${r.user.displayName}さんに申請しました`);
   });
 
@@ -28,20 +34,27 @@ export function AddFriendSheet() {
     const r = await api.addFriendByMac(manualMac.trim().toLowerCase().replace(/-/g, ':'));
     await reloadFriends();
     closeSheet();
-    setManualKey('');
-    setManualMac('');
+    reset();
     showToast(`${r.user.displayName}さんに申請しました`);
   });
 
   const link = me ? shareLink(me.shareKey) : '';
-  const copyLink = async () => {
-    try { await navigator.clipboard.writeText(link); showToast('招待リンクをコピーしました'); }
-    catch { showToast(link); }
+  const copy = async (text: string, done: string) => {
+    try { await navigator.clipboard.writeText(text); showToast(done); }
+    catch { showToast(text); }
+  };
+  // スマホなら LINE などに直接送れる。使えないブラウザ（パソコンなど）はコピーにする
+  const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+  const sendLink = async () => {
+    try { await navigator.share({ title: 'COKOYO', text: `${me?.displayName}さんからのフレンド招待`, url: link }); }
+    catch (e) { if ((e as DOMException).name !== 'AbortError') void copy(link, '招待リンクをコピーしました'); }
   };
 
   const candidates = useMockBackend && me
     ? mockBackend.sim.state(me.userId).people.filter((p) => p.relation === 'フレンドではない' || p.relation === '申請が届いている' || p.relation === '申請中')
     : [];
+
+  const tab = sheet.mode === 'link' ? 'link' : 'qr';
 
   return (
     <>
@@ -52,26 +65,29 @@ export function AddFriendSheet() {
             <div className="grab" />
             <h4 id="sheetTitle">フレンドを追加</h4>
             <div className="seg" role="tablist">
-              <button role="tab" className={sheet.mode === 'show' ? 'on' : ''} onClick={() => setAddMode('show')}>QRを見せる</button>
-              <button role="tab" className={sheet.mode === 'scan' ? 'on' : ''} onClick={() => setAddMode('scan')}>QRを読み取る</button>
+              <button role="tab" aria-selected={tab === 'qr'} className={tab === 'qr' ? 'on' : ''} onClick={() => setAddMode('show')}>QR</button>
+              <button role="tab" aria-selected={tab === 'link'} className={tab === 'link' ? 'on' : ''} onClick={() => setAddMode('link')}>リンクで共有</button>
             </div>
 
-            {sheet.mode === 'show' ? (
+            {sheet.mode === 'show' && (
               <>
                 <p className="lead">目の前の相手に読み取ってもらいます。読み取ると、すぐにフレンドになります。</p>
                 <div className="qr" aria-label="あなたのQRコード">
                   <QRCodeSVG value={link} size={148} level="M" fgColor="#1C1917" bgColor="#FFFFFF" />
                 </div>
-                <p className="sharekey">共有キー <span className="mono">{me.shareKey}</span></p>
-                <button className="btn btn-quiet" onClick={() => void copyLink()}>招待リンクをコピー</button>
-                <p className="note">リンクで送った場合は、相手が開いたあと、あなたが承認するとフレンドになります。</p>
+                <button className="btn btn-primary btn-icon" onClick={() => setAddMode('scan')}>
+                  <ScanIcon />QRを読み込む
+                </button>
               </>
-            ) : (
+            )}
+
+            {sheet.mode === 'scan' && (
               <>
-                <div className="camera" aria-hidden="true">
-                  <span className="corner tl" /><span className="corner tr" /><span className="corner bl" /><span className="corner br" />
-                  <span className="camera-text">相手のQRコードを枠に合わせてください</span>
-                </div>
+                <p className="lead">相手の「フレンドを追加」に出ているQRを読み取ります。読み取ると、すぐにフレンドになります。</p>
+                <QrScanner onKey={(key) => {
+                  if (key === me.shareKey) { showToast('これはあなた自身のQRコードです'); return; }
+                  void add(key, 'qr', 'QRコードを読み取った');
+                }} />
                 {candidates.length > 0 && (
                   <>
                     <p className="demo-cap">（デモ）読み取る相手を選ぶ</p>
@@ -84,10 +100,32 @@ export function AddFriendSheet() {
                     </div>
                   </>
                 )}
+                <button className="btn btn-quiet" onClick={() => setAddMode('show')}>自分のQRを表示する</button>
+              </>
+            )}
+
+            {sheet.mode === 'link' && (
+              <>
+                <p className="lead">LINE などで招待リンクを送ります。相手が開いて申請し、あなたが承認するとフレンドになります。</p>
+                <div className="linkbox mono">{link}</div>
+                {canShare && <button className="btn btn-primary" onClick={() => void sendLink()}>招待リンクを送る</button>}
+                <button className={`btn ${canShare ? 'btn-quiet' : 'btn-primary'}`} onClick={() => void copy(link, '招待リンクをコピーしました')}>
+                  招待リンクをコピー
+                </button>
+
+                <div className="keybox">
+                  <div className="keybox-body">
+                    <span className="keybox-cap">あなたの共有キー</span>
+                    <span className="keybox-key mono">{me.shareKey}</span>
+                  </div>
+                  <button className="mini-btn" onClick={() => void copy(me.shareKey, '共有キーをコピーしました')}>コピー</button>
+                </div>
+                <p className="note">リンクが開けない相手には、このキーを伝えて「相手の共有キーを入力」から申請してもらえます。</p>
+
                 <details className="manual">
-                  <summary>読み取れないとき：共有キーを入力</summary>
+                  <summary>相手の共有キーを入力</summary>
                   <div className="field-row">
-                    <input className="field mono" placeholder="sk_…" value={manualKey} autoComplete="off" spellCheck={false}
+                    <input className="field mono" placeholder="sk_…" value={manualKey} autoComplete="off" autoCapitalize="off" spellCheck={false}
                       onChange={(e) => setManualKey(e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Enter') void add(manualKey.trim(), 'link', '共有キーで申請'); }} />
                     <button className="mini-btn primary" onClick={() => void add(manualKey.trim(), 'link', '共有キーで申請')}>申請</button>
@@ -119,5 +157,13 @@ export function AddFriendSheet() {
         )}
       </div>
     </>
+  );
+}
+
+function ScanIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3" /><path d="M4 12h16" />
+    </svg>
   );
 }

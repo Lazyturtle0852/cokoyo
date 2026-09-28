@@ -100,7 +100,7 @@ export function CampusMap() {
                   key={b.key}
                   className={`map-pin${picked === b.key ? ' on' : ''}`}
                   // 建物の北がわの端に立たせて、まんなかの字を隠さないようにする
-                  style={{ left: `${(b.cx / MAP_W) * 100}%`, top: `${((b.cy - b.h * 0.34) / MAP_H) * 100}%` }}
+                  style={{ left: `${(b.cx / MAP_W) * 100}%`, top: `${((b.top + (b.cy - b.top) * 0.35) / MAP_H) * 100}%` }}
                   onClick={() => setPicked((p) => (p === b.key ? null : b.key))}
                   aria-label={`${b.label}に${pins.length}人`}
                 >
@@ -180,33 +180,19 @@ function Building({ b, count, on, onPick }: { b: MapBuilding; count: number; on:
   const live = count > 0;
   const fill = b.soft ? (live ? '#7BC96F' : '#CFE3C4') : live ? 'var(--brand)' : '#D6CFC6';
   const ink = live ? '#FFFFFF' : '#A29A91';
-  // ギリシャ文字は1字で大きく。「体育」「ラウンジ」は全角なので、幅に収まるまで小さくする
-  const fontSize = b.glyph.length === 1
-    ? Math.min(b.h * 0.8, 19)
-    : Math.min(b.h * 0.7, (b.w * 0.86) / b.glyph.length);
   return (
     <g
       className={`map-bld${live ? ' live' : ''}${on ? ' on' : ''}`}
-      transform={`translate(${b.cx} ${b.cy}) rotate(${b.angle})`}
       onClick={onPick}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(); } }}
       aria-label={`${b.label}${live ? `・${count}人` : ''}`}
     >
-      <rect x={-b.w / 2} y={-b.h / 2 + 2.5} width={b.w} height={b.h} rx={6} fill="rgba(28,25,23,.10)" />
-      <rect x={-b.w / 2} y={-b.h / 2} width={b.w} height={b.h} rx={6} fill={fill} />
-      {on && <rect x={-b.w / 2 - 3} y={-b.h / 2 - 3} width={b.w + 6} height={b.h + 6} rx={9} fill="none" stroke="var(--ink)" strokeWidth="2" />}
-      <text
-        x={0}
-        y={0}
-        transform={`rotate(${-b.angle})`}
-        textAnchor="middle"
-        dominantBaseline="central"
-        fontSize={fontSize}
-        fontWeight="800"
-        fill={ink}
-      >
+      <polygon points={b.points} fill="rgba(28,25,23,.10)" transform="translate(0 2.5)" />
+      <polygon points={b.points} fill={fill} strokeLinejoin="round"
+        stroke={on ? 'var(--ink)' : fill} strokeWidth={on ? 2.5 : 1} />
+      <text x={b.cx} y={b.cy} textAnchor="middle" dominantBaseline="central" fontSize={b.size} fontWeight="800" fill={ink}>
         {b.glyph}
       </text>
     </g>

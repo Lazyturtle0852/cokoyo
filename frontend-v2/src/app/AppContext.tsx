@@ -13,7 +13,8 @@ import { clearPendingInvite, pendingInvite, takeInviteFromUrl } from './invite';
 
 export type View = 'loading' | 'onboarding' | 'app' | 'error';
 export type Tab = 'home' | 'friends' | 'settings';
-export type AddMode = 'show' | 'scan';
+/** show: 自分のQR  scan: 相手のQRを読む（どちらも「QR」タブ）  link: リンクで共有 */
+export type AddMode = 'show' | 'scan' | 'link';
 
 /** 右上の累計ポイント（src/phone/TotalPoints.tsx）が登録する操作 */
 export interface CounterHandle {
@@ -88,6 +89,9 @@ const readLastCheck = (uid: string): CheckResponse | null => {
 const writeLastCheck = (uid: string, v: CheckResponse) => {
   try { localStorage.setItem(LASTCHECK_KEY(uid), JSON.stringify(v)); } catch { /* 保存できない環境 */ }
 };
+
+/** 「佐藤さん・田中さんから」のように、名前を並べる */
+const names = (list: string[]) => (list.length > 2 ? `${list.slice(0, 2).join('さん・')}さんほか${list.length - 2}人` : `${list.join('さん・')}さん`);
 
 // 招待リンクで開かれたなら、URLからキーを預かる（表示の前に一度だけ）
 takeInviteFromUrl();
@@ -222,14 +226,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const later = (ms: number, fn: () => void) => { timers.current.push(window.setTimeout(fn, ms)); };
 
     const list = friendsRef.current?.friends ?? [];
-    const present = r.friends.filter((f) => f.present)
-      .map((f) => ({ userId: f.userId, name: list.find((x) => x.userId === f.userId)?.displayName ?? '' }));
-    const landed = field.sync(present, { present: r.me.present, ghost: r.me.hidden });
+    const nameOf = (id: string) => list.find((x) => x.userId === id)?.displayName ?? '';
+    const present = r.friends.filter((f) => f.present).map((f) => ({ userId: f.userId, name: nameOf(f.userId) }));
+    let landed = field.sync(present, { present: r.me.present, ghost: r.me.hidden });
+
+    // 届いていたリアクション（つんつん）を、そのフレンドのスライムで見せてから、ポイントに移る
+    const reactions = r.reactions ?? [];
+    if (reactions.length) {
+      reactions.forEach((x, i) => later(landed + 150 + i * 700, () => { field.react(x.userId, x.count); }));
+      later(landed + 150, () => showToast(`${names(reactions.map((x) => nameOf(x.userId)))}から つんつんが届きました`));
+      landed += 150 + reactions.length * 700 + 900;
+    }
     const items = r.points.awarded;
 
     if (!items.length) {
       setDisplayTotal(null);
-      later(Math.min(landed, 400), () => showToast(r.points.notice ?? '今の分は獲得済みです'));
+      later(reactions.length ? landed : Math.min(landed, 400), () => showToast(r.points.notice ?? '今の分は獲得済みです'));
       return;
     }
     if (r.points.notice) later(landed + items.length * 460 + 300, () => showToast(r.points.notice as string));
@@ -266,6 +278,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     if (box.result) celebrate(box.result, before);
   }, [celebrate, me, points, run]);
+
+  // フレンドのスライムを連打し終えたら送る。すぐには届かず、相手の画面にこちらのスライムが出たときに届く
+  useEffect(() => {
+    field.onReact((userId, count) => {
+      const name = friendsRef.current?.friends.find((f) => f.userId === userId)?.displayName ?? '';
+      callLog.begin('スライムを連打した');
+      api.react(userId, count)
+        .then(() => showToast(`${name}さんに つんつん×${count} を送りました`))
+        .catch((e: ApiError) => showToast(e.message));
+    });
+    return () => field.onReact(null);
+  }, [field, showToast]);
 
   const toggleHide = useCallback(async () => {
     if (!me) return;

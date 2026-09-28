@@ -79,6 +79,16 @@ CREATE TABLE IF NOT EXISTS visits (
   PRIMARY KEY (user_id, date)
 );
 
+-- スライムを連打したリアクションの、まだ届いていない分。送り手→受け手ごとに1行へまとめる。
+-- 受け手の画面に送り手のスライムが出たとき（受け手の /v1/checks）に渡して消す。
+CREATE TABLE IF NOT EXISTS reactions (
+  from_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  to_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  count       INTEGER NOT NULL,
+  updated_at  TEXT NOT NULL,
+  PRIMARY KEY (from_id, to_id)
+);
+
 -- 最後にマッチした日。reunion と first の判定に使う。一方向。
 CREATE TABLE IF NOT EXISTS matches (
   user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
