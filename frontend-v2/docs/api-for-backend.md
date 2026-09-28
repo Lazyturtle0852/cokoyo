@@ -8,7 +8,7 @@
 |---|---|
 | `GET /auth/google` | Google OIDC にリダイレクト。任意の `?add=<shareKey>` を callback 後まで保存 |
 | `GET /auth/google/callback` | code/state/nonce/PKCE を検証し、`keio.jp` の ID に限ってセッション発行 |
-| `GET /auth/session` | `{email, status: "onboarding"\|"ready"}`。未ログインは 401 |
+| `GET /auth/session` | `{email, displayName, status: "onboarding"\|"ready"}`。未ログインは 401。初回登録前の `displayName` は Google 名（取得できなければ空文字） |
 | `POST /auth/logout` | 現在のセッションを失効。204 |
 | `POST /auth/logout-all` | 当該アカウントの全セッションを失効。204 |
 | `POST /onboarding` | `{displayName, mac, label}`。初回のみ。最初の MAC を必須として `Me` を 201 で返す |

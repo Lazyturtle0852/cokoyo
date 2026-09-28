@@ -78,7 +78,6 @@ export function Settings() {
         <div className="inline-actions"><button className="mini-btn primary" onClick={() => void removeMac()}>削除する</button><button className="mini-btn" onClick={() => setDeleteId(null)}>やめる</button></div>
       </div>}
       {editingMacId === null && <button className="btn btn-quiet" disabled={me.macs.length >= 5} onClick={() => { setEditingMacId('new'); setLabel('新しい端末'); setMac(''); }}>端末を追加</button>}
-      <p className="row-note">MACアドレスの登録は本人申告です。Googleログインだけでは端末の所有は確認できません。</p>
     </div>
 
     <div className="sec"><h3>アカウント</h3></div>

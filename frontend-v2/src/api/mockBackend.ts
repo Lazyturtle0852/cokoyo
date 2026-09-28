@@ -495,7 +495,7 @@ function route(method: string, path: string, _headers: Record<string, string>, b
   const uid = sessionUid;
   if (method === 'POST' && path === '/v1/auth/logout') { setSession(null); return { status: 204, json: null }; }
   if (!uid || !db.users[uid]) return E(401, 'unauthorized', 'Googleでログインしてください');
-  if (method === 'GET' && path === '/v1/auth/session') return ok({ email: db.users[uid].email ?? 'demo@keio.jp', status: db.users[uid].onboarded === false ? 'onboarding' : 'ready' });
+  if (method === 'GET' && path === '/v1/auth/session') return ok({ displayName: db.users[uid].name, email: db.users[uid].email ?? 'demo@keio.jp', status: db.users[uid].onboarded === false ? 'onboarding' : 'ready' });
   if (method === 'POST' && path === '/v1/auth/logout-all') { setSession(null); return { status: 204, json: null }; }
   if (method === 'POST' && path === '/v1/onboarding') return completeOnboarding(uid, body);
   if (db.users[uid].onboarded === false) return E(403, 'onboarding_required', '初回登録を完了してください');
@@ -564,7 +564,7 @@ const sim = {
   },
   startNewAccount() {
     const now = new Date().toISOString();
-    db.users.u_new = { name: '', mac: '', shareKey: '', hidden: false, avatar: DEMO_GOOGLE_AVATAR, avatarSource: 'google',
+    db.users.u_new = { name: '山田 太郎', mac: '', shareKey: '', hidden: false, avatar: DEMO_GOOGLE_AVATAR, avatarSource: 'google',
       macRegisteredAt: now, createdAt: now, email: 'new@keio.jp', macs: [], onboarded: false };
     db.campus.u_new = { connected: false, buildingKey: 'kappa' };
     db.points.u_new = { total: 0, visitDays: [], lastMatch: {}, days: {} };

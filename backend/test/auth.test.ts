@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
-import { downloadGoogleAvatar, validateGoogleIdentity, type GoogleProvider } from "../src/auth.js";
+import { downloadGoogleAvatar, googleDisplayName, validateGoogleIdentity, type GoogleProvider } from "../src/auth.js";
 import { openDb } from "../src/db.js";
 import { createRepo } from "../src/repo.js";
 import { StubDtc, MAC } from "./helpers.js";
 
-const make = (avatar?: string) => {
+const make = (avatar?: string, displayName?: string) => {
   const repo = createRepo(openDb(":memory:"));
   const provider: GoogleProvider = {
     async authorizationUrl(_verifier, state) { return new URL(`https://accounts.google.com/auth?state=${state}`); },
-    async exchange() { return { sub: "google-user-1", email: "student@keio.jp", avatar }; },
+    async exchange() { return { sub: "google-user-1", email: "student@keio.jp", avatar, displayName }; },
   };
   const app = createApp(repo, new StubDtc(), provider);
   return { app, repo };
@@ -19,6 +19,36 @@ const cookieValue = (header: string | null, name: string) =>
   new RegExp(`${name}=([^;]+)`).exec(header ?? "")?.[1] ?? "";
 
 describe("Google login", () => {
+  it("Google名を20文字以内に整え、欠落・空白・不正な型は初期値にしない", () => {
+    const claims = { sub: "stable-sub", email: "student@keio.jp", hd: "keio.jp", email_verified: true };
+    expect(validateGoogleIdentity({ ...claims, name: " 山田 太郎 " }).displayName).toBe("山田 太郎");
+    for (const name of [undefined, null, 42, "   "]) expect(googleDisplayName(name)).toBeUndefined();
+    expect(googleDisplayName("あ".repeat(25))).toBe("あ".repeat(20));
+    expect(googleDisplayName("あ".repeat(19) + "😀")).toBe("あ".repeat(19));
+  });
+
+  it("Google名をセッションから初期入力用に返し、登録後の名前を再ログインで上書きしない", async () => {
+    const { app } = make(undefined, "山田 太郎");
+    const login = async () => {
+      const start = await app.request("/api/v1/auth/google");
+      const state = new URL(start.headers.get("location") as string).searchParams.get("state") as string;
+      const callback = await app.request(`/api/v1/auth/google/callback?state=${state}&code=ok`, {
+        headers: { cookie: `cokoyo_oauth=${state}` },
+      });
+      expect(callback.status).toBe(302);
+      return { cookie: `cokoyo_session=${cookieValue(callback.headers.get("set-cookie"), "cokoyo_session")}` };
+    };
+    const headers = await login();
+    expect(await (await app.request("/api/v1/auth/session", { headers })).json()).toMatchObject({ displayName: "山田 太郎", status: "onboarding" });
+    const result = await app.request("/api/v1/onboarding", {
+      method: "POST", headers: { ...headers, origin: "http://localhost:5173", "content-type": "application/json" },
+      body: JSON.stringify({ displayName: "たろう", mac: MAC.alice, label: "iPhone" }),
+    });
+    expect(result.status).toBe(201);
+    const nextHeaders = await login();
+    expect(await (await app.request("/api/v1/auth/session", { headers: nextHeaders })).json()).toMatchObject({ displayName: "たろう", status: "ready" });
+  });
+
   it("Googleの画像URLだけを小さなdata URLとして読み、失敗時はアイコンなしで続ける", async () => {
     const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
     const fetcher = async () => new Response(png, { headers: { "content-type": "image/png" } });
@@ -81,7 +111,7 @@ describe("Google login", () => {
     expect(callback.headers.get("location")).toBe("http://localhost:5173/?add=sk_abcdefgh");
     const token = cookieValue(callback.headers.get("set-cookie"), "cokoyo_session");
     expect(token).toBeTruthy();
-    expect((await app.request("/api/v1/auth/session", { headers: { cookie: `cokoyo_session=${token}` } })).status).toBe(200);
+    expect(await (await app.request("/api/v1/auth/session", { headers: { cookie: `cokoyo_session=${token}` } })).json()).toMatchObject({ displayName: "", status: "onboarding" });
     expect((await app.request("/api/v1/me", { headers: { cookie: `cokoyo_session=${token}` } })).status).toBe(403);
 
     const onboard = await app.request("/api/v1/onboarding", {

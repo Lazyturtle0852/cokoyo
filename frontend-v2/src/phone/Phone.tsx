@@ -71,13 +71,17 @@ export function Phone() {
           <div className="view">
             {view === 'loading' && <div className="center-note">読み込み中…</div>}
             {view === 'login' && (
-              <div className="content ob">
-                <div className="ob-hero"><div className="wordmark big">COK<span>O</span>YO</div><h2>フレンドがキャンパスにいるか、ボタンひとつで分かる</h2></div>
-                <p className="ob-lead">keio.jp のGoogleアカウントでログインしてください。</p>
+              <div className="content ob ob-welcome">
+                <div className="ob-hero"><div className="wordmark big">COK<span>O</span>YO</div><h2>フレンドがキャンパスにいるか、<br />ボタンひとつで分かる</h2></div>
+                <ul className="ob-list">
+                  <li><span className="ob-ico"><Icon.Wifi /></span><span><b>位置情報は使いません</b>キャンパスのWiFiにつながっているかだけを見ます</span></li>
+                  <li><span className="ob-ico best"><Icon.Friends size={18} /></span><span><b>見せる範囲は相手ごと</b>ベストフレンドにだけ建物まで。ブロックした相手には見えません</span></li>
+                  <li><span className="ob-ico hide"><Icon.Hide /></span><span><b>いつでも隠れられます</b>かくれんぼ中は、フレンド全員から「いません」に見えます</span></li>
+                </ul>
                 {inAppBrowser()
                   ? <InAppNotice />
                   : <button className="btn btn-primary" onClick={api.beginLogin}>Googleでログイン</button>}
-                <p className="row-note">位置情報は使いません。キャンパスのWiFiにつながっている端末で在校を判定します。</p>
+                <p className="row-note">keio.jp のGoogleアカウントで利用できます。</p>
               </div>
             )}
             {view === 'error' && (
