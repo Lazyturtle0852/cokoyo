@@ -4,7 +4,7 @@
 FROM node:24-alpine AS build
 WORKDIR /app
 COPY backend/package.json backend/package-lock.json* ./backend/
-RUN cd backend && npm install
+RUN cd backend && npm ci
 COPY shared ./shared
 COPY backend ./backend
 RUN cd backend && npm run build
@@ -18,7 +18,7 @@ FROM node:24-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 COPY backend/package.json backend/package-lock.json* ./
-RUN npm install --omit=dev && npm cache clean --force
+RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/backend/dist ./dist
 
 # SQLite のファイルはボリュームに置く。

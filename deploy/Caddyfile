@@ -15,9 +15,23 @@ cokoyo.lazyta-toru.net {
 	}
 
 	redir /documents /documents/
+	redir /explain /explain/
+	redir /test /test/
 
 	handle_path /documents/* {
 		root * /srv/documents
+		file_server
+	}
+
+	handle_path /explain/* {
+		root * /srv/explain
+		try_files {path} /index.html
+		file_server
+	}
+
+	handle_path /test/* {
+		root * /srv/test
+		try_files {path} /index.html
 		file_server
 	}
 

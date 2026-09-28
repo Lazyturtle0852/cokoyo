@@ -33,7 +33,7 @@ describe("/v1/debug/db", () => {
 
     // 関わりの無い人も含めて、users は丸ごと出る
     expect(col(dump, "users", "display_name")).toEqual(["ゆうき", "佐藤", "知らない人"]);
-    expect(col(dump, "users", "share_key")).toContain(bob.shareKey);
+    expect(JSON.stringify(dump)).not.toContain(bob.shareKey);
 
     // friendships は (小さい方, 大きい方) に畳まれている
     expect(table(dump, "friendships").rows).toHaveLength(1);
@@ -42,16 +42,17 @@ describe("/v1/debug/db", () => {
     expect(col(dump, "friendships", "status")).toEqual(["friends"]);
   });
 
-  it("MACは伏せ、端末トークンは頭だけにする", async () => {
+  it("MACと認証情報は公開しない", async () => {
     const h = createHarness();
     const alice = await h.signUp("ゆうき", MAC.alice);
 
     const dump = await h.json<DebugDbResponse>(await h.call("/v1/debug/db"));
-    expect(col(dump, "users", "mac")).toEqual(["a2:b4:••:••:••:03"]);
-    // MAC は事実上のパスワード（POST /v1/sessions がこれで通る）なので平文で出さない
+    expect(col(dump, "mac_addresses", "mac")).toEqual(["a2:b4:••:••:••:03"]);
     expect(JSON.stringify(dump)).not.toContain(MAC.alice);
-    expect(JSON.stringify(dump)).not.toContain(alice.deviceToken);
-    expect(String(col(dump, "users", "device_token_hash")[0])).toMatch(/^[0-9a-f]{12}…$/);
+    expect(JSON.stringify(dump)).not.toContain(alice.sessionToken);
+    expect(JSON.stringify(dump)).not.toContain("google_sub");
+    expect(JSON.stringify(dump)).not.toContain("email");
+    expect(dump.tables.map((t) => t.name)).not.toContain("sessions");
   });
 
   it("ブロックも、誰が誰をブロックしたかの形のまま出る", async () => {
@@ -64,5 +65,15 @@ describe("/v1/debug/db", () => {
     expect(table(dump, "blocks").rows).toHaveLength(1);
     expect(col(dump, "blocks", "blocker_id")).toEqual([2]);
     expect(col(dump, "blocks", "blocked_id")).toEqual([1]);
+  });
+
+  it("ポイントが100行を超えても全行を公開用の形で返す", async () => {
+    const h = createHarness();
+    const alice = await h.signUp("ゆうき", MAC.alice);
+    const user = h.repo.findByUserId(alice.userId);
+    if (!user) throw new Error("test user missing");
+    for (let i = 0; i < 101; i++) h.repo.addPoint(user.id, "2026-09-28", `test-${i}`, "確認", 1, null, null);
+    const dump = await h.json<DebugDbResponse>(await h.call("/v1/debug/db"));
+    expect(table(dump, "point_events").rows).toHaveLength(101);
   });
 });

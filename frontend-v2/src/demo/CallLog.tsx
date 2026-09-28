@@ -34,7 +34,7 @@ export function CallLog() {
             <div className="callhead">
               <span className="verb">{c.method}</span><span className="mono">{c.path}</span>
               <span className={`status${c.status >= 400 || c.status === 0 ? ' bad' : ''}`}>{c.status || '接続失敗'}</span>
-              <span className="auth">{c.withToken ? '端末トークンつき' : 'トークンなし'}</span>
+              <span className="auth">{c.withToken ? 'ログインCookieつき' : 'ログインCookieなし'}</span>
             </div>
             <div className="io">
               <div><p className="cap">送ったもの</p><pre>{c.body ? <Json value={c.body} /> : '（なし）'}</pre></div>
@@ -45,7 +45,7 @@ export function CallLog() {
       </div>
       <div className="callout">
         バックエンドは、ここに出ている<strong>パス・送るもの・返すもの</strong>の形で作ってください。
-        一覧は <span className="mono">docs/api-for-backend.md</span>、型は <span className="mono">app/src/api/types.ts</span> にあります。
+        一覧は <span className="mono">docs/api-for-backend.md</span>、型は <span className="mono">src/api/types.ts</span> にあります。
       </div>
     </section>
   );

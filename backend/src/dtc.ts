@@ -39,11 +39,12 @@ export class RealDtcClient implements DtcClient {
 
   async latest(mac: string): Promise<Lookup> {
     const url = `${this.baseUrl}/wifi/clients/${toColonMac(mac)}/connection`;
+    const signal = AbortSignal.timeout(4000);
 
     for (let attempt = 0; ; attempt++) {
       let res: Response;
       try {
-        res = await fetch(url, { headers: { accept: "application/json" } });
+        res = await fetch(url, { headers: { accept: "application/json" }, signal });
       } catch {
         return { status: "unavailable" };
       }
@@ -73,7 +74,7 @@ export class RealDtcClient implements DtcClient {
 
   async weather(): Promise<string | null> {
     try {
-      const res = await fetch(`${this.baseUrl}/weather`, { headers: { accept: "application/json" } });
+      const res = await fetch(`${this.baseUrl}/weather`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(4000) });
       if (!res.ok) return null;
       const body = (await res.json()) as { weather?: { condition?: string } };
       return body.weather?.condition ?? null;

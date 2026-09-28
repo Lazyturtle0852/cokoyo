@@ -1,5 +1,3 @@
-// 設定：表示名・アイコン・MACアドレスの登録し直し・ログアウト・このアプリについて
-
 import { useState } from 'react';
 import { useApp } from '../app/AppContext';
 import { api } from '../api/client';
@@ -7,73 +5,91 @@ import { config, useMockBackend } from '../config';
 import { AvatarPicker } from './AvatarPicker';
 import { fullDate } from './ui';
 
+const normalizeMac = (value: string) => value.trim().toLowerCase().replace(/-/g, ':');
+
 export function Settings() {
-  const { me, run, setMe, showToast, startReregister, logout } = useApp();
-  const [editing, setEditing] = useState(false);
+  const { me, run, setMe, showToast, restart } = useApp();
+  const [editingName, setEditingName] = useState(false);
   const [name, setName] = useState('');
-  const [armedLogout, setArmedLogout] = useState(false);
+  const [editingMacId, setEditingMacId] = useState<number | 'new' | null>(null);
+  const [mac, setMac] = useState('');
+  const [label, setLabel] = useState('');
+  const [deleteId, setDeleteId] = useState<number | null>(null);
   if (!me) return null;
 
-  const save = async () => {
+  const refreshMe = async () => setMe(await api.getMe());
+  const saveName = async () => {
     const ok = await run('表示名を変更', async () => { setMe(await api.updateMe({ displayName: name })); showToast('表示名を変更しました'); });
-    if (ok) setEditing(false);
+    if (ok) setEditingName(false);
+  };
+  const saveMac = async () => {
+    const value = normalizeMac(mac);
+    const ok = await run('端末を保存', async () => {
+      if (editingMacId === 'new') await api.addMac(value, label.trim());
+      else if (typeof editingMacId === 'number') await api.editMac(editingMacId, { mac: value || undefined, label: label.trim() });
+      await refreshMe(); showToast('端末を保存しました');
+    });
+    if (ok) { setEditingMacId(null); setMac(''); setLabel(''); }
+  };
+  const removeMac = async () => {
+    if (deleteId === null) return;
+    const ok = await run('端末を削除', async () => { await api.deleteMac(deleteId); await refreshMe(); showToast('端末を削除しました'); });
+    if (ok) setDeleteId(null);
+  };
+  const logout = async (all: boolean) => {
+    await run(all ? '全端末からログアウト' : 'ログアウト', async () => {
+      if (all) await api.logoutAll(); else await api.logout();
+      try { Object.keys(localStorage).filter((key) => key.startsWith('cokoyo-lastcheck:')).forEach((key) => localStorage.removeItem(key)); } catch { /* 保存できない環境 */ }
+      await restart();
+    });
   };
 
-  return (
-    <>
-      <div className="sec"><h3>プロフィール</h3></div>
-      <div className="card">
-        {editing ? (
-          <>
-            <label className="field-label" htmlFor="nameEdit">表示名</label>
-            <input className="field" id="nameEdit" maxLength={20} value={name} autoFocus
-              onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void save(); }} />
-            <div className="inline-actions">
-              <button className="mini-btn primary" onClick={() => void save()}>保存</button>
-              <button className="mini-btn" onClick={() => setEditing(false)}>やめる</button>
-            </div>
-          </>
-        ) : (
-          <div className="kv">
-            <div><div className="k">表示名</div><div className="v">{me.displayName}</div></div>
-            <button className="mini-btn" onClick={() => { setName(me.displayName); setEditing(true); }}>変更</button>
-          </div>
-        )}
-        <p className="row-note">フレンドの画面に表示されます</p>
-        <AvatarPicker />
-      </div>
+  return <>
+    <div className="sec"><h3>プロフィール</h3></div>
+    <div className="card">
+      {editingName ? <>
+        <label className="field-label" htmlFor="nameEdit">表示名</label>
+        <input className="field" id="nameEdit" maxLength={20} value={name} autoFocus onChange={(e) => setName(e.target.value)} />
+        <div className="inline-actions"><button className="mini-btn primary" onClick={() => void saveName()}>保存</button><button className="mini-btn" onClick={() => setEditingName(false)}>やめる</button></div>
+      </> : <div className="kv"><div><div className="k">表示名</div><div className="v">{me.displayName}</div></div><button className="mini-btn" onClick={() => { setName(me.displayName); setEditingName(true); }}>変更</button></div>}
+      <p className="row-note">フレンドの画面に表示されます</p>
+      <AvatarPicker />
+    </div>
 
-      <div className="sec"><h3>キャンパスの検知</h3></div>
-      <div className="card">
-        <div className="kv"><div><div className="k">登録しているMACアドレス</div><div className="v mono">{me.macMasked}</div></div></div>
-        <p className="row-note">{fullDate(me.macRegisteredAt)}に登録。機種変更やWiFi設定のリセットをすると変わります。キャンパスにいるのに「キャンパス外」になるときは、登録し直してください。</p>
-        <button className="btn btn-quiet" onClick={startReregister}>MACアドレスを登録し直す</button>
-      </div>
+    <div className="sec"><h3>キャンパスの検知</h3><span>{me.macs.length} / 5台</span></div>
+    <div className="card">
+      <p className="row-note">登録した端末のどれかがキャンパスのWiFiにつながると、在校と判定します。</p>
+      {me.macs.map((item) => <div className="mac-device" key={item.id}>
+        <div className="kv"><div><div className="k">{item.label}</div><div className="v mono">{item.macMasked}</div></div>
+          <button className="mini-btn" onClick={() => { setEditingMacId(item.id); setLabel(item.label); setMac(''); }}>編集</button></div>
+        <p className="row-note">{fullDate(item.registeredAt)}に登録</p>
+        <button className="mini-btn" disabled={me.macs.length <= 1} onClick={() => setDeleteId(item.id)}>削除</button>
+      </div>)}
+      {editingMacId !== null && <div className="mac-editor">
+        <h4>{editingMacId === 'new' ? '端末を追加' : '端末を編集'}</h4>
+        <label className="field-label" htmlFor="macLabel">端末の名前</label>
+        <input className="field" id="macLabel" maxLength={30} value={label} onChange={(e) => setLabel(e.target.value)} />
+        <label className="field-label" htmlFor="macValue">MACアドレス{editingMacId === 'new' ? '' : '（変更する場合のみ）'}</label>
+        <input className="field mono" id="macValue" value={mac} placeholder="例）a2:3f:9c:1b:7e:44" autoComplete="off" autoCapitalize="off" spellCheck={false} onChange={(e) => setMac(e.target.value)} />
+        <div className="inline-actions"><button className="mini-btn primary" onClick={() => void saveMac()}>保存</button><button className="mini-btn" onClick={() => setEditingMacId(null)}>やめる</button></div>
+      </div>}
+      {deleteId !== null && <div className="notice" role="alertdialog" aria-label="端末の削除確認">
+        <p>この端末を削除すると、在校判定に使われなくなります。</p>
+        <div className="inline-actions"><button className="mini-btn primary" onClick={() => void removeMac()}>削除する</button><button className="mini-btn" onClick={() => setDeleteId(null)}>やめる</button></div>
+      </div>}
+      {editingMacId === null && <button className="btn btn-quiet" disabled={me.macs.length >= 5} onClick={() => { setEditingMacId('new'); setLabel('新しい端末'); setMac(''); }}>端末を追加</button>}
+      <p className="row-note">MACアドレスの登録は本人申告です。Googleログインだけでは端末の所有は確認できません。</p>
+    </div>
 
-      <div className="sec"><h3>この端末</h3></div>
-      <div className="card">
-        <p className="row-note">
-          一度登録すれば、同じ端末では入れたままになります。ログアウトすると、この端末の覚えを消します。
-          登録そのものは残るので、同じMACアドレスを入れればいつでも戻れます。
-        </p>
-        {armedLogout ? (
-          <div className="confirm">
-            <p>ログアウトしますか？ もう一度使うときは、MACアドレスの入力が必要です。</p>
-            <div className="confirm-actions">
-              <button className="mini-btn danger" onClick={() => void logout()}>ログアウトする</button>
-              <button className="mini-btn" onClick={() => setArmedLogout(false)}>やめる</button>
-            </div>
-          </div>
-        ) : (
-          <button className="btn btn-quiet" onClick={() => setArmedLogout(true)}>ログアウト</button>
-        )}
-      </div>
+    <div className="sec"><h3>アカウント</h3></div>
+    <div className="card">
+      <div className="kv"><div><div className="k">Googleアカウント</div><div className="v account-email">{me.email}</div></div></div>
+      <p className="row-note">ログイン状態は14日間有効です。</p>
+      <button className="btn btn-quiet" onClick={() => void logout(false)}>ログアウト</button>
+      <button className="btn btn-quiet" onClick={() => void logout(true)}>すべての端末からログアウト</button>
+    </div>
 
-      <div className="sec"><h3>このアプリについて</h3></div>
-      <div className="card about">
-        <p>位置情報は使いません。キャンパスのWiFiにつながっているかどうかを、大学側のAPIに問い合わせて確認します。</p>
-        <p className="muted">試作品・{useMockBackend ? 'バックエンドは模擬' : `接続先 ${config.apiBaseUrl}`}</p>
-      </div>
-    </>
-  );
+    <div className="sec"><h3>このアプリについて</h3></div>
+    <div className="card about"><p>位置情報は使いません。キャンパスのWiFiにつながっているかどうかを、大学側のAPIに問い合わせて確認します。</p><p className="muted">試作品・{useMockBackend ? 'バックエンドは模擬' : `接続先 ${config.apiBaseUrl}`}</p></div>
+  </>;
 }

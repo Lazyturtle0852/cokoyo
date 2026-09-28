@@ -5,14 +5,15 @@ services:
     build:
       context: ..
       dockerfile: backend/Dockerfile
+    env_file:
+      - ../backend/.env.production
     environment:
       # 0 で実APIを叩く。1 にするとMACから決定的に在校を組み立てるモックになる。
       MOCK_DTC: "0"
       DTC_BASE_URL: "https://api.dtc.wide.ad.jp"
       TIMING_FLOOR_MS: "250"
-      REGISTER_RATE_LIMIT: "20"
     volumes:
-      - api-data:/data
+      - api-data-v2:/data
     # ローカルにだけ開ける。外から届く経路は手前のリバースプロキシだけにする。
     # ホスト側のポートは他のサービスとぶつかるので API_PORT で変えられるようにしてある。
     # 変えたら apache/ の vhost の ProxyPass も合わせること。
@@ -31,7 +32,9 @@ services:
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ../frontend:/srv/frontend:ro
+      - ../frontend-v2/dist:/srv/frontend:ro
+      - ../frontend-v2/dist-explain:/srv/explain:ro
+      - ../frontend-v2/dist-test:/srv/test:ro
       - ../docs:/srv/documents:ro
       - caddy-data:/data
       - caddy-config:/config
@@ -42,4 +45,4 @@ services:
 volumes:
   caddy-data:
   caddy-config:
-  api-data:
+  api-data-v2:

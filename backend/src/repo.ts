@@ -6,13 +6,21 @@ import { maskMac } from "./lib/mac.js";
 export interface User {
   id: number;
   user_id: string;
-  display_name: string;
-  share_key: string;
-  mac: string;
-  hidden: number;
-  mac_registered_at: string;
-  /** アイコンの画像（data URL）。未設定は null */
+  google_sub: string;
+  email: string;
+  display_name: string | null;
   avatar: string | null;
+  share_key: string | null;
+  hidden: number;
+  onboarding_completed_at: string | null;
+}
+
+export interface MacAddress {
+  id: number;
+  user_id: number;
+  mac: string;
+  label: string;
+  registered_at: string;
 }
 
 export interface FriendshipRow {
@@ -37,7 +45,7 @@ export interface PointRow {
 }
 
 const USER_COLS =
-  "id, user_id, display_name, share_key, mac, hidden, mac_registered_at, avatar";
+  "id, user_id, google_sub, email, display_name, avatar, share_key, hidden, onboarding_completed_at";
 
 /** 常に (小さい方, 大きい方) の順に揃える。 */
 const pair = (a: number, b: number): [number, number] => (a < b ? [a, b] : [b, a]);
@@ -50,17 +58,28 @@ export function createRepo(db: Db) {
     userById: db.prepare(`SELECT ${USER_COLS} FROM users WHERE id = ?`),
     userByUserId: db.prepare(`SELECT ${USER_COLS} FROM users WHERE user_id = ?`),
     userByShareKey: db.prepare(`SELECT ${USER_COLS} FROM users WHERE share_key = ?`),
-    userByMac: db.prepare(`SELECT ${USER_COLS} FROM users WHERE mac = ?`),
-    userByToken: db.prepare(`SELECT ${USER_COLS} FROM users WHERE device_token_hash = ?`),
-    insertUser: db.prepare(
-      `INSERT INTO users (user_id, display_name, share_key, device_token_hash, mac,
-                          hidden, mac_registered_at, created_at)
-       VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
-    ),
+    userBySub: db.prepare(`SELECT ${USER_COLS} FROM users WHERE google_sub = ?`),
+    userByEmail: db.prepare(`SELECT ${USER_COLS} FROM users WHERE email = ?`),
+    insertUser: db.prepare("INSERT INTO users (user_id, google_sub, email, created_at) VALUES (?, ?, ?, ?)"),
+    updateEmail: db.prepare("UPDATE users SET email = ? WHERE id = ?"),
+    completeUser: db.prepare("UPDATE users SET display_name = ?, share_key = ?, onboarding_completed_at = ? WHERE id = ?"),
     updateProfile: db.prepare("UPDATE users SET display_name = ?, hidden = ? WHERE id = ?"),
-    updateToken: db.prepare("UPDATE users SET device_token_hash = ? WHERE id = ?"),
-    updateMac: db.prepare("UPDATE users SET mac = ?, mac_registered_at = ? WHERE id = ?"),
     updateAvatar: db.prepare("UPDATE users SET avatar = ? WHERE id = ?"),
+    macsOf: db.prepare("SELECT id, user_id, mac, label, registered_at FROM mac_addresses WHERE user_id = ? ORDER BY id"),
+    macById: db.prepare("SELECT id, user_id, mac, label, registered_at FROM mac_addresses WHERE id = ?"),
+    userByMac: db.prepare(`SELECT ${USER_COLS} FROM users WHERE id = (SELECT user_id FROM mac_addresses WHERE mac = ?)`),
+    insertMac: db.prepare("INSERT INTO mac_addresses (user_id, mac, label, registered_at) VALUES (?, ?, ?, ?)"),
+    updateMac: db.prepare("UPDATE mac_addresses SET mac = ?, label = ?, registered_at = ? WHERE id = ? AND user_id = ?"),
+    deleteMac: db.prepare("DELETE FROM mac_addresses WHERE id = ? AND user_id = ?"),
+    insertSession: db.prepare("INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)"),
+    userByToken: db.prepare(`SELECT ${USER_COLS} FROM users WHERE id = (SELECT user_id FROM sessions WHERE token_hash = ? AND expires_at > ?)`),
+    deleteSession: db.prepare("DELETE FROM sessions WHERE token_hash = ?"),
+    deleteSessionsOf: db.prepare("DELETE FROM sessions WHERE user_id = ?"),
+    pruneSessions: db.prepare("DELETE FROM sessions WHERE expires_at <= ?"),
+    insertFlow: db.prepare("INSERT INTO auth_flows (state_hash, code_verifier, nonce, return_to, expires_at) VALUES (?, ?, ?, ?, ?)"),
+    flow: db.prepare("SELECT code_verifier, nonce, return_to, expires_at FROM auth_flows WHERE state_hash = ?"),
+    deleteFlow: db.prepare("DELETE FROM auth_flows WHERE state_hash = ?"),
+    pruneFlows: db.prepare("DELETE FROM auth_flows WHERE expires_at <= ?"),
 
     friendship: db.prepare(
       "SELECT * FROM friendships WHERE user_low = ? AND user_high = ?",
@@ -124,13 +143,14 @@ export function createRepo(db: Db) {
   };
 
   // /explain で中身を見せるためのもの。アプリ本体は使わない。
-  // PoC なので、テーブルを丸ごと出す。件数の多いものだけ上限をつける。
+  // テーブルの全行を出す。秘密の列は dump() で除外する。
   const dumpQ = {
     users: db.prepare("SELECT * FROM users ORDER BY id"),
+    macs: db.prepare("SELECT * FROM mac_addresses ORDER BY id"),
     friendships: db.prepare("SELECT * FROM friendships ORDER BY id"),
     blocks: db.prepare("SELECT * FROM blocks ORDER BY created_at"),
-    points: db.prepare("SELECT * FROM (SELECT * FROM point_events ORDER BY id DESC LIMIT 100) ORDER BY id"),
-    visits: db.prepare("SELECT * FROM visits ORDER BY date DESC, user_id LIMIT 100"),
+    points: db.prepare("SELECT * FROM point_events ORDER BY id"),
+    visits: db.prepare("SELECT * FROM visits ORDER BY date DESC, user_id"),
     matches: db.prepare("SELECT * FROM matches ORDER BY user_id, other_user_id"),
     reactions: db.prepare("SELECT * FROM reactions ORDER BY updated_at"),
   };
@@ -148,34 +168,85 @@ export function createRepo(db: Db) {
     findByUserId: (userId: string) => one<User>(q.userByUserId.get(userId)),
     findByShareKey: (shareKey: string) => one<User>(q.userByShareKey.get(shareKey)),
     findByMac: (mac: string) => one<User>(q.userByMac.get(mac)),
-    findByToken: (token: string) => one<User>(q.userByToken.get(hashToken(token))),
+    findBySub: (sub: string) => one<User>(q.userBySub.get(sub)),
+    findByEmail: (email: string) => one<User>(q.userByEmail.get(email)),
+    findByToken: (token: string) => one<User>(q.userByToken.get(hashToken(token), new Date().toISOString())),
 
-    createUser(displayName: string, mac: string, deviceToken: string): User {
+    findOrCreateGoogleUser(sub: string, email: string): User {
+      const existing = one<User>(q.userBySub.get(sub));
+      if (existing) {
+        if (existing.email !== email) q.updateEmail.run(email, existing.id);
+        return one<User>(q.userBySub.get(sub)) as User;
+      }
       const now = new Date().toISOString();
-      q.insertUser.run(
-        newUserId(), displayName, newShareKey(), hashToken(deviceToken), mac, now, now,
-      );
-      const user = one<User>(q.userByMac.get(mac));
+      q.insertUser.run(newUserId(), sub, email, now);
+      const user = one<User>(q.userBySub.get(sub));
       if (!user) throw new Error("failed to persist user");
       return user;
+    },
+
+    completeUser(id: number, displayName: string, mac: string, label: string): User {
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        const now = new Date().toISOString();
+        q.insertMac.run(id, mac, label, now);
+        q.completeUser.run(displayName, newShareKey(), now, id);
+        db.exec("COMMIT");
+        return one<User>(q.userById.get(id)) as User;
+      } catch (error) { db.exec("ROLLBACK"); throw error; }
+    },
+
+    listMacs: (id: number) => many<MacAddress>(q.macsOf.all(id)),
+    getMac: (id: number) => one<MacAddress>(q.macById.get(id)),
+    addMac(userId: number, mac: string, label: string): MacAddress {
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        if (q.macsOf.all(userId).length >= 5) throw new Error("mac_limit");
+        const result = q.insertMac.run(userId, mac, label, new Date().toISOString());
+        db.exec("COMMIT");
+        return one<MacAddress>(q.macById.get(result.lastInsertRowid)) as MacAddress;
+      } catch (error) { db.exec("ROLLBACK"); throw error; }
+    },
+    editMac(userId: number, id: number, mac: string, label: string): MacAddress {
+      const old = one<MacAddress>(q.macById.get(id));
+      q.updateMac.run(mac, label, old?.mac === mac ? old.registered_at : new Date().toISOString(), id, userId);
+      return one<MacAddress>(q.macById.get(id)) as MacAddress;
+    },
+    removeMac(userId: number, id: number): void {
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        if (q.macsOf.all(userId).length <= 1) throw new Error("last_mac");
+        q.deleteMac.run(id, userId);
+        db.exec("COMMIT");
+      } catch (error) { db.exec("ROLLBACK"); throw error; }
+    },
+    createSession(userId: number, token: string): void {
+      const now = new Date();
+      q.pruneSessions.run(now.toISOString());
+      q.insertSession.run(hashToken(token), userId, now.toISOString(), new Date(now.getTime() + 14 * 86400000).toISOString());
+    },
+    deleteSession: (token: string) => void q.deleteSession.run(hashToken(token)),
+    deleteSessionsOf: (userId: number) => void q.deleteSessionsOf.run(userId),
+    createFlow(state: string, verifier: string, nonce: string, returnTo: string): void {
+      q.pruneFlows.run(new Date().toISOString());
+      q.insertFlow.run(hashToken(state), verifier, nonce, returnTo, new Date(Date.now() + 10 * 60000).toISOString());
+    },
+    consumeFlow(state: string): { code_verifier: string; nonce: string; return_to: string } | null {
+      const key = hashToken(state);
+      const flow = one<{ code_verifier: string; nonce: string; return_to: string; expires_at: string }>(q.flow.get(key));
+      q.deleteFlow.run(key);
+      return flow && flow.expires_at > new Date().toISOString() ? flow : null;
     },
 
     updateProfile(id: number, displayName: string, hidden: boolean): void {
       q.updateProfile.run(displayName, hidden ? 1 : 0, id);
     },
+    updateAvatar: (id: number, avatar: string | null) => void q.updateAvatar.run(avatar, id),
 
-    /** 端末トークンを作り直す。前の端末はこれで使えなくなる。 */
-    rotateToken(id: number, deviceToken: string): void {
-      q.updateToken.run(hashToken(deviceToken), id);
-    },
-
-    updateMac(id: number, mac: string): void {
-      q.updateMac.run(mac, new Date().toISOString(), id);
-    },
-
-    /** アイコンの画像。null で元の頭文字に戻す */
-    updateAvatar(id: number, avatar: string | null): void {
-      q.updateAvatar.run(avatar, id);
+    transaction<T>(fn: () => T): T {
+      db.exec("BEGIN IMMEDIATE");
+      try { const result = fn(); db.exec("COMMIT"); return result; }
+      catch (error) { db.exec("ROLLBACK"); throw error; }
     },
 
     // ── friendships ──────────────────────────────────────────
@@ -262,19 +333,12 @@ export function createRepo(db: Db) {
       void q.upsertMatch.run(userId, otherId, date),
 
     // ── /explain 用のダンプ ───────────────────────────────────
-    /**
-     * テーブルを丸ごと、行の形のまま返す。PoC なので全員ぶんを出す。
-     *
-     * MAC だけは伏せる。ここでの MAC は事実上のパスワードで
-     * （POST /v1/sessions は MAC を知っていれば端末を乗り換えられる）、
-     * 誰でも読めるページに平文で並べると、全員のアカウントを渡すのと同じになる。
-     * 端末トークンは sha256 しか持っていないので、頭だけ出して残りは省く。
-     */
+    /** 公開説明画面用。行は全件表示し、認証情報とMAC原文は列単位で除外する。 */
     dump(): DbTable[] {
       const uCols = [
-        "id", "user_id", "display_name", "share_key", "device_token_hash",
-        "mac", "avatar", "hidden", "mac_registered_at", "created_at",
+        "id", "user_id", "display_name", "avatar", "hidden", "onboarding_completed_at", "created_at",
       ];
+      const mCols = ["id", "user_id", "mac", "label", "registered_at"];
       const fCols = ["id", "user_low", "user_high", "status", "requested_by", "request_id",
         "best_low", "best_high", "created_at", "friends_since"];
       const pCols = ["id", "user_id", "date", "kind", "label", "pts", "other_user_id", "days"];
@@ -284,18 +348,17 @@ export function createRepo(db: Db) {
       return [
         {
           name: "users",
-          note: "登録した人。share_key は配ってよい値。device_token_hash は sha256 の頭12文字（平文は保存していない）。MAC は伏せ、アイコンの画像は大きさだけにしてある。",
+          note: "登録した人。メール、Google ID、共有キーは公開しない。",
           columns: uCols,
-          rows: (dumpQ.users.all() as Record<string, unknown>[]).map((r) => cells(
-            {
-              ...r,
-              device_token_hash: `${String(r.device_token_hash).slice(0, 12)}…`,
-              mac: maskMac(String(r.mac)),
-              // 画像そのものは長いので、大きさだけ出す
-              avatar: r.avatar ? `（画像 ${Math.round(String(r.avatar).length / 1024)}KB）` : null,
-            },
-            uCols,
-          )),
+          rows: (dumpQ.users.all() as Record<string, unknown>[]).map((r) => cells({
+            ...r, avatar: r.avatar ? `（画像 ${Math.round(String(r.avatar).length / 1024)}KB）` : null,
+          }, uCols)),
+        },
+        {
+          name: "mac_addresses",
+          note: "登録端末。MAC原文は伏せてある。",
+          columns: mCols,
+          rows: (dumpQ.macs.all() as Record<string, unknown>[]).map((r) => cells({ ...r, mac: maskMac(String(r.mac)) }, mCols)),
         },
         {
           name: "friendships",
@@ -311,7 +374,7 @@ export function createRepo(db: Db) {
         },
         {
           name: "point_events",
-          note: "入ったポイント1件が1行。今日の分と累計はここを数えている。直近100件。",
+          note: "入ったポイント1件が1行。今日の分と累計はここを数えている。",
           columns: pCols,
           rows: rows(dumpQ.points, pCols),
         },
@@ -323,7 +386,7 @@ export function createRepo(db: Db) {
         },
         {
           name: "visits",
-          note: "来校した日。連続日数（streak）の判定に使う。新しい順に100件。",
+          note: "来校した日。連続日数（streak）の判定に使う。",
           columns: ["user_id", "date"],
           rows: rows(dumpQ.visits, ["user_id", "date"]),
         },

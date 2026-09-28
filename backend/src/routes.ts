@@ -1,20 +1,19 @@
 import { Hono } from "hono";
-import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type {
   AddFriendResponse, BestResponse, BestState, BlockResponse, BuildingKey, CheckResponse,
   DebugDbResponse, FriendsResponse, Me, PointItem, PointsResponse, Reaction, ReactionResponse,
-  RegisterResponse, UserRef,
+  MacAddressView, UserRef,
 } from "../../shared/app-types.js";
 import { BUILDING_LABELS } from "../../shared/app-types.js";
 import { config } from "./config.js";
+import { newSecret, type GoogleProvider } from "./auth.js";
 import type { DtcClient, Lookup } from "./dtc.js";
 import { fail } from "./lib/errors.js";
-import { newDeviceToken } from "./lib/ids.js";
 import { maskMac, normalizeMac } from "./lib/mac.js";
 import { jstDate, sleep } from "./lib/time.js";
 import { awardPoints, isRainy, type VisibleFriend } from "./points.js";
-import type { FriendshipRow, Repo, User } from "./repo.js";
+import type { FriendshipRow, MacAddress, Repo, User } from "./repo.js";
 
 /** 地図に置く場所。APが建物に紐づいていなければ null。 */
 const buildingKeyOf = (lookup: Lookup): BuildingKey | null =>
@@ -26,17 +25,11 @@ const buildingLabel = (lookup: Lookup): string | null => {
 };
 
 const toRef = (u: User): UserRef => ({
-  userId: u.user_id,
-  displayName: u.display_name,
+  userId: u.user_id, displayName: u.display_name ?? "",
   ...(u.avatar ? { avatar: u.avatar } : {}),
 });
 
-/**
- * アイコンの画像。アプリが 128px四方の JPEG に縮めてから送ってくる。
- * 大きすぎるものは断る（DBに入れるので、1人ぶんの上限を決めておく）。
- */
 const AVATAR = { MAX_BYTES: 120 * 1024, TYPES: ["image/jpeg", "image/png", "image/webp"] } as const;
-
 function validAvatar(input: unknown): string {
   if (typeof input !== "string") fail(400, "invalid_avatar", "画像を送ってください");
   const image = input as string;
@@ -48,12 +41,16 @@ function validAvatar(input: unknown): string {
   return image;
 }
 
-const toMe = (u: User): Me => ({
+const toMac = (m: MacAddress): MacAddressView => ({
+  id: m.id, label: m.label, macMasked: maskMac(m.mac), registeredAt: m.registered_at,
+});
+
+const toMe = (u: User, repo: Repo): Me => ({
   ...toRef(u),
-  shareKey: u.share_key,
+  email: u.email,
+  shareKey: u.share_key ?? "",
   hidden: u.hidden !== 0,
-  macMasked: maskMac(u.mac),
-  macRegisteredAt: u.mac_registered_at,
+  macs: repo.listMacs(u.id).map(toMac),
 });
 
 /** best は片側ずつのフラグ。自分から見た状態に直す。 */
@@ -69,43 +66,34 @@ function bestState(row: FriendshipRow, me: number): BestState {
 const otherIdOf = (row: FriendshipRow, me: number) =>
   row.user_low === me ? row.user_high : row.user_low;
 
-/**
- * 端末トークンの置き場所。
- *
- * アプリは localStorage にも持っているが、iPhone の Safari は
- * しばらく開かないでいると localStorage を消してしまう。消えるたびに
- * MACアドレスの入れ直しになるので、同じ値をクッキーにも入れておく。
- * サーバーが付けるクッキーのほうが長生きするうえ、JavaScript から
- * 読めない（HttpOnly）ので、置きっぱなしにしても取り出されにくい。
- *
- * 期限は約400日。使うたびに付け直すので、開き続けているかぎり切れない。
- */
-const COOKIE = "cokoyo_device";
-const COOKIE_MAX_AGE = 400 * 24 * 60 * 60;
+const secureCookies = config.appOrigin.startsWith("https://");
+const sessionCookie = secureCookies ? "__Host-cokoyo_session" : "cokoyo_session";
+const oauthCookie = secureCookies ? "__Host-cokoyo_oauth" : "cokoyo_oauth";
+const cookieOptions = { path: "/", httpOnly: true, secure: secureCookies, sameSite: "Lax" as const };
 
-type Ctx = Context;
-
-const putDeviceCookie = (c: Ctx, token: string) => {
-  setCookie(c, COOKIE, token, {
-    path: "/",
-    httpOnly: true,
-    sameSite: "Lax",
-    maxAge: COOKIE_MAX_AGE,
-    // 本番は https。手元の http://localhost では付けない（付けると保存されない）
-    secure: new URL(c.req.url).protocol === "https:"
-      || c.req.header("x-forwarded-proto") === "https",
-  });
-};
-
-function requireUser(c: Ctx, repo: Repo): User {
-  const match = /^Bearer\s+(.+)$/i.exec((c.req.header("authorization") ?? "").trim());
-  const token = match?.[1] ?? getCookie(c, COOKIE) ?? "";
-  if (!token) fail(401, "unauthorized", "登録が必要です");
+function requireUser(c: Parameters<typeof getCookie>[0], repo: Repo, completed = true): User {
+  const token = getCookie(c, sessionCookie);
+  if (!token) fail(401, "unauthorized", "Googleでログインしてください");
   const user = repo.findByToken(token);
-  if (!user) fail(401, "unauthorized", "登録が必要です");
-  // 使うたびに期限を延ばす
-  putDeviceCookie(c, token);
+  if (!user) fail(401, "unauthorized", "Googleでログインしてください");
+  if (completed && !user.onboarding_completed_at) fail(403, "onboarding_required", "初回登録を完了してください");
   return user;
+}
+
+function validLabel(input: unknown): string {
+  if (typeof input !== "string" || !input.trim() || input.trim().length > 30) {
+    fail(400, "invalid_label", "端末の名前は1〜30文字で入力してください");
+  }
+  return input.trim();
+}
+
+function translateMacError(error: unknown): never {
+  if (error instanceof Error && error.message.includes("mac_addresses.mac")) {
+    fail(409, "mac_taken", "このMACアドレスはすでに登録されています");
+  }
+  if (error instanceof Error && error.message === "mac_limit") fail(409, "mac_limit", "登録できる端末は5台までです");
+  if (error instanceof Error && error.message === "last_mac") fail(409, "last_mac", "最後の端末は削除できません");
+  throw error;
 }
 
 function validName(input: unknown): string {
@@ -126,6 +114,30 @@ function validMac(input: unknown): string {
 
 /** 1組（送り手→受け手）にためておけるリアクションの数と、届かないまま捨てるまでの時間。 */
 export const REACTION = { MAX: 99, TTL_MS: 3 * 24 * 60 * 60 * 1000 } as const;
+
+function limiter(max: number) {
+  let active = 0;
+  const pending: Array<() => void> = [];
+  return async <T>(work: () => Promise<T>): Promise<T> => {
+    if (active >= max) await new Promise<void>((resolve) => pending.push(resolve));
+    active++;
+    try { return await work(); }
+    finally { active--; pending.shift()?.(); }
+  };
+}
+
+async function lookupUser(repo: Repo, dtc: DtcClient, user: User, limited: ReturnType<typeof limiter>): Promise<Lookup> {
+  const observations = await Promise.all(repo.listMacs(user.id).map((m) => limited(() => dtc.latest(m.mac))));
+  const present = observations.filter((x): x is Extract<Lookup, { status: "present" }> => x.status === "present");
+  if (present.length) {
+    const keys = new Set(present.map((x) => x.buildingKey));
+    const buildingKey = observations.some((x) => x.status === "unavailable") || keys.size !== 1
+      ? undefined : present[0]?.buildingKey;
+    return { status: "present", ...(buildingKey ? { buildingKey } : {}) };
+  }
+  return observations.some((x) => x.status === "unavailable")
+    ? { status: "unavailable" } : { status: "absent" };
+}
 
 const pointsView = (repo: Repo, me: User): PointsResponse => {
   const date = jstDate();
@@ -161,103 +173,146 @@ function friendTarget(repo: Repo, me: User, userId: string): User {
 }
 
 /** /v1 の下に生やす。フロントは apiBaseUrl + "/v1/..." で叩く。 */
-export function createRoutes(repo: Repo, dtc: DtcClient) {
+export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider | null = null) {
   const app = new Hono();
 
   app.get("/health", (c) => c.json({ ok: true, mock_dtc: config.mockDtc }));
 
-  // ── 登録・自分 ────────────────────────────────────────────
-  app.post("/v1/users", async (c) => {
-    const body = await c.req.json().catch(() => null);
-    const displayName = validName(body?.displayName);
-    const mac = validMac(body?.mac);
-
-    if (repo.findByMac(mac)) {
-      fail(409, "mac_taken", "このMACアドレスはすでに登録されています");
+  // ── Googleログイン・自分 ───────────────────────────────────
+  app.use("/v1/*", async (c, next) => {
+    if (!["GET", "HEAD", "OPTIONS"].includes(c.req.method) && c.req.header("origin") !== config.appOrigin) {
+      fail(403, "invalid_origin", "この操作はこのサイトからだけ実行できます");
     }
-
-    const deviceToken = newDeviceToken();
-    const user = repo.createUser(displayName, mac, deviceToken);
-    putDeviceCookie(c, deviceToken);
-    const response: RegisterResponse = { ...toMe(user), deviceToken };
-    return c.json(response, 201);
+    await next();
   });
 
-  /**
-   * 登録済みのMACを、この端末に引き継ぐ。
-   *
-   * アプリを入れ直すと端末トークンが消え、同じMACでは mac_taken になって
-   * 二度と入れなくなるため、その退路。
-   *
-   * MACの持ち主であることは確かめられないが、それは登録そのものも同じで
-   * （手入力なので他人のMACでも登録できる）、ここだけ厳しくしても意味がない。
-   * 当面は仲間内の試用に限る、という前提を共有した上での割り切り。
-   */
-  app.post("/v1/sessions", async (c) => {
-    const mac = validMac((await c.req.json().catch(() => null))?.mac);
-
-    const user = repo.findByMac(mac);
-    if (!user) fail(404, "mac_not_registered", "このMACアドレスはまだ登録されていません");
-
-    // 前の端末は使えなくなる。乗っ取られたときに気づけるよう、黙って両方は生かさない。
-    const deviceToken = newDeviceToken();
-    repo.rotateToken(user.id, deviceToken);
-    putDeviceCookie(c, deviceToken);
-
-    const response: RegisterResponse = { ...toMe(user), deviceToken };
-    return c.json(response);
+  app.get("/v1/auth/google", async (c) => {
+    if (!google) fail(503, "auth_unavailable", "Googleログインが設定されていません");
+    const key = c.req.query("add") ?? "";
+    const returnTo = /^sk_[0-9A-Za-z]{4,64}$/.test(key) ? `/?add=${encodeURIComponent(key)}` : "/";
+    const state = newSecret();
+    const verifier = newSecret();
+    const nonce = newSecret();
+    repo.createFlow(state, verifier, nonce, returnTo);
+    setCookie(c, oauthCookie, state, { ...cookieOptions, maxAge: 600 });
+    return c.redirect((await google.authorizationUrl(verifier, state, nonce)).href, 302);
   });
 
-  /** ログアウト。この端末の覚えを消すだけで、登録そのものは残る。 */
-  app.delete("/v1/sessions", (c) => {
-    deleteCookie(c, COOKIE, { path: "/" });
+  app.get("/v1/auth/google/callback", async (c) => {
+    const state = c.req.query("state") ?? "";
+    const cookie = getCookie(c, oauthCookie);
+    if (!state || !cookie || state !== cookie) fail(400, "invalid_state", "ログインをやり直してください");
+    const flow = repo.consumeFlow(state);
+    deleteCookie(c, oauthCookie, cookieOptions);
+    if (!flow || !google) fail(400, "invalid_state", "ログインをやり直してください");
+    let identity;
+    try {
+      const callbackUrl = new URL(`${config.appOrigin}/api/v1/auth/google/callback${new URL(c.req.url).search}`);
+      identity = await google.exchange(callbackUrl, flow.code_verifier, state, flow.nonce);
+    } catch {
+      fail(401, "google_login_failed", "Googleログインを確認できませんでした");
+    }
+    const collision = repo.findByEmail(identity.email);
+    if (collision && collision.google_sub !== identity.sub) {
+      fail(409, "email_conflict", "このメールアドレスの登録を確認できませんでした。運営に連絡してください");
+    }
+    const user = repo.findOrCreateGoogleUser(identity.sub, identity.email);
+    const token = newSecret();
+    repo.createSession(user.id, token);
+    setCookie(c, sessionCookie, token, { ...cookieOptions, maxAge: 14 * 86400 });
+    return c.redirect(`${config.appOrigin}${flow.return_to}`, 302);
+  });
+
+  app.get("/v1/auth/session", (c) => {
+    const user = requireUser(c, repo, false);
+    return c.json({ email: user.email, status: user.onboarding_completed_at ? "ready" : "onboarding" });
+  });
+
+  app.post("/v1/auth/logout", (c) => {
+    const token = getCookie(c, sessionCookie);
+    if (token) repo.deleteSession(token);
+    deleteCookie(c, sessionCookie, cookieOptions);
     return c.body(null, 204);
   });
 
-  app.get("/v1/me", (c) => c.json(toMe(requireUser(c, repo))));
+  app.post("/v1/auth/logout-all", (c) => {
+    const user = requireUser(c, repo, false);
+    repo.deleteSessionsOf(user.id);
+    deleteCookie(c, sessionCookie, cookieOptions);
+    return c.body(null, 204);
+  });
 
+  app.post("/v1/onboarding", async (c) => {
+    const user = requireUser(c, repo, false);
+    if (user.onboarding_completed_at) fail(409, "already_onboarded", "初回登録は完了しています");
+    const body = await c.req.json().catch(() => null);
+    const name = validName(body?.displayName);
+    const mac = validMac(body?.mac);
+    const label = validLabel(body?.label);
+    if (repo.findByMac(mac)) fail(409, "mac_taken", "このMACアドレスはすでに登録されています");
+    try { return c.json(toMe(repo.completeUser(user.id, name, mac, label), repo), 201); }
+    catch (error) { translateMacError(error); }
+  });
+
+  app.get("/v1/me", (c) => c.json(toMe(requireUser(c, repo), repo)));
   app.patch("/v1/me", async (c) => {
     const me = requireUser(c, repo);
     const body = await c.req.json().catch(() => null);
-
-    const displayName = body?.displayName === undefined
-      ? me.display_name
-      : validName(body.displayName);
+    const displayName = body?.displayName === undefined ? me.display_name ?? "" : validName(body.displayName);
     if (body?.hidden !== undefined && typeof body.hidden !== "boolean") {
       fail(400, "invalid_hidden", "かくれんぼの設定が正しくありません");
     }
-    const hidden = body?.hidden === undefined ? me.hidden !== 0 : (body.hidden as boolean);
-
+    const hidden = body?.hidden === undefined ? me.hidden !== 0 : body.hidden;
     repo.updateProfile(me.id, displayName, hidden);
-    return c.json(toMe(repo.findById(me.id) as User));
+    return c.json(toMe(repo.findById(me.id) as User, repo));
   });
 
-  app.put("/v1/me/mac", async (c) => {
-    const me = requireUser(c, repo);
-    const mac = validMac((await c.req.json().catch(() => null))?.mac);
-
-    const owner = repo.findByMac(mac);
-    if (owner && owner.id !== me.id) {
-      fail(409, "mac_taken", "このMACアドレスはすでに登録されています");
-    }
-
-    repo.updateMac(me.id, mac);
-    return c.json(toMe(repo.findById(me.id) as User));
-  });
-
-  /** アイコンの画像を登録する。フレンドの一覧に出る。 */
   app.put("/v1/me/avatar", async (c) => {
     const me = requireUser(c, repo);
     const image = validAvatar((await c.req.json().catch(() => null))?.image);
     repo.updateAvatar(me.id, image);
-    return c.json(toMe(repo.findById(me.id) as User));
+    return c.json(toMe(repo.findById(me.id) as User, repo));
   });
-
-  /** アイコンの画像を消して、名前の頭文字に戻す。 */
   app.delete("/v1/me/avatar", (c) => {
     const me = requireUser(c, repo);
     repo.updateAvatar(me.id, null);
-    return c.json(toMe(repo.findById(me.id) as User));
+    return c.json(toMe(repo.findById(me.id) as User, repo));
+  });
+
+  app.get("/v1/me/macs", (c) => {
+    const me = requireUser(c, repo);
+    return c.json({ macs: repo.listMacs(me.id).map(toMac), limit: 5 });
+  });
+  app.post("/v1/me/macs", async (c) => {
+    const me = requireUser(c, repo);
+    const body = await c.req.json().catch(() => null);
+    const mac = validMac(body?.mac);
+    const label = validLabel(body?.label);
+    if (repo.findByMac(mac)) fail(409, "mac_taken", "このMACアドレスはすでに登録されています");
+    try { return c.json(toMac(repo.addMac(me.id, mac, label)), 201); }
+    catch (error) { translateMacError(error); }
+  });
+  app.patch("/v1/me/macs/:id", async (c) => {
+    const me = requireUser(c, repo);
+    const id = Number(c.req.param("id"));
+    const old = Number.isSafeInteger(id) ? repo.getMac(id) : undefined;
+    if (!old || old.user_id !== me.id) fail(404, "mac_not_found", "この端末は見つかりません");
+    const body = await c.req.json().catch(() => null);
+    const mac = body?.mac === undefined ? old.mac : validMac(body.mac);
+    const label = body?.label === undefined ? old.label : validLabel(body.label);
+    const owner = repo.findByMac(mac);
+    if (owner && owner.id !== me.id) fail(409, "mac_taken", "このMACアドレスはすでに登録されています");
+    if (repo.listMacs(me.id).some((m) => m.id !== id && m.mac === mac)) fail(409, "mac_taken", "このMACアドレスはすでに登録されています");
+    try { return c.json(toMac(repo.editMac(me.id, id, mac, label))); }
+    catch (error) { translateMacError(error); }
+  });
+  app.delete("/v1/me/macs/:id", (c) => {
+    const me = requireUser(c, repo);
+    const id = Number(c.req.param("id"));
+    const old = Number.isSafeInteger(id) ? repo.getMac(id) : undefined;
+    if (!old || old.user_id !== me.id) fail(404, "mac_not_found", "この端末は見つかりません");
+    try { repo.removeMac(me.id, id); return c.body(null, 204); }
+    catch (error) { translateMacError(error); }
   });
 
   // ── 在校確認とポイント ────────────────────────────────────
@@ -274,15 +329,16 @@ export function createRoutes(repo: Repo, dtc: DtcClient) {
       .filter((f): f is { row: FriendshipRow; other: User } => Boolean(f.other))
       .filter((f) => !repo.isBlocking(me.id, f.other.id));
 
+    const limited = limiter(8);
     const [mine, ...theirs] = await Promise.all([
-      dtc.latest(me.mac),
+      lookupUser(repo, dtc, me, limited),
       ...friends.map(async (f) => {
         // WiFiに繋がっていない・かくれんぼ中・相手が自分をブロック中は、
         // すべて同じ「いない」にする。理由は区別しない。
         if (f.other.hidden !== 0 || repo.isBlocking(f.other.id, me.id)) {
           return { status: "absent" } as Lookup;
         }
-        return dtc.latest(f.other.mac);
+        return lookupUser(repo, dtc, f.other, limited);
       }),
     ]);
 
@@ -295,12 +351,12 @@ export function createRoutes(repo: Repo, dtc: DtcClient) {
     }));
 
     const today = jstDate();
-    const { awarded, notice } = awardPoints(repo, me, {
+    const { awarded, notice } = repo.transaction(() => awardPoints(repo, me, {
       present: mine?.status === "present",
       rainy,
       friends: visible,
       today,
-    });
+    }));
 
     // 画面に出たフレンドのスライムから、届いていたリアクションを渡す。
     // 在校が見えている＝相手の画面では自分のスライムが見えている、とは限らないが、
@@ -318,7 +374,7 @@ export function createRoutes(repo: Repo, dtc: DtcClient) {
     const response: CheckResponse = {
       checkedAt: new Date().toISOString(),
       me: {
-        present: mine?.status === "present",
+        presence: mine?.status === "present" ? "present" : mine?.status === "unavailable" ? "unknown" : "absent",
         // かくれんぼ中でも、本人には本当のことを返す。
         building: mine ? buildingLabel(mine) : null,
         buildingKey: mine ? buildingKeyOf(mine) : null,
@@ -340,7 +396,7 @@ export function createRoutes(repo: Repo, dtc: DtcClient) {
           ...(key ? { buildingKey: key } : {}),
         };
       }),
-      points: { awarded, notice, ...pointsView(repo, me) },
+      points: { awarded, notice: mine?.status === "unavailable" ? "在校を判定できなかったため、ポイントは入りません" : notice, ...pointsView(repo, me) },
       reactions,
     };
 
@@ -391,19 +447,14 @@ export function createRoutes(repo: Repo, dtc: DtcClient) {
   app.post("/v1/friends", async (c) => {
     const me = requireUser(c, repo);
     const body = await c.req.json().catch(() => null);
-    // qr は即フレンド。link と mac は相手の承認待ち（どちらも相手が居ない場で渡された値なので）。
-    const via = body?.via === "qr" ? "qr" : body?.via === "mac" ? "mac" : "link";
-
-    const other = via === "mac"
-      ? repo.findByMac(validMac(body?.mac))
-      : typeof body?.shareKey === "string"
-        ? repo.findByShareKey(body.shareKey)
-        : undefined;
+    // QRは対面での追加。リンク・共有キーは承認待ち。
+    if (body?.via === "mac" || body?.mac !== undefined) fail(400, "unsupported_friend_method", "MACでのフレンド検索は終了しました");
+    const via = body?.via === "qr" ? "qr" : "link";
+    const other = typeof body?.shareKey === "string" ? repo.findByShareKey(body.shareKey) : undefined;
     if (!other) {
-      if (via === "mac") fail(404, "mac_not_registered", "このMACアドレスの人は、まだ登録していません");
       fail(404, "share_key_not_found", "この共有キーの相手が見つかりません");
     }
-    if (other.id === me.id) fail(400, "self", via === "mac" ? "自分のMACアドレスです" : "自分のキーです");
+    if (other.id === me.id) fail(400, "self", "自分のキーです");
     if (repo.isBlocking(me.id, other.id)) {
       fail(409, "blocked_by_you", "ブロック中の相手です。先にブロックを解除してください");
     }
@@ -552,7 +603,7 @@ export function createRoutes(repo: Repo, dtc: DtcClient) {
    * アプリ本体は使わない。
    *
    * PoC なので、テーブルを丸ごと・全員ぶん返す。登録していない人にも見せたい
-   * （説明のためのページなので）ため、端末トークンも要求しない。
+   * （説明のためのページなので）ため、ログインも要求しない。
    * MAC だけは伏せる。理由は repo.dump() のコメント。
    */
   app.get("/v1/debug/db", (c) => {

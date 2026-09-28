@@ -2,7 +2,6 @@
 
 import { useReducer } from 'react';
 import { useApp } from '../app/AppContext';
-import { device } from '../api/client';
 import { BUILDINGS, buildingLabel, mockBackend } from '../api/mockBackend';
 import { config, useMockBackend } from '../config';
 
@@ -21,7 +20,7 @@ export function DemoPanel() {
     );
   }
 
-  const uid = app.me?.userId ?? sim.userIdForToken(device.token);
+  const uid = app.me?.userId ?? sim.currentUserId();
   const st = sim.state(uid);
   const mine = st.people.find((p) => p.userId === uid);
   const others = st.people.filter((p) => p.userId !== uid);
@@ -33,7 +32,6 @@ export function DemoPanel() {
   const reset = async () => {
     sim.reset();
     try { Object.keys(localStorage).filter((k) => k.startsWith('cokoyo-lastcheck:')).forEach((k) => localStorage.removeItem(k)); } catch { /* 保存できない環境 */ }
-    device.set(sim.demoToken);
     await app.restart();
     app.showToast('最初の状態に戻しました');
   };
@@ -74,6 +72,23 @@ export function DemoPanel() {
         </table>
       </div>
 
+      {uid && sim.macStates(uid).length > 0 && <>
+        <p className="plabel">あなたの端末ごとのWiFi状態</p>
+        <div className="row">
+          {sim.macStates(uid).map((entry) => <div className="demo-mac" key={entry.id}>
+            <span>{entry.label}</span>
+            <select aria-label={`${entry.label}の状態`} value={entry.unavailable ? 'unknown' : entry.connected ? 'present' : 'absent'}
+              onChange={(e) => { sim.setMacCampus(uid, entry.id, { unavailable: e.target.value === 'unknown', connected: e.target.value === 'present' }); hint(); }}>
+              <option value="absent">未接続</option><option value="present">接続中</option><option value="unknown">判定不可</option>
+            </select>
+            <select aria-label={`${entry.label}の建物`} value={entry.buildingKey}
+              onChange={(e) => { sim.setMacCampus(uid, entry.id, { buildingKey: e.target.value as typeof BUILDINGS[number] }); hint(); }}>
+              {BUILDINGS.map((b) => <option key={b} value={b}>{buildingLabel(b)}</option>)}
+            </select>
+          </div>)}
+        </div>
+      </>}
+
       <p className="plabel">相手の操作</p>
       <div className="row">
         {uid && others.filter((p) => p.relation === 'フレンドではない').map((p) => (
@@ -104,7 +119,7 @@ export function DemoPanel() {
       <p className="plabel">やり直す</p>
       <div className="row">
         <button className="ghost" onClick={() => void reset()}>デモを最初の状態に戻す</button>
-        <button className="ghost" onClick={app.restartFromOnboarding}>登録画面から始める</button>
+        <button className="ghost" onClick={() => { sim.startNewAccount(); void app.restart(); }}>新規登録画面から始める</button>
       </div>
     </section>
   );

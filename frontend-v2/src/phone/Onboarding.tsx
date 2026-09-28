@@ -3,14 +3,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useApp } from '../app/AppContext';
 import { useInstall } from '../app/install';
-import { howToOpen, inAppBrowser, inAppName, openInBrowserUrl } from '../app/browser';
 import { pendingInvite } from '../app/invite';
-import { api, callLog, device, type ApiError } from '../api/client';
+import { api, callLog, type ApiError } from '../api/client';
 import { useMockBackend } from '../config';
 import { InstallStep } from './Install';
 import { Icon } from './ui';
 
-type Step = 'install' | 'welcome' | 'name' | 'mac' | 'restore' | 'done';
+type Step = 'install' | 'name' | 'mac' | 'done';
 type Os = 'ios' | 'android' | 'mac' | 'windows';
 
 /**
@@ -105,248 +104,83 @@ const normalizeMac = (s: string) => s.trim().toLowerCase().replace(/-/g, ':');
 const validMac = (s: string) => /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(s);
 
 export function Onboarding() {
-  const { onboardingMode, cancelReregister, completeRegistration, finishOnboarding, setMe, showToast, setTab } = useApp();
-  const reRegister = onboardingMode === 'reregister';
-  // 端末トークンだけ消えた人は、覚えているMACアドレスを入れた引き継ぎの画面から始める
-  const restoreMode = onboardingMode === 'restore';
-  // ホーム画面に追加できる端末なら、いちばん最初にその案内を出す
+  const { completeRegistration, finishOnboarding } = useApp();
   const { canOffer } = useInstall();
-  const [step, setStep] = useState<Step>(reRegister ? 'mac' : restoreMode ? 'restore' : canOffer ? 'install' : 'welcome');
+  const [step, setStep] = useState<Step>(canOffer ? 'install' : 'name');
   const [name, setName] = useState('');
-  const [mac, setMac] = useState(() => (onboardingMode === 'restore' ? device.mac : ''));
+  const [mac, setMac] = useState('');
   const [os, setOs] = useState<Os>('ios');
+  const [label, setLabel] = useState('iPhone');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  // 登録しようとしたMACがすでに使われていたとき、引き継ぎに進めるようにする
-  const [taken, setTaken] = useState(false);
-  const takenRef = useRef<HTMLButtonElement>(null);
-
-  // 画面が変わったら、いちばん上（「戻る」が見える位置）から始める。
-  // 前の画面でスクロールした位置が残っていると、戻るボタンが画面の外に隠れてしまう。
   const contentRef = useRef<HTMLDivElement>(null);
   useEffect(() => { contentRef.current?.scrollTo({ top: 0 }); }, [step]);
-
-  // スマホ枠の表示範囲より下に出ると気づけないので、出たら見える位置まで送る。
-  // block: 'nearest' にして、必要なぶんだけ動かす（'center' だと戻るボタンが押し出される）
-  useEffect(() => {
-    if (taken) takenRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [taken]);
-
-  const restoring = step === 'restore';
-
-  const go = (s: Step) => { setError(''); setTaken(false); setStep(s); };
-  const Back = ({ onClick, label }: { onClick: () => void; label: string }) => (
-    <button className="ob-back" onClick={onClick}><Icon.Back />{label}</button>
-  );
-
-  const paste = async () => {
-    try { setMac((await navigator.clipboard.readText()).trim()); setError(''); }
-    catch { setError('貼り付けできませんでした。欄を長押しして貼り付けてください'); }
-  };
-
-  const fillSample = () => {
-    const hex = () => Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
-    setMac(['5e', hex(), hex(), hex(), hex(), hex()].join(':'));
-    setError('');
-  };
-
-  // 登録済みのMACを、この端末に引き継ぐ
-  const restore = async (value: string) => {
-    setBusy(true); setError(''); setTaken(false);
-    callLog.begin('この端末に引き継ぐ');
-    try {
-      const r = await api.restore(value);
-      device.set(r.deviceToken);
-      device.setMac(value);
-      await completeRegistration();
-      showToast('この端末に引き継ぎました');
-      finishOnboarding('home');
-    } catch (e) {
-      setError((e as ApiError).message);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const go = (next: Step) => { setError(''); setStep(next); };
 
   const submit = async () => {
-    const m = normalizeMac(mac);
-    if (!validMac(m)) {
-      setError(m ? '形が正しくありません。「a2:3f:9c:1b:7e:44」のように、2文字ずつ「:」で区切った12文字です' : 'MACアドレスを入力してください');
+    const normalized = normalizeMac(mac);
+    if (!validMac(normalized) || normalized === '02:00:00:00:00:00') {
+      setError('キャンパスのWiFi設定に表示されたMACアドレスを入力してください');
       return;
     }
-    if (m === '02:00:00:00:00:00') { setError('この値は端末がMACアドレスを隠しているときの仮の値です。設定画面に出ている値を写してください'); return; }
-    if (restoring) { await restore(m); return; }
-
-    setBusy(true); setError(''); setTaken(false);
-    callLog.begin(reRegister ? 'MACアドレスを登録し直す' : 'はじめての登録');
+    if (!label.trim() || label.trim().length > 30) { setError('端末の名前は1〜30文字で入力してください'); return; }
+    setBusy(true); setError('');
+    callLog.begin('初回登録');
     try {
-      if (reRegister) {
-        setMe(await api.updateMac(m));
-        device.setMac(m);
-        setTab('settings');
-        cancelReregister();
-        showToast('MACアドレスを登録し直しました');
-      } else {
-        const r = await api.register(name.trim(), m);
-        device.set(r.deviceToken);
-        device.setMac(m);
-        await completeRegistration();
-        setStep('done');
-      }
-    } catch (e) {
-      const err = e as ApiError;
-      setError(err.message);
-      // すでに使われているMACなら、行き止まりにせず引き継ぎを出す
-      if (err.code === 'mac_taken') setTaken(true);
-    } finally {
-      setBusy(false);
-    }
+      await api.completeOnboarding(name.trim(), normalized, label.trim());
+      await completeRegistration();
+      setStep('done');
+    } catch (e) { setError((e as ApiError).message); }
+    finally { setBusy(false); }
   };
 
-  if (step === 'install') {
-    return <InstallStep onNext={() => go('welcome')} />;
-  }
-
-  if (step === 'welcome') {
-    return (
-      <div className="content ob" ref={contentRef}>
-        <div className="ob-hero">
-          <div className="wordmark big">COK<span>O</span>YO</div>
-          <h2>フレンドがキャンパスにいるか、<br />ボタンひとつで分かる</h2>
-        </div>
-        <InAppNotice />
-        <ul className="ob-list">
-          <li><span className="ob-ico"><Icon.Wifi /></span><span><b>位置情報は使いません</b>キャンパスのWiFiにつながっているかだけを見ます</span></li>
-          <li><span className="ob-ico best"><Icon.Friends size={18} /></span><span><b>見せる範囲は相手ごと</b>ベストフレンドにだけ建物まで。ブロックした相手には見えません</span></li>
-          <li><span className="ob-ico hide"><Icon.Hide /></span><span><b>いつでも隠れられます</b>かくれんぼ中は、フレンド全員から「いません」に見えます</span></li>
-        </ul>
-        {pendingInvite() && !inAppBrowser() && (
-          <p className="row-note">招待リンクから開きました。登録が終わると、そのまま相手に申請します。</p>
-        )}
-        <button className="btn btn-primary" onClick={() => go('name')}>はじめる</button>
-        <button className="btn btn-quiet" onClick={() => go('restore')}>登録ずみの方はこちら</button>
-      </div>
-    );
-  }
-
-  if (step === 'name') {
-    return (
-      <div className="content ob" ref={contentRef}>
-        <Back onClick={() => go('welcome')} label="戻る" />
-        <p className="ob-step">1 / 2</p>
-        <h2 className="ob-title">フレンドに表示される名前</h2>
-        <p className="ob-lead">あとから設定で変えられます。</p>
-        <label className="field-label" htmlFor="obName">表示名</label>
-        <input className="field" id="obName" maxLength={20} placeholder="例）ゆうき" value={name} autoComplete="nickname" autoFocus
-          onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) go('mac'); }} />
-        <button className="btn btn-primary" onClick={() => go('mac')} disabled={!name.trim()}>次へ</button>
-      </div>
-    );
-  }
-
-  if (step === 'mac' || restoring) {
+  if (step === 'install') return <InstallStep onNext={() => go('name')} />;
+  if (step === 'name') return (
+    <div className="content ob" ref={contentRef}>
+      <p className="ob-step">1 / 2</p>
+      <h2 className="ob-title">フレンドに表示される名前</h2>
+      <p className="ob-lead">Googleログインが完了しました。表示名はあとから変更できます。</p>
+      {pendingInvite() && <p className="row-note">登録後に招待リンクの相手へ申請します。</p>}
+      <label className="field-label" htmlFor="obName">表示名</label>
+      <input className="field" id="obName" maxLength={20} value={name} autoComplete="nickname" autoFocus
+        onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) go('mac'); }} />
+      <button className="btn btn-primary" onClick={() => go('mac')} disabled={!name.trim()}>次へ</button>
+    </div>
+  );
+  if (step === 'mac') {
     const guide = GUIDE[os];
     return (
       <div className="content ob" ref={contentRef}>
-        {reRegister ? <Back onClick={cancelReregister} label="設定に戻る" />
-          : restoring ? <Back onClick={() => go('welcome')} label="戻る" />
-          : <Back onClick={() => go('name')} label="戻る" />}
-        {!reRegister && !restoring && <p className="ob-step">2 / 2</p>}
-        <h2 className="ob-title">
-          {restoring ? 'この端末に引き継ぐ' : reRegister ? 'MACアドレスを登録し直す' : 'キャンパスのWiFiのMACアドレスを登録'}
-        </h2>
-        <p className="ob-lead">
-          {restoring
-            ? restoreMode
-              ? 'この端末の登録が見つかりませんでした。登録したときのMACアドレスを入れると、名前・フレンド・ポイントをそのまま引き継げます。'
-              : '登録したときのMACアドレスを入れてください。名前・フレンド・ポイントはそのまま引き継がれます。'
-            : 'WiFiにつなぐ機器ごとの識別番号です。これで「キャンパスにいるか」を判定します。フレンドには見せません。'}
-        </p>
-
+        <button className="ob-back" onClick={() => go('name')}><Icon.Back />戻る</button>
+        <p className="ob-step">2 / 2</p>
+        <h2 className="ob-title">最初の端末を登録</h2>
+        <p className="ob-lead">キャンパスのWiFiで使うMACアドレスを入力してください。あとから最大5台まで追加できます。</p>
         <div className="seg four" role="tablist" aria-label="端末の種類">
-          {OS_LIST.map((o) => (
-            <button key={o} role="tab" className={os === o ? 'on' : ''} aria-selected={os === o} onClick={() => setOs(o)}>
-              {GUIDE[o].label}
-            </button>
-          ))}
+          {OS_LIST.map((o) => <button key={o} role="tab" className={os === o ? 'on' : ''} aria-selected={os === o}
+            onClick={() => { setOs(o); setLabel(GUIDE[o].label); }}>{GUIDE[o].label}</button>)}
         </div>
-
-        <ol className="steps">{guide.steps.map((s, i) => <li key={i}><span>{s}</span></li>)}</ol>
-
-        {guide.sample}
-        {guide.note && <p className="row-note">{guide.note}</p>}
-
+        <ol className="steps">{guide.steps.map((item, i) => <li key={i}><span>{item}</span></li>)}</ol>
+        {guide.sample}{guide.note && <p className="row-note">{guide.note}</p>}
+        <label className="field-label" htmlFor="obLabel">端末の名前</label>
+        <input className="field" id="obLabel" maxLength={30} value={label} onChange={(e) => setLabel(e.target.value)} />
         <label className="field-label" htmlFor="obMac">MACアドレス</label>
-        <div className="field-row">
-          <input className="field mono" id="obMac" placeholder="例）a2:3f:9c:1b:7e:44" value={mac}
-            autoComplete="off" autoCapitalize="off" spellCheck={false} aria-describedby="obMacErr"
-            onChange={(e) => setMac(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void submit(); }} />
-          <button className="mini-btn" onClick={() => void paste()}>貼り付け</button>
-        </div>
+        <input className="field mono" id="obMac" placeholder="例）a2:3f:9c:1b:7e:44" value={mac}
+          autoComplete="off" autoCapitalize="off" spellCheck={false} aria-describedby="obMacErr"
+          onChange={(e) => setMac(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void submit(); }} />
         <p className="field-err" id="obMacErr" role="alert">{error}</p>
-        {taken && (
-          <button ref={takenRef} className="btn btn-quiet" onClick={() => void restore(normalizeMac(mac))} disabled={busy}>
-            このMACアドレスをこの端末に引き継ぐ
-          </button>
-        )}
-        {useMockBackend && !restoring && <button className="demo-link" onClick={fillSample}>（デモ）例のアドレスを入れる</button>}
-
-        <div className="notice">
-          <p><b>キャンパスではWiFiにつないでおいてください。</b>モバイルデータや有線LANだけだと検知できません。</p>
-          <p className="muted">
-            {restoring
-              ? '前に使っていた端末は、引き継ぐとログアウトされます。'
-              : '本人確認の仕組みができるまでの暫定の登録方法です。'}
-          </p>
-        </div>
-
-        <button className="btn btn-primary" onClick={() => void submit()} disabled={busy}>
-          {busy ? (restoring ? '引き継いでいます…' : '登録しています…')
-            : restoring ? '引き継ぐ' : reRegister ? '登録し直す' : '登録する'}
-        </button>
+        {useMockBackend && <button className="demo-link" onClick={() => setMac('5e:12:34:56:78:90')}>（デモ）例のアドレスを入れる</button>}
+        <div className="notice"><p>MACアドレスの入力は本人申告です。Googleログインだけでは端末の所有は確認できません。</p></div>
+        <button className="btn btn-primary" onClick={() => void submit()} disabled={busy}>{busy ? '登録しています…' : '登録する'}</button>
       </div>
     );
   }
-
   return (
-    <div className="content ob ob-done" ref={contentRef}>
+    <div className="content ob ob-done">
       <div className="done-mark"><Icon.Check /></div>
       <h2 className="ob-title">登録しました</h2>
       <p className="ob-lead">キャンパスで「ポイント獲得（在校確認）」を押すと、あなたとフレンドの様子が分かります。</p>
       <button className="btn btn-primary" onClick={() => finishOnboarding('friends')}>フレンドを追加する</button>
       <button className="btn btn-quiet" onClick={() => finishOnboarding('home')}>あとで</button>
-    </div>
-  );
-}
-
-/**
- * LINE やインスタの中のブラウザで開かれたときの案内。
- *
- * そのまま登録すると、ふだんのブラウザのアカウントとは別に、もう1つできてしまう。
- * （フレンドの申請が片方にだけ届く、という食い違いの原因になる。）
- */
-function InAppNotice() {
-  const kind = inAppBrowser();
-  const [copied, setCopied] = useState(false);
-  if (!kind) return null;
-
-  const here = window.location.href;
-  const intent = openInBrowserUrl(here);
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(here); setCopied(true); } catch { setCopied(false); }
-  };
-
-  return (
-    <div className="inapp">
-      <p className="inapp-title">{inAppName(kind)}の中のブラウザで開いています</p>
-      <p className="inapp-body">
-        このまま登録すると、ふだん使っているブラウザとは<b>別のアプリ</b>として扱われます。
-        すでに登録している人は、もう一度登録することになってしまいます。
-      </p>
-      <p className="inapp-body"><b>{howToOpen(kind)}</b></p>
-      {intent
-        ? <button className="btn btn-primary" onClick={() => { window.location.href = intent; }}>Chromeで開く</button>
-        : <button className="btn btn-quiet" onClick={() => void copy()}>{copied ? 'コピーしました' : 'このページのリンクをコピー'}</button>}
     </div>
   );
 }

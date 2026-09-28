@@ -10,8 +10,8 @@
 import type { BestState, BuildingKey, PointItem, PointKind, Reaction } from './types';
 import { BUILDING_KEYS, BUILDING_LABELS } from './types';
 
-// v2：建物をラベルの文字列ではなく buildingKey で持つようにしたので、古い保存は捨てる
-const STORE_KEY = 'cokoyo-mock-backend:v2';
+// Google アカウントと複数MACの形に変わったため、旧デモの保存は使わない。
+const STORE_KEY = 'cokoyo-mock-backend:v4';
 
 // ---------------------------------------------------------------
 // ポイントの決まり
@@ -32,8 +32,8 @@ export const buildingLabel = (key: BuildingKey) => BUILDING_LABELS[key];
 // ---------------------------------------------------------------
 // データの形（バックエンドの中だけで使う）
 // ---------------------------------------------------------------
-interface DbUser { name: string; mac: string; shareKey: string; token: string | null; hidden: boolean; macRegisteredAt: string; createdAt: string; avatar?: string }
-interface Campus { connected: boolean; buildingKey: BuildingKey }
+interface DbUser { name: string; mac: string; shareKey: string; hidden: boolean; macRegisteredAt: string; createdAt: string; email?: string; avatar?: string; macs?: { id: number; mac: string; label: string; registeredAt: string }[]; onboarded?: boolean }
+interface Campus { connected: boolean; buildingKey: BuildingKey; unavailable?: boolean }
 interface Ledger {
   total: number;
   visitDays: string[];
@@ -43,6 +43,7 @@ interface Ledger {
 interface Db {
   users: Record<string, DbUser>;
   campus: Record<string, Campus>;
+  macCampus?: Record<string, Campus>;
   friendships: { a: string; b: string; since: string }[];
   friendRequests: { id: string; from: string; to: string; createdAt: string }[];
   best: { a: string; b: string; since: string }[];
@@ -91,20 +92,20 @@ const rand = (prefix: string, n: number) => prefix + Array.from(crypto.getRandom
 // ---------------------------------------------------------------
 // 最初の状態
 // ---------------------------------------------------------------
-const DEMO_TOKEN = 'dt_demo_me';
-
 function seed(): Db {
   const today = startOfDay(new Date());
   const wd = prevWeekdays(today, 4); // 昨日までの平日4日 → 今日来ると5日連続
   const ago = (n: number) => addDays(today, -n).toISOString();
   const user = (name: string, mac: string, shareKey: string, extra: Partial<DbUser> = {}): DbUser => ({
-    name, mac, shareKey, token: null, hidden: false, macRegisteredAt: ago(20), createdAt: ago(30), ...extra,
+    name, mac, shareKey, hidden: false, macRegisteredAt: ago(20), createdAt: ago(30),
+    email: `user-${mac.replace(/:/g, '').slice(0, 8)}@keio.jp`,
+    macs: [{ id: 1, mac, label: '端末', registeredAt: ago(20) }], onboarded: true, ...extra,
   });
   const empty = (): Ledger => ({ total: 0, visitDays: [], lastMatch: {}, days: {} });
 
   return {
     users: {
-      u_me:        user('ゆうき', 'a2:3f:9c:1b:7e:44', 'sk_m8qe4tz2', { token: DEMO_TOKEN, macRegisteredAt: ago(12) }),
+      u_me:        user('ゆうき', 'a2:3f:9c:1b:7e:44', 'sk_m8qe4tz2', { macRegisteredAt: ago(12) }),
       u_sato:      user('佐藤',   '5c:e1:08:77:3a:b2', 'sk_s3nv7kpa'),
       u_tanaka:    user('田中',   'd6:4b:92:0f:c8:13', 'sk_t9wd2hxe'),
       u_suzuki:    user('鈴木',   '7e:a0:5d:e6:21:9f', 'sk_z4rc8mfu', { hidden: true }),
@@ -150,6 +151,15 @@ let db: Db = (() => {
   return seed();
 })();
 const save = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(db)); } catch { /* 保存できない環境 */ } };
+const SESSION_KEY = 'cokoyo-mock-session:v2';
+let sessionUid: string | null = (() => {
+  try { const saved = localStorage.getItem(SESSION_KEY); return saved === null ? 'u_me' : saved || null; }
+  catch { return 'u_me'; }
+})();
+const setSession = (uid: string | null) => {
+  sessionUid = uid;
+  try { localStorage.setItem(SESSION_KEY, uid ?? ''); } catch { /* 保存できない環境 */ }
+};
 
 // ---------------------------------------------------------------
 // 関係の判定
@@ -170,19 +180,34 @@ function bestState(me: string, other: string): BestState {
 
 // viewer に target の在校を見せてよいか。だめなら「いない」と同じ形で返す（理由は区別しない）
 function visiblePresence(viewer: string, target: string): { present: boolean; building?: string; buildingKey?: BuildingKey } {
-  const c = db.campus[target];
+  const c = aggregatePresence(target);
   const u = db.users[target];
-  if (!c || !c.connected || u.hidden || blockedEither(viewer, target) || !isFriend(viewer, target)) return { present: false };
+  if (c.presence !== 'present' || u.hidden || blockedEither(viewer, target) || !isFriend(viewer, target)) return { present: false };
   // 建物を出すのはベストフレンド同士のときだけ。本物のバックエンドと同じ条件。
-  return isBest(viewer, target)
+  return isBest(viewer, target) && c.buildingKey
     ? { present: true, building: BUILDING_LABELS[c.buildingKey], buildingKey: c.buildingKey }
     : { present: true };
 }
 
-const publicUser = (uid: string) => ({ userId: uid, displayName: db.users[uid].name, ...(db.users[uid].avatar ? { avatar: db.users[uid].avatar } : {}) });
+const publicUser = (uid: string) => ({ userId: uid, displayName: db.users[uid].name,
+  ...(db.users[uid].avatar ? { avatar: db.users[uid].avatar } : {}) });
 const maskMac = (mac: string) => { const p = mac.split(':'); return `${p[0]}:${p[1]}:••:••:••:${p[5]}`; };
 const normalizeMac = (s: unknown) => String(s ?? '').trim().toLowerCase().replace(/-/g, ':');
-const validMac = (s: string) => /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(s);
+const validMac = (s: string) => /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(s) && s !== '02:00:00:00:00:00';
+const macsOf = (uid: string) => db.users[uid].macs ?? (db.users[uid].macs = [{ id: 1, mac: db.users[uid].mac, label: '端末', registeredAt: db.users[uid].macRegisteredAt }]);
+const macView = (entry: { id: number; mac: string; label: string; registeredAt: string }) =>
+  ({ id: entry.id, label: entry.label, macMasked: maskMac(entry.mac), registeredAt: entry.registeredAt });
+const macOwner = (mac: string) => Object.keys(db.users).find((uid) => macsOf(uid).some((entry) => entry.mac === mac));
+const macCampus = (uid: string, id: number): Campus => db.macCampus?.[`${uid}:${id}`] ?? db.campus[uid];
+function aggregatePresence(uid: string): { presence: 'present' | 'absent' | 'unknown'; buildingKey: BuildingKey | null } {
+  const observations = macsOf(uid).map((entry) => macCampus(uid, entry.id));
+  const present = observations.filter((c) => c.connected && !c.unavailable);
+  if (present.length) {
+    const keys = new Set(present.map((c) => c.buildingKey));
+    return { presence: 'present', buildingKey: keys.size === 1 && !observations.some((c) => c.unavailable) ? present[0].buildingKey : null };
+  }
+  return { presence: observations.some((c) => c.unavailable) ? 'unknown' : 'absent', buildingKey: null };
+}
 
 // ---------------------------------------------------------------
 // API本体
@@ -193,16 +218,11 @@ const ok = (json: unknown, status = 200): MockResult => ({ status, json });
 
 function meView(uid: string) {
   const u = db.users[uid];
-  return {
-    userId: uid, displayName: u.name, shareKey: u.shareKey, hidden: u.hidden,
-    macMasked: maskMac(u.mac), macRegisteredAt: u.macRegisteredAt,
-    ...(u.avatar ? { avatar: u.avatar } : {}),
-  };
+  return { ...publicUser(uid), email: u.email ?? 'demo@keio.jp', shareKey: u.shareKey, hidden: u.hidden, macs: macsOf(uid).map(macView) };
 }
 
-// PUT / DELETE /v1/me/avatar — アイコンの画像（data URL）
 const AVATAR_MAX = 120 * 1024;
-function updateAvatar(uid: string, body: Body) {
+function updateAvatar(uid: string, body: Body): MockResult {
   const image = String(body.image ?? '');
   if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(image)) return E(400, 'invalid_avatar', '画像の形式が正しくありません（JPEG・PNG・WebP）');
   if (image.length > AVATAR_MAX) return E(400, 'avatar_too_large', '画像が大きすぎます');
@@ -210,37 +230,54 @@ function updateAvatar(uid: string, body: Body) {
   return ok(meView(uid));
 }
 
+function completeOnboarding(uid: string, body: Body): MockResult {
+  const name = String(body.displayName ?? '').trim();
+  const label = String(body.label ?? '').trim();
+  const mac = normalizeMac(body.mac);
+  if (!name || name.length > 20) return E(400, 'invalid_name', '表示名は1〜20文字で入力してください');
+  if (!label || label.length > 30) return E(400, 'invalid_label', '端末の名前は1〜30文字で入力してください');
+  if (!validMac(mac)) return E(400, 'invalid_mac', 'MACアドレスの形式が正しくありません');
+  if (macOwner(mac)) return E(409, 'mac_taken', 'このMACアドレスはすでに登録されています');
+  const u = db.users[uid];
+  if (u.onboarded !== false) return E(409, 'already_onboarded', '初回登録は完了しています');
+  u.name = name; u.mac = mac; u.shareKey = rand('sk_', 8); u.onboarded = true;
+  u.macRegisteredAt = new Date().toISOString();
+  u.macs = [{ id: 1, mac, label, registeredAt: u.macRegisteredAt }];
+  return ok(meView(uid), 201);
+}
+
+function addMac(uid: string, body: Body): MockResult {
+  const mac = normalizeMac(body.mac);
+  const label = String(body.label ?? '').trim();
+  if (!validMac(mac)) return E(400, 'invalid_mac', 'MACアドレスの形式が正しくありません');
+  if (!label || label.length > 30) return E(400, 'invalid_label', '端末の名前は1〜30文字で入力してください');
+  if (macOwner(mac)) return E(409, 'mac_taken', 'このMACアドレスはすでに登録されています');
+  const macs = macsOf(uid);
+  if (macs.length >= 5) return E(409, 'mac_limit', '登録できる端末は5台までです');
+  const entry = { id: Math.max(0, ...macs.map((m) => m.id)) + 1, mac, label, registeredAt: new Date().toISOString() };
+  macs.push(entry);
+  return ok(macView(entry), 201);
+}
+
+function editMac(uid: string, id: number, body: Body): MockResult {
+  const entry = macsOf(uid).find((m) => m.id === id);
+  if (!entry) return E(404, 'mac_not_found', 'この端末は見つかりません');
+  const mac = body.mac === undefined ? entry.mac : normalizeMac(body.mac);
+  const label = body.label === undefined ? entry.label : String(body.label).trim();
+  if (!validMac(mac)) return E(400, 'invalid_mac', 'MACアドレスの形式が正しくありません');
+  if (!label || label.length > 30) return E(400, 'invalid_label', '端末の名前は1〜30文字で入力してください');
+  if (macOwner(mac) && mac !== entry.mac) return E(409, 'mac_taken', 'このMACアドレスはすでに登録されています');
+  if (mac !== entry.mac) entry.registeredAt = new Date().toISOString();
+  entry.mac = mac; entry.label = label;
+  if (id === 1) db.users[uid].mac = mac;
+  return ok(macView(entry));
+}
+
 function pointsView(uid: string) {
   const pts = db.points[uid];
   const t = fmt(startOfDay(new Date()));
   const items = pts.days[t]?.items ?? [];
   return { date: t, today: { items, total: items.reduce((s, i) => s + i.pts, 0) }, total: pts.total };
-}
-
-// POST /v1/users — はじめての登録（ログインなし。端末トークンを返す）
-function createUser(body: Body) {
-  const name = String(body.displayName ?? '').trim();
-  const mac = normalizeMac(body.mac);
-  if (!name || name.length > 20) return E(400, 'invalid_name', '表示名は1〜20文字で入力してください');
-  if (!validMac(mac)) return E(400, 'invalid_mac', 'MACアドレスの形が正しくありません（例：a2:3f:9c:1b:7e:44）');
-  if (Object.values(db.users).some((u) => u.mac === mac)) return E(409, 'mac_taken', 'このMACアドレスはすでに登録されています');
-  const uid = rand('u_', 8);
-  const now = new Date().toISOString();
-  db.users[uid] = { name, mac, shareKey: rand('sk_', 8), token: rand('dt_', 20), hidden: false, macRegisteredAt: now, createdAt: now };
-  db.campus[uid] = { connected: false, buildingKey: 'kappa' };
-  db.points[uid] = { total: 0, visitDays: [], lastMatch: {}, days: {} };
-  return ok({ ...meView(uid), deviceToken: db.users[uid].token }, 201);
-}
-
-// POST /v1/sessions — 登録済みのMACをこの端末に引き継ぐ
-function restoreSession(body: Body) {
-  const mac = normalizeMac(body.mac);
-  if (!validMac(mac)) return E(400, 'invalid_mac', 'MACアドレスの形が正しくありません（例：a2:3f:9c:1b:7e:44）');
-  const uid = Object.keys(db.users).find((id) => db.users[id].mac === mac);
-  if (!uid) return E(404, 'mac_not_registered', 'このMACアドレスはまだ登録されていません');
-  db.users[uid].token = rand('dt_', 20); // 前の端末は使えなくなる
-  save();
-  return ok({ ...meView(uid), deviceToken: db.users[uid].token });
 }
 
 // PATCH /v1/me — 表示名・かくれんぼ
@@ -255,16 +292,6 @@ function updateMe(uid: string, body: Body) {
     if (typeof body.hidden !== 'boolean') return E(400, 'invalid_hidden', 'hidden は true か false で指定してください');
     u.hidden = body.hidden;
   }
-  return ok(meView(uid));
-}
-
-// PUT /v1/me/mac — MACアドレスの登録し直し
-function updateMac(uid: string, body: Body) {
-  const mac = normalizeMac(body.mac);
-  if (!validMac(mac)) return E(400, 'invalid_mac', 'MACアドレスの形が正しくありません（例：a2:3f:9c:1b:7e:44）');
-  if (Object.entries(db.users).some(([id, u]) => id !== uid && u.mac === mac)) return E(409, 'mac_taken', 'このMACアドレスはすでに登録されています');
-  db.users[uid].mac = mac;
-  db.users[uid].macRegisteredAt = new Date().toISOString();
   return ok(meView(uid));
 }
 
@@ -289,19 +316,12 @@ function makeFriends(a: string, b: string) {
 
 // POST /v1/friends — QRコード（すぐ成立）かリンク（相手の承認が必要）でフレンド追加
 function addFriend(uid: string, body: Body) {
-  const via = body.via === 'qr' ? 'qr' : body.via === 'mac' ? 'mac' : 'link';
-  let target: string | undefined;
-  if (via === 'mac') {
-    const mac = normalizeMac(body.mac);
-    if (!validMac(mac)) return E(400, 'invalid_mac', 'MACアドレスの形式が正しくありません');
-    target = Object.keys(db.users).find((id) => db.users[id].mac === mac);
-    if (!target) return E(404, 'mac_not_registered', 'このMACアドレスの人は、まだ登録していません');
-  } else {
-    const key = String(body.shareKey ?? '').trim();
-    target = Object.keys(db.users).find((id) => db.users[id].shareKey === key);
-    if (!target) return E(404, 'share_key_not_found', 'このQRコード・リンクは見つかりません');
-  }
-  if (target === uid) return E(400, 'self', via === 'mac' ? '自分のMACアドレスです' : '自分のQRコードです');
+  if (body.via === 'mac' || body.mac !== undefined) return E(400, 'unsupported_friend_method', 'MACでのフレンド検索は終了しました');
+  const via = body.via === 'qr' ? 'qr' : 'link';
+  const key = String(body.shareKey ?? '').trim();
+  const target = Object.keys(db.users).find((id) => db.users[id].shareKey === key);
+  if (!target) return E(404, 'share_key_not_found', 'このQRコード・リンクは見つかりません');
+  if (target === uid) return E(400, 'self', '自分のQRコードです');
   if (blockedBy(uid, target)) return E(409, 'blocked_by_you', 'ブロック中の相手です。フレンド画面で解除してください');
   if (isFriend(uid, target)) return E(409, 'already_friends', `${db.users[target].name}さんとはすでにフレンドです`);
   // 相手にブロックされている場合は、ブロックされていることが分からないよう「申請した」と同じ形で返す
@@ -370,8 +390,8 @@ function check(uid: string) {
   const today = startOfDay(now);
   const t = fmt(today);
   const me = db.users[uid];
-  const c = db.campus[uid];
-  const present = !!c?.connected;
+  const c = aggregatePresence(uid);
+  const present = c.presence === 'present';
   const rainy = RAINY.includes(db.weather);
 
   const friends = friendIdsOf(uid).map((o) => o.id).filter((id) => !blockedBy(uid, id))
@@ -382,7 +402,7 @@ function check(uid: string) {
   let notice: string | null = null;
 
   if (!present) {
-    notice = 'キャンパス外なので、ポイントは入りません';
+    notice = c.presence === 'unknown' ? '在校を判定できなかったため、ポイントは入りません' : 'キャンパス外なので、ポイントは入りません';
   } else {
     const day = pts.days[t] ?? (pts.days[t] = { baseDone: false, items: [], matched: {} });
     // その日はじめてのときだけ：来校ベース・連続・雨
@@ -433,9 +453,9 @@ function check(uid: string) {
   return ok({
     checkedAt: now.toISOString(),
     me: {
-      present,
-      building: present ? BUILDING_LABELS[c.buildingKey] : null,
-      buildingKey: present ? c.buildingKey : null,
+      presence: c.presence,
+      building: c.buildingKey ? BUILDING_LABELS[c.buildingKey] : null,
+      buildingKey: c.buildingKey,
       hidden: me.hidden,
     },
     weather: { condition: db.weather, rainy },
@@ -468,25 +488,30 @@ function sendReaction(uid: string, other: string, body: Body) {
 // ---------------------------------------------------------------
 // 受け付け口
 // ---------------------------------------------------------------
-function userFromToken(headers: Record<string, string>) {
-  const m = /^Bearer\s+(\S+)$/.exec(headers.Authorization ?? headers.authorization ?? '');
-  if (!m) return null;
-  return Object.keys(db.users).find((id) => db.users[id].token === m[1]) ?? null;
-}
-
-function route(method: string, path: string, headers: Record<string, string>, body: Body): MockResult {
-  if (method === 'POST' && path === '/v1/users') return createUser(body);
-  if (method === 'POST' && path === '/v1/sessions') return restoreSession(body);
-
-  const uid = userFromToken(headers);
-  if (!uid) return E(401, 'unauthorized', 'この端末は登録されていません。登録からやり直してください');
+function route(method: string, path: string, _headers: Record<string, string>, body: Body): MockResult {
+  const uid = sessionUid;
+  if (method === 'POST' && path === '/v1/auth/logout') { setSession(null); return { status: 204, json: null }; }
+  if (!uid || !db.users[uid]) return E(401, 'unauthorized', 'Googleでログインしてください');
+  if (method === 'GET' && path === '/v1/auth/session') return ok({ email: db.users[uid].email ?? 'demo@keio.jp', status: db.users[uid].onboarded === false ? 'onboarding' : 'ready' });
+  if (method === 'POST' && path === '/v1/auth/logout-all') { setSession(null); return { status: 204, json: null }; }
+  if (method === 'POST' && path === '/v1/onboarding') return completeOnboarding(uid, body);
+  if (db.users[uid].onboarded === false) return E(403, 'onboarding_required', '初回登録を完了してください');
 
   if (method === 'GET' && path === '/v1/me') return ok(meView(uid));
   if (method === 'PATCH' && path === '/v1/me') return updateMe(uid, body);
-  if (method === 'PUT' && path === '/v1/me/mac') return updateMac(uid, body);
   if (method === 'PUT' && path === '/v1/me/avatar') return updateAvatar(uid, body);
   if (method === 'DELETE' && path === '/v1/me/avatar') { delete db.users[uid].avatar; return ok(meView(uid)); }
-  if (method === 'DELETE' && path === '/v1/sessions') { db.users[uid].token = null; return { status: 204, json: null }; }
+  if (method === 'GET' && path === '/v1/me/macs') return ok({ macs: macsOf(uid).map(macView), limit: 5 });
+  if (method === 'POST' && path === '/v1/me/macs') return addMac(uid, body);
+  const macMatch = /^\/v1\/me\/macs\/(\d+)$/.exec(path);
+  if (macMatch && method === 'PATCH') return editMac(uid, Number(macMatch[1]), body);
+  if (macMatch && method === 'DELETE') {
+    const macs = macsOf(uid);
+    if (!macs.some((m) => m.id === Number(macMatch[1]))) return E(404, 'mac_not_found', 'この端末は見つかりません');
+    if (macs.length <= 1) return E(409, 'last_mac', '最後の端末は削除できません');
+    db.users[uid].macs = macs.filter((m) => m.id !== Number(macMatch[1]));
+    return { status: 204, json: null };
+  }
   if (method === 'GET' && path === '/v1/points') return ok(pointsView(uid));
   if (method === 'POST' && path === '/v1/checks') return check(uid);
   if (method === 'GET' && path === '/v1/friends') return listFriends(uid);
@@ -525,7 +550,23 @@ export interface SimPerson extends Campus {
 }
 
 const sim = {
-  demoToken: DEMO_TOKEN,
+  signedIn() { return !!sessionUid; },
+  currentUserId() { return sessionUid; },
+  login() { setSession('u_me'); },
+  macStates(uid: string) { return macsOf(uid).map((entry) => ({ ...entry, ...macCampus(uid, entry.id) })); },
+  setMacCampus(uid: string, id: number, patch: Partial<Campus>) {
+    db.macCampus ??= {};
+    db.macCampus[`${uid}:${id}`] = { ...macCampus(uid, id), ...patch };
+    save();
+  },
+  startNewAccount() {
+    const now = new Date().toISOString();
+    db.users.u_new = { name: '', mac: '', shareKey: '', hidden: false,
+      macRegisteredAt: now, createdAt: now, email: 'new@keio.jp', macs: [], onboarded: false };
+    db.campus.u_new = { connected: false, buildingKey: 'kappa' };
+    db.points.u_new = { total: 0, visitDays: [], lastMatch: {}, days: {} };
+    setSession('u_new'); save();
+  },
   state(currentUid: string | null): { people: SimPerson[]; weather: string } {
     const people = Object.keys(db.users).map((id): SimPerson => {
       let relation: SimPerson['relation'] = 'フレンドではない';
@@ -554,8 +595,7 @@ const sim = {
   requestBestFrom(from: string, currentUid: string) { requestBest(from, currentUid); save(); },
   // 相手がこちらのスライムを連打した（相手のスライムがこちらの画面に出たときに届く）
   reactFrom(from: string, currentUid: string, count: number) { sendReaction(from, currentUid, { count }); save(); },
-  userIdForToken(token: string | null) { return token ? Object.keys(db.users).find((id) => db.users[id].token === token) ?? null : null; },
-  reset() { db = seed(); save(); },
+  reset() { db = seed(); setSession('u_me'); save(); },
 };
 
 export const mockBackend = { handle, sim };

@@ -8,6 +8,9 @@ import { FieldView } from './FieldView';
 import { Friends } from './Friends';
 import { Home } from './Home';
 import { Onboarding } from './Onboarding';
+import { api } from '../api/client';
+import { inAppBrowser } from '../app/browser';
+import { InAppNotice } from './InAppNotice';
 import { Settings } from './Settings';
 import { TotalPoints } from './TotalPoints';
 import { Icon } from './ui';
@@ -53,7 +56,7 @@ function AppScreens() {
 }
 
 export function Phone() {
-  const { view, error, screenRef, toast, restart, onboardingMode, mapOpen } = useApp();
+  const { view, error, screenRef, toast, restart, mapOpen } = useApp();
   return (
     <div className="device-col">
       <div className="device">
@@ -67,6 +70,16 @@ export function Phone() {
           </div>
           <div className="view">
             {view === 'loading' && <div className="center-note">読み込み中…</div>}
+            {view === 'login' && (
+              <div className="content ob">
+                <div className="ob-hero"><div className="wordmark big">COK<span>O</span>YO</div><h2>フレンドがキャンパスにいるか、ボタンひとつで分かる</h2></div>
+                <p className="ob-lead">keio.jp のGoogleアカウントでログインしてください。</p>
+                {inAppBrowser()
+                  ? <InAppNotice />
+                  : <button className="btn btn-primary" onClick={api.beginLogin}>Googleでログイン</button>}
+                <p className="row-note">位置情報は使いません。キャンパスのWiFiにつながっている端末で在校を判定します。</p>
+              </div>
+            )}
             {view === 'error' && (
               <div className="content center-note">
                 <p className="err-title">バックエンドに接続できません</p>
@@ -74,7 +87,7 @@ export function Phone() {
                 <button className="btn btn-quiet" onClick={() => void restart()}>もう一度試す</button>
               </div>
             )}
-            {view === 'onboarding' && <Onboarding key={onboardingMode} />}
+            {view === 'onboarding' && <Onboarding />}
             {view === 'app' && <AppScreens />}
           </div>
           {view === 'app' && mapOpen && <CampusMap />}

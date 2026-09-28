@@ -17,6 +17,13 @@ main() {
   cd "$(dirname "$0")/.."
   local repo="$PWD"
 
+  # v2 は旧DBとは互換性がない。OAuth 設定がないまま画面だけ切り替わる事故を防ぐ。
+  local env_file=backend/.env.production
+  test -s "$env_file" || { echo "$env_file を先に配置してください" >&2; exit 1; }
+  grep -qE '^APP_ORIGIN=https://cokoyo\.lazyta-toru\.net$' "$env_file" || { echo "APP_ORIGIN が本番URLと一致しません" >&2; exit 1; }
+  grep -qE '^GOOGLE_CLIENT_ID=.+$' "$env_file" || { echo "GOOGLE_CLIENT_ID が未設定です" >&2; exit 1; }
+  grep -qE '^GOOGLE_CLIENT_SECRET=.+$' "$env_file" || { echo "GOOGLE_CLIENT_SECRET が未設定です" >&2; exit 1; }
+
   echo "==> git pull"
   git pull
 
@@ -49,11 +56,15 @@ main() {
   echo
   echo "==> 確認"
   local b=https://cokoyo.lazyta-toru.net
-  curl -s -o /dev/null -w "/            %{http_code}\n" $b/
-  curl -s -o /dev/null -w "/explain/    %{http_code}\n" $b/explain/
-  curl -s -o /dev/null -w "/test/       %{http_code}\n" $b/test/
-  curl -s -o /dev/null -w "/documents/  %{http_code}\n" $b/documents/
-  curl -s $b/api/health; echo
+  local path status
+  for path in / /explain/ /test/ /documents/; do
+    status=$(curl --silent --show-error -o /dev/null -w '%{http_code}' "$b$path")
+    echo "$path $status"
+    test "$status" = 200
+  done
+  curl --fail --silent --show-error $b/api/health; echo
+  # 認証Cookieなしなら401。Googleの資格情報をログに出さずに疎通を確認する。
+  test "$(curl -s -o /dev/null -w '%{http_code}' "$b/api/v1/auth/session")" = 401
 }
 
 main "$@"
