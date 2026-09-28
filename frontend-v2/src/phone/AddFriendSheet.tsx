@@ -4,13 +4,14 @@
 //   リンクで共有 … 招待リンクを送る・コピーする。共有キーも出しておく。
 //                  相手のキーやMACアドレスを入力して申請するのもここ
 
-import { QRCodeSVG } from 'qrcode.react';
-import { useState } from 'react';
+import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
+import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../app/AppContext';
 import { api } from '../api/client';
 import { mockBackend } from '../api/mockBackend';
 import { shareLink, useMockBackend } from '../config';
 import { QrScanner } from './QrScanner';
+import { drawStory, shareStory, tweetUrl } from './share';
 import { Avatar } from './ui';
 
 export function AddFriendSheet() {
@@ -18,6 +19,13 @@ export function AddFriendSheet() {
   const [manualKey, setManualKey] = useState('');
   const [manualMac, setManualMac] = useState('');
   const open = view === 'app' && sheet.open && !!me;
+
+  // ストーリーズの画像に貼るQRコード（画面には出さない）
+  const qrBox = useRef<HTMLDivElement>(null);
+
+  // タブを変えたら、シートの中もいちばん上から見せる
+  const sheetRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { sheetRef.current?.scrollTo({ top: 0 }); }, [sheet.mode, sheet.open]);
 
   const reset = () => { setManualKey(''); setManualMac(''); };
 
@@ -50,6 +58,18 @@ export function AddFriendSheet() {
     catch (e) { if ((e as DOMException).name !== 'AbortError') void copy(link, '招待リンクをコピーしました'); }
   };
 
+  // インスタのストーリーズに貼る画像を作って、共有シート（または保存）に渡す
+  const shareStoryImage = async () => {
+    const qr = qrBox.current?.querySelector('canvas');
+    if (!qr || !me) { showToast('画像を作れませんでした'); return; }
+    try {
+      const message = await shareStory(drawStory(qr, me.displayName, new URL(link).host), link);
+      if (message) showToast(message);
+    } catch (e) {
+      showToast((e as Error).message);
+    }
+  };
+
   const candidates = useMockBackend && me
     ? mockBackend.sim.state(me.userId).people.filter((p) => p.relation === 'フレンドではない' || p.relation === '申請が届いている' || p.relation === '申請中')
     : [];
@@ -59,7 +79,7 @@ export function AddFriendSheet() {
   return (
     <>
       <div className={`backdrop${open ? ' open' : ''}`} onClick={closeSheet} />
-      <div className={`sheet${open ? ' open' : ''}`} role="dialog" aria-labelledby="sheetTitle" aria-hidden={!open}>
+      <div ref={sheetRef} className={`sheet${open ? ' open' : ''}`} role="dialog" aria-labelledby="sheetTitle" aria-hidden={!open}>
         {open && me && (
           <>
             <div className="grab" />
@@ -122,6 +142,26 @@ export function AddFriendSheet() {
                 </div>
                 <p className="note">リンクが開けない相手には、このキーを伝えて「相手の共有キーを入力」から申請してもらえます。</p>
 
+                <div className="sns">
+                  <p className="sns-cap">SNSで誘う</p>
+                  <div className="sns-row">
+                    <button className="sns-btn x" onClick={() => window.open(tweetUrl(link), '_blank', 'noopener')}>
+                      <XIcon />Xで共有
+                    </button>
+                    <button className="sns-btn ig" onClick={() => void shareStoryImage()}>
+                      <StoryIcon />ストーリーズ
+                    </button>
+                  </div>
+                  <p className="row-note">
+                    受け取った人は、リンクを開いて登録するだけでフレンドの申請が飛びます（あなたが承認するとフレンドになります）。
+                    「ストーリーズ」を押すと、貼るだけの画像（9:16）を作ります。QRコードが入っているので、画面を写してもらっても大丈夫です。
+                  </p>
+                </div>
+                {/* 画像を作るときだけ使うQRコード。画面には出さない */}
+                <div ref={qrBox} className="qr-hidden" aria-hidden="true">
+                  <QRCodeCanvas value={link} size={480} level="M" marginSize={2} fgColor="#1C1917" bgColor="#FFFFFF" />
+                </div>
+
                 <details className="manual">
                   <summary>相手の共有キーを入力</summary>
                   <div className="field-row">
@@ -157,6 +197,23 @@ export function AddFriendSheet() {
         )}
       </div>
     </>
+  );
+}
+
+function XIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M18.9 2H22l-7 8 8.2 12h-6.4l-5-7.3L5.9 22H2.8l7.5-8.6L2.4 2h6.6l4.5 6.7L18.9 2Zm-1.1 18h1.7L7.3 3.8H5.5L17.8 20Z" />
+    </svg>
+  );
+}
+
+function StoryIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="6" y="2.5" width="12" height="19" rx="3" /><circle cx="12" cy="10.5" r="3" /><path d="M9 17h6" />
+    </svg>
   );
 }
 

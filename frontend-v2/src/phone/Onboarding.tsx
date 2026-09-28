@@ -106,11 +106,13 @@ const validMac = (s: string) => /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(s);
 export function Onboarding() {
   const { onboardingMode, cancelReregister, completeRegistration, finishOnboarding, setMe, showToast, setTab } = useApp();
   const reRegister = onboardingMode === 'reregister';
+  // 端末トークンだけ消えた人は、覚えているMACアドレスを入れた引き継ぎの画面から始める
+  const restoreMode = onboardingMode === 'restore';
   // ホーム画面に追加できる端末なら、いちばん最初にその案内を出す
   const { canOffer } = useInstall();
-  const [step, setStep] = useState<Step>(reRegister ? 'mac' : canOffer ? 'install' : 'welcome');
+  const [step, setStep] = useState<Step>(reRegister ? 'mac' : restoreMode ? 'restore' : canOffer ? 'install' : 'welcome');
   const [name, setName] = useState('');
-  const [mac, setMac] = useState('');
+  const [mac, setMac] = useState(() => (onboardingMode === 'restore' ? device.mac : ''));
   const [os, setOs] = useState<Os>('ios');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -118,9 +120,15 @@ export function Onboarding() {
   const [taken, setTaken] = useState(false);
   const takenRef = useRef<HTMLButtonElement>(null);
 
-  // スマホ枠の表示範囲より下に出ると気づけないので、出たら見える位置まで送る
+  // 画面が変わったら、いちばん上（「戻る」が見える位置）から始める。
+  // 前の画面でスクロールした位置が残っていると、戻るボタンが画面の外に隠れてしまう。
+  const contentRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { contentRef.current?.scrollTo({ top: 0 }); }, [step]);
+
+  // スマホ枠の表示範囲より下に出ると気づけないので、出たら見える位置まで送る。
+  // block: 'nearest' にして、必要なぶんだけ動かす（'center' だと戻るボタンが押し出される）
   useEffect(() => {
-    if (taken) takenRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (taken) takenRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [taken]);
 
   const restoring = step === 'restore';
@@ -148,6 +156,7 @@ export function Onboarding() {
     try {
       const r = await api.restore(value);
       device.set(r.deviceToken);
+      device.setMac(value);
       await completeRegistration();
       showToast('この端末に引き継ぎました');
       finishOnboarding('home');
@@ -172,12 +181,14 @@ export function Onboarding() {
     try {
       if (reRegister) {
         setMe(await api.updateMac(m));
+        device.setMac(m);
         setTab('settings');
         cancelReregister();
         showToast('MACアドレスを登録し直しました');
       } else {
         const r = await api.register(name.trim(), m);
         device.set(r.deviceToken);
+        device.setMac(m);
         await completeRegistration();
         setStep('done');
       }
@@ -197,7 +208,7 @@ export function Onboarding() {
 
   if (step === 'welcome') {
     return (
-      <div className="content ob">
+      <div className="content ob" ref={contentRef}>
         <div className="ob-hero">
           <div className="wordmark big">COK<span>O</span>YO</div>
           <span className="provisional">仮称</span>
@@ -219,7 +230,7 @@ export function Onboarding() {
 
   if (step === 'name') {
     return (
-      <div className="content ob">
+      <div className="content ob" ref={contentRef}>
         <Back onClick={() => go('welcome')} label="戻る" />
         <p className="ob-step">1 / 2</p>
         <h2 className="ob-title">フレンドに表示される名前</h2>
@@ -235,7 +246,7 @@ export function Onboarding() {
   if (step === 'mac' || restoring) {
     const guide = GUIDE[os];
     return (
-      <div className="content ob">
+      <div className="content ob" ref={contentRef}>
         {reRegister ? <Back onClick={cancelReregister} label="設定に戻る" />
           : restoring ? <Back onClick={() => go('welcome')} label="戻る" />
           : <Back onClick={() => go('name')} label="戻る" />}
@@ -245,7 +256,9 @@ export function Onboarding() {
         </h2>
         <p className="ob-lead">
           {restoring
-            ? '登録したときのMACアドレスを入れてください。名前・フレンド・ポイントはそのまま引き継がれます。'
+            ? restoreMode
+              ? 'この端末の登録が見つかりませんでした。登録したときのMACアドレスを入れると、名前・フレンド・ポイントをそのまま引き継げます。'
+              : '登録したときのMACアドレスを入れてください。名前・フレンド・ポイントはそのまま引き継がれます。'
             : 'WiFiにつなぐ機器ごとの識別番号です。これで「キャンパスにいるか」を判定します。フレンドには見せません。'}
         </p>
 
@@ -295,7 +308,7 @@ export function Onboarding() {
   }
 
   return (
-    <div className="content ob ob-done">
+    <div className="content ob ob-done" ref={contentRef}>
       <div className="done-mark"><Icon.Check /></div>
       <h2 className="ob-title">登録しました</h2>
       <p className="ob-lead">キャンパスで「ポイント獲得（在校確認）」を押すと、あなたとフレンドの様子が分かります。</p>
