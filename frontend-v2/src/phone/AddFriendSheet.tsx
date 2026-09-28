@@ -15,7 +15,7 @@ import { appUrl, drawStory, shareStory, tweetUrl } from './share';
 import { Avatar } from './ui';
 
 export function AddFriendSheet() {
-  const { view, me, sheet, closeSheet, setAddMode, run, reloadFriends, showToast } = useApp();
+  const { view, me, friends, sheet, closeSheet, setAddMode, run, reloadFriends, showToast } = useApp();
   const [manualKey, setManualKey] = useState('');
   const [manualMac, setManualMac] = useState('');
   const open = view === 'app' && sheet.open && !!me;
@@ -26,6 +26,29 @@ export function AddFriendSheet() {
   // タブを変えたら、シートの中もいちばん上から見せる
   const sheetRef = useRef<HTMLDivElement>(null);
   useEffect(() => { sheetRef.current?.scrollTo({ top: 0 }); }, [sheet.mode, sheet.open]);
+
+  // ---------------------------------------------------------------
+  // 自分のQRを出しているあいだは、フレンドが増えていないか裏で見にいく。
+  // 読み取ってもらった側の画面は、自分では何も操作しないので、
+  // これが無いと古いまま（相手だけフレンド、自分は「承認待ち」）に見えてしまう。
+  // ---------------------------------------------------------------
+  const known = useRef<Set<string> | null>(null);
+  const showingQr = open && sheet.mode === 'show';
+  useEffect(() => {
+    if (!showingQr) { known.current = null; return; }
+    const t = window.setInterval(() => { void reloadFriends(true); }, 3000);
+    return () => window.clearInterval(t);
+  }, [showingQr, reloadFriends]);
+
+  useEffect(() => {
+    if (!showingQr || !friends) return;
+    if (!known.current) { known.current = new Set(friends.friends.map((f) => f.userId)); return; }
+    const added = friends.friends.filter((f) => !known.current?.has(f.userId));
+    if (!added.length) return;
+    known.current = new Set(friends.friends.map((f) => f.userId));
+    showToast(`${added[0].displayName}さんとフレンドになりました`);
+    closeSheet();
+  }, [showingQr, friends, showToast, closeSheet]);
 
   const reset = () => { setManualKey(''); setManualMac(''); };
 

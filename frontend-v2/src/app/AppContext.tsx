@@ -58,7 +58,7 @@ interface AppActions {
   run(name: string, fn: () => Promise<void>): Promise<boolean>;
   check(): Promise<void>;
   toggleHide(): Promise<void>;
-  reloadFriends(): Promise<void>;
+  reloadFriends(silent?: boolean): Promise<void>;
   setMe(me: Me): void;
 
   // 登録
@@ -125,8 +125,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const showToast = useCallback((message: string) => setToast({ id: Date.now() + Math.random(), message }), []);
 
-  const loadAll = useCallback(async () => {
-    const [m, f, p] = await Promise.all([api.getMe(), api.getFriends(), api.getPoints()]);
+  const loadAll = useCallback(async (silent = false) => {
+    const [m, f, p] = await Promise.all([api.getMe(silent), api.getFriends(silent), api.getPoints(silent)]);
     setMe(m); setFriends(f); setPoints(p);
     setLastCheck(readLastCheck(m.userId));
   }, []);
@@ -179,7 +179,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [goOnboarding, showToast]);
 
-  const reloadFriends = useCallback(async () => { setFriends(await api.getFriends()); }, []);
+  const reloadFriends = useCallback(async (silent = false) => { setFriends(await api.getFriends(silent)); }, []);
 
   // ---------------------------------------------------------------
   // 招待リンク（?add=<共有キー>）で開かれたとき
@@ -307,6 +307,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (view !== 'app') return;
     try { await loadAll(); } catch { /* 次の操作で表示する */ }
   }, [loadAll, view]);
+
+  // ---------------------------------------------------------------
+  // 画面に戻ってきたら、裏で取り直す
+  //
+  // フレンドは相手の操作でも変わる（QRを読み取ってもらった・申請を承認された）。
+  // 自分が何かするまで古いままだと、片方の画面にだけ「承認待ち」が残って見える。
+  // ---------------------------------------------------------------
+  useEffect(() => {
+    if (view !== 'app') return;
+    let last = Date.now();
+    const catchUp = () => {
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - last < 5000) return; // 戻るたびに何度も叩かない
+      last = now;
+      loadAll(true).catch(() => { /* 次の操作で表示する */ });
+    };
+    document.addEventListener('visibilitychange', catchUp);
+    window.addEventListener('focus', catchUp);
+    return () => {
+      document.removeEventListener('visibilitychange', catchUp);
+      window.removeEventListener('focus', catchUp);
+    };
+  }, [view, loadAll]);
 
   const restart = useCallback(async () => {
     timers.current.forEach(clearTimeout);
