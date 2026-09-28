@@ -332,6 +332,9 @@ body.plain .sheet { border-radius: 28px 28px 0 0; padding-bottom: max(22px, env(
 .ob-hero { padding: 40px 0 26px; }
 .wordmark.big { font-size: 34px; letter-spacing: .1em; line-height: 1.1; }
 .ob-hero h2 { font-size: 23px; font-weight: 700; letter-spacing: -.01em; line-height: 1.45; margin: 22px 0 0; text-wrap: balance; }
+.ob-welcome .ob-hero h2 { font-size: clamp(18px, 5.3vw, 23px); text-wrap: initial; }
+.ob-welcome > .row-note { margin-top: 12px; text-align: center; }
+.ob > .ob-step:first-child { margin-top: 24px; }
 .ob-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }
 .ob-list li { display: flex; gap: 13px; font-size: 13px; color: var(--ink-2); line-height: 1.6; }
 .ob-list b { display: block; font-size: 14px; color: var(--ink); }

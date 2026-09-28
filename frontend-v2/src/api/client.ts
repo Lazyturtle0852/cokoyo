@@ -84,7 +84,7 @@ const id = encodeURIComponent;
 
 export const api = {
   // 認証・初回登録
-  getSession: () => request<{ email: string; status: 'onboarding' | 'ready' }>('GET', '/v1/auth/session'),
+  getSession: () => request<{ email: string; displayName: string; status: 'onboarding' | 'ready' }>('GET', '/v1/auth/session'),
   beginLogin: () => {
     if (useMockBackend) { mockBackend.sim.login(); window.location.reload(); return; }
     const invite = pendingInvite();

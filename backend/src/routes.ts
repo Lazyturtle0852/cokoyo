@@ -217,6 +217,7 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
       fail(409, "email_conflict", "このメールアドレスの登録を確認できませんでした。運営に連絡してください");
     }
     const user = repo.findOrCreateGoogleUser(identity.sub, identity.email);
+    if (identity.displayName) repo.setGoogleNameIfUnset(user.id, identity.displayName);
     if (identity.avatar) repo.setGoogleAvatarIfUnset(user.id, identity.avatar);
     const token = newSecret();
     repo.createSession(user.id, token);
@@ -226,7 +227,7 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
 
   app.get("/v1/auth/session", (c) => {
     const user = requireUser(c, repo, false);
-    return c.json({ email: user.email, status: user.onboarding_completed_at ? "ready" : "onboarding" });
+    return c.json({ email: user.email, displayName: user.display_name ?? "", status: user.onboarding_completed_at ? "ready" : "onboarding" });
   });
 
   app.post("/v1/auth/logout", (c) => {

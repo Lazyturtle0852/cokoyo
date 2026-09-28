@@ -2,7 +2,7 @@ import * as oidc from "openid-client";
 import { randomBytes } from "node:crypto";
 import { config } from "./config.js";
 
-export interface GoogleIdentity { sub: string; email: string; avatar?: string }
+export interface GoogleIdentity { sub: string; email: string; displayName?: string; avatar?: string }
 export interface GoogleProvider {
   authorizationUrl(verifier: string, state: string, nonce: string): Promise<URL>;
   exchange(callbackUrl: URL, verifier: string, state: string, nonce: string): Promise<GoogleIdentity>;
@@ -43,13 +43,24 @@ export async function downloadGoogleAvatar(picture: string | undefined, fetcher:
   } catch { return null; }
 }
 
+export function googleDisplayName(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  let name = "";
+  for (const char of value.trim()) {
+    if (name.length + char.length > 20) break;
+    name += char;
+  }
+  return name.trim() || undefined;
+}
+
 export function validateGoogleIdentity(claims: Record<string, unknown> | undefined): GoogleIdentity {
   if (!claims || typeof claims.sub !== "string" || !claims.sub ||
       claims.hd !== "keio.jp" || claims.email_verified !== true ||
       typeof claims.email !== "string" || !/^[^@\s]+@keio\.jp$/i.test(claims.email)) {
     throw new Error("google_domain_rejected");
   }
-  return { sub: claims.sub, email: claims.email.toLowerCase() };
+  const displayName = googleDisplayName(claims.name);
+  return { sub: claims.sub, email: claims.email.toLowerCase(), ...(displayName ? { displayName } : {}) };
 }
 
 export function createGoogleProvider(): GoogleProvider {
@@ -89,7 +100,7 @@ export function createGoogleProvider(): GoogleProvider {
       const claims = tokens.claims() as Record<string, unknown> | undefined;
       const identity = validateGoogleIdentity(claims);
       let picture = typeof claims?.picture === "string" ? claims.picture : undefined;
-      if (!picture && tokens.access_token) {
+      if ((!picture || !identity.displayName) && tokens.access_token) {
         try {
           const response = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
             headers: { authorization: `Bearer ${tokens.access_token}`, accept: "application/json" },
@@ -97,9 +108,12 @@ export function createGoogleProvider(): GoogleProvider {
           });
           if (response.ok) {
             const info = await response.json() as Record<string, unknown>;
-            if (info.sub === identity.sub && typeof info.picture === "string") picture = info.picture;
+            if (info.sub === identity.sub) {
+              if (!picture && typeof info.picture === "string") picture = info.picture;
+              identity.displayName ??= googleDisplayName(info.name);
+            }
           }
-        } catch { /* 写真が取れなくてもログインは続ける */ }
+        } catch { /* プロフィールが取れなくてもログインは続ける */ }
       }
       const avatar = await downloadGoogleAvatar(picture);
       return avatar ? { ...identity, avatar } : identity;

@@ -104,10 +104,10 @@ const normalizeMac = (s: string) => s.trim().toLowerCase().replace(/-/g, ':');
 const validMac = (s: string) => /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(s);
 
 export function Onboarding() {
-  const { completeRegistration, finishOnboarding } = useApp();
+  const { completeRegistration, finishOnboarding, initialDisplayName } = useApp();
   const { canOffer } = useInstall();
   const [step, setStep] = useState<Step>(canOffer ? 'install' : 'name');
-  const [name, setName] = useState('');
+  const [name, setName] = useState(initialDisplayName);
   const [mac, setMac] = useState('');
   const [os, setOs] = useState<Os>('ios');
   const [label, setLabel] = useState('iPhone');
@@ -139,10 +139,10 @@ export function Onboarding() {
     <div className="content ob" ref={contentRef}>
       <p className="ob-step">1 / 2</p>
       <h2 className="ob-title">フレンドに表示される名前</h2>
-      <p className="ob-lead">Googleログインが完了しました。表示名はあとから変更できます。</p>
+      <p className="ob-lead">あとから設定で変えられます。</p>
       {pendingInvite() && <p className="row-note">登録後に招待リンクの相手へ申請します。</p>}
       <label className="field-label" htmlFor="obName">表示名</label>
-      <input className="field" id="obName" maxLength={20} value={name} autoComplete="nickname" autoFocus
+      <input className="field" id="obName" maxLength={20} placeholder="例）ゆうき" value={name} autoComplete="nickname" autoFocus
         onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) go('mac'); }} />
       <button className="btn btn-primary" onClick={() => go('mac')} disabled={!name.trim()}>次へ</button>
     </div>
@@ -169,7 +169,6 @@ export function Onboarding() {
           onChange={(e) => setMac(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void submit(); }} />
         <p className="field-err" id="obMacErr" role="alert">{error}</p>
         {useMockBackend && <button className="demo-link" onClick={() => setMac('5e:12:34:56:78:90')}>（デモ）例のアドレスを入れる</button>}
-        <div className="notice"><p>MACアドレスの入力は本人申告です。Googleログインだけでは端末の所有は確認できません。</p></div>
         <button className="btn btn-primary" onClick={() => void submit()} disabled={busy}>{busy ? '登録しています…' : '登録する'}</button>
       </div>
     );

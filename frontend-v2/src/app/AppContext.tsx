@@ -22,6 +22,7 @@ export interface CounterHandle {
 
 interface AppState {
   view: View;
+  initialDisplayName: string;
   error: string;
   tab: Tab;
   me: Me | null;
@@ -92,6 +93,7 @@ takeInviteFromUrl();
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [view, setView] = useState<View>('loading');
+  const [initialDisplayName, setInitialDisplayName] = useState('');
   const [error, setError] = useState('');
   const [tab, setTabState] = useState<Tab>('home');
   const [me, setMe] = useState<Me | null>(null);
@@ -133,6 +135,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const goLogin = useCallback(() => {
     setMe(null); setFriends(null); setPoints(null); setLastCheck(null);
     field.clear();
+    setInitialDisplayName('');
     setView('login');
   }, [field]);
 
@@ -140,7 +143,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     callLog.begin('アプリを開いた');
     try {
       const session = await api.getSession();
-      if (session.status === 'onboarding') { goOnboarding(); return; }
+      if (session.status === 'onboarding') { setInitialDisplayName(session.displayName ?? ''); goOnboarding(); return; }
       await loadAll();
       setView('app');
     } catch (e) {
@@ -339,7 +342,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [boot, field]);
 
   const value = useMemo<Ctx>(() => ({
-    view, error, tab, me, friends, points, lastCheck, checking, sheet, mapOpen, displayTotal, toast,
+    view, initialDisplayName, error, tab, me, friends, points, lastCheck, checking, sheet, mapOpen, displayTotal, toast,
     field, counter, screenRef,
     // タブを移ると地図は閉じる
     setTab: (t) => { setMapOpen(false); setTabState(t); },
@@ -363,7 +366,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refresh,
     restart,
     restartFromOnboarding: () => { void api.logout().finally(() => { setTabState('home'); goLogin(); }); },
-  }), [view, error, tab, me, friends, points, lastCheck, checking, sheet, mapOpen, displayTotal, toast,
+  }), [view, initialDisplayName, error, tab, me, friends, points, lastCheck, checking, sheet, mapOpen, displayTotal, toast,
     field, showToast, run, check, toggleHide, reloadFriends, loadAll, refresh, restart, goLogin]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

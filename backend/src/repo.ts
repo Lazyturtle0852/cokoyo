@@ -66,6 +66,7 @@ export function createRepo(db: Db) {
     completeUser: db.prepare("UPDATE users SET display_name = ?, share_key = ?, onboarding_completed_at = ? WHERE id = ?"),
     updateProfile: db.prepare("UPDATE users SET display_name = ?, hidden = ? WHERE id = ?"),
     updateAvatar: db.prepare("UPDATE users SET avatar = ?, avatar_source = ? WHERE id = ?"),
+    setGoogleName: db.prepare("UPDATE users SET display_name = ? WHERE id = ? AND display_name IS NULL AND onboarding_completed_at IS NULL"),
     setGoogleAvatar: db.prepare("UPDATE users SET avatar = ?, avatar_source = 'google' WHERE id = ? AND avatar_source = 'unset'"),
     macsOf: db.prepare("SELECT id, user_id, mac, label, registered_at FROM mac_addresses WHERE user_id = ? ORDER BY id"),
     macById: db.prepare("SELECT id, user_id, mac, label, registered_at FROM mac_addresses WHERE id = ?"),
@@ -245,6 +246,7 @@ export function createRepo(db: Db) {
     },
     updateAvatar: (id: number, avatar: string | null) =>
       void q.updateAvatar.run(avatar, avatar ? "custom" : "disabled", id),
+    setGoogleNameIfUnset: (id: number, name: string) => void q.setGoogleName.run(name, id),
     setGoogleAvatarIfUnset: (id: number, avatar: string) => void q.setGoogleAvatar.run(avatar, id),
 
     transaction<T>(fn: () => T): T {
