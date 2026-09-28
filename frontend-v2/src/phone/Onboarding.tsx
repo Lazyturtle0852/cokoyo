@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useApp } from '../app/AppContext';
 import { useInstall } from '../app/install';
+import { howToOpen, inAppBrowser, inAppName, openInBrowserUrl } from '../app/browser';
 import { pendingInvite } from '../app/invite';
 import { api, callLog, device, type ApiError } from '../api/client';
 import { useMockBackend } from '../config';
@@ -211,15 +212,15 @@ export function Onboarding() {
       <div className="content ob" ref={contentRef}>
         <div className="ob-hero">
           <div className="wordmark big">COK<span>O</span>YO</div>
-          <span className="provisional">仮称</span>
           <h2>フレンドがキャンパスにいるか、<br />ボタンひとつで分かる</h2>
         </div>
+        <InAppNotice />
         <ul className="ob-list">
           <li><span className="ob-ico"><Icon.Wifi /></span><span><b>位置情報は使いません</b>キャンパスのWiFiにつながっているかだけを見ます</span></li>
           <li><span className="ob-ico best"><Icon.Friends size={18} /></span><span><b>見せる範囲は相手ごと</b>ベストフレンドにだけ建物まで。ブロックした相手には見えません</span></li>
           <li><span className="ob-ico hide"><Icon.Hide /></span><span><b>いつでも隠れられます</b>かくれんぼ中は、フレンド全員から「いません」に見えます</span></li>
         </ul>
-        {pendingInvite() && (
+        {pendingInvite() && !inAppBrowser() && (
           <p className="row-note">招待リンクから開きました。登録が終わると、そのまま相手に申請します。</p>
         )}
         <button className="btn btn-primary" onClick={() => go('name')}>はじめる</button>
@@ -314,6 +315,38 @@ export function Onboarding() {
       <p className="ob-lead">キャンパスで「ポイント獲得（在校確認）」を押すと、あなたとフレンドの様子が分かります。</p>
       <button className="btn btn-primary" onClick={() => finishOnboarding('friends')}>フレンドを追加する</button>
       <button className="btn btn-quiet" onClick={() => finishOnboarding('home')}>あとで</button>
+    </div>
+  );
+}
+
+/**
+ * LINE やインスタの中のブラウザで開かれたときの案内。
+ *
+ * そのまま登録すると、ふだんのブラウザのアカウントとは別に、もう1つできてしまう。
+ * （フレンドの申請が片方にだけ届く、という食い違いの原因になる。）
+ */
+function InAppNotice() {
+  const kind = inAppBrowser();
+  const [copied, setCopied] = useState(false);
+  if (!kind) return null;
+
+  const here = window.location.href;
+  const intent = openInBrowserUrl(here);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(here); setCopied(true); } catch { setCopied(false); }
+  };
+
+  return (
+    <div className="inapp">
+      <p className="inapp-title">{inAppName(kind)}の中のブラウザで開いています</p>
+      <p className="inapp-body">
+        このまま登録すると、ふだん使っているブラウザとは<b>別のアプリ</b>として扱われます。
+        すでに登録している人は、もう一度登録することになってしまいます。
+      </p>
+      <p className="inapp-body"><b>{howToOpen(kind)}</b></p>
+      {intent
+        ? <button className="btn btn-primary" onClick={() => { window.location.href = intent; }}>Chromeで開く</button>
+        : <button className="btn btn-quiet" onClick={() => void copy()}>{copied ? 'コピーしました' : 'このページのリンクをコピー'}</button>}
     </div>
   );
 }

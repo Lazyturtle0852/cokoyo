@@ -66,7 +66,6 @@ export function InstallStep({ onNext }: { onNext(): void }) {
     <div className="content ob">
       <div className="ob-hero inst-hero">
         <div className="wordmark big">COK<span>O</span>YO</div>
-        <span className="provisional">仮称</span>
         <h2>まず、ホーム画面に追加しましょう</h2>
       </div>
       <Preview />

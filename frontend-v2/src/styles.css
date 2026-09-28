@@ -320,7 +320,6 @@ body.plain .sheet { border-radius: 28px 28px 0 0; padding-bottom: max(22px, env(
            font-size: 14px; font-weight: 600; color: var(--ink-2); cursor: pointer; }
 .ob-hero { padding: 40px 0 26px; }
 .wordmark.big { font-size: 34px; letter-spacing: .1em; line-height: 1.1; }
-.provisional { display: inline-block; font-size: 11px; font-weight: 700; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; margin-top: 8px; }
 .ob-hero h2 { font-size: 23px; font-weight: 700; letter-spacing: -.01em; line-height: 1.45; margin: 22px 0 0; text-wrap: balance; }
 .ob-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }
 .ob-list li { display: flex; gap: 13px; font-size: 13px; color: var(--ink-2); line-height: 1.6; }
@@ -581,3 +580,9 @@ body.plain .map-screen { border-radius: 0; }
 .sns-btn.ig { background: linear-gradient(120deg, #F2711C 0%, #E1306C 55%, #A333C8 100%); }
 .sns .row-note { margin-top: 10px; }
 .qr-hidden { position: absolute; left: -9999px; top: 0; width: 0; height: 0; overflow: hidden; }
+
+/* ---------- アプリの中のブラウザ（LINE・インスタ）で開かれたとき ---------- */
+.inapp { background: var(--brand-tint); border: 1px solid #F7D9C4; border-radius: 16px; padding: 14px 16px; margin-bottom: 18px; }
+.inapp-title { font-size: 14px; font-weight: 700; color: var(--brand-dark); margin: 0 0 6px; }
+.inapp-body { font-size: 12.5px; color: var(--ink-2); line-height: 1.7; margin: 0 0 6px; }
+.inapp .btn { margin-top: 8px; }

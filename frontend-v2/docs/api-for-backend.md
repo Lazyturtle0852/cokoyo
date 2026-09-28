@@ -296,7 +296,7 @@ MACアドレスのハッシュにすると、総当たりで元のMACアドレ�
 
 | via | 送るもの | 動き | 返すもの |
 |---|---|---|---|
-| `qr` | `shareKey` | 直接会って読み取ったので、**すぐにフレンド** | `201 { "status": "friends", "user": { "userId", "displayName" } }` |
+| `qr` | `shareKey` | 直接会って読み取ったので、**すぐにフレンド**。自分が出した申請・相手から届いた申請が残っていても、その場でフレンドにする（片方の画面に「承認待ち」が残らないように） | `201 { "status": "friends", "user": { "userId", "displayName" } }` |
 | `link` | `shareKey` | リンク・キー入力。**相手の承認が必要** | `202 { "status": "requested", "requestId", "user": {…} }` |
 | `mac` | `mac` | 相手のMACアドレスを直接入力。**相手の承認が必要**（`link` と同じ扱い） | 同上 |
 

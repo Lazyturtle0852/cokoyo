@@ -21,6 +21,8 @@ export function Friends() {
 
   const acceptRequest = (id: string) => act('フレンド申請を承認', async () => `${(await api.acceptRequest(id)).user.displayName}さんとフレンドになりました`);
   const declineRequest = (id: string) => act('フレンド申請を断る', async () => { await api.declineRequest(id); return '申請を断りました'; });
+  // 出した申請を取り消す（相手が承認する前なら、いつでも消せる）
+  const cancelRequest = (id: string) => act('申請を取り消す', async () => { await api.declineRequest(id); return '申請を取り消しました'; });
   const requestBest = (f: Friend, label: string) => act(`ベストフレンドを${label}`, async () => {
     const r = await api.requestBest(f.userId);
     return r.best === 'best' ? `${f.displayName}さんとベストフレンドになりました` : `${f.displayName}さんにベストフレンドを申請しました`;
@@ -136,6 +138,9 @@ export function Friends() {
               <div className="req" key={r.requestId}>
                 <Avatar userId={r.userId} name={r.displayName} avatar={r.avatar} off />
                 <div className="fbody"><div className="fname">{r.displayName}</div><div className="fmeta">相手の承認を待っています</div></div>
+                <div className="req-actions">
+                  <button className="mini-btn" onClick={() => void cancelRequest(r.requestId)}>取り消す</button>
+                </div>
               </div>
             ))}
           </div>

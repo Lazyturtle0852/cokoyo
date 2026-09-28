@@ -153,7 +153,8 @@ export const api = {
   restore: (mac: string) => request<RegisterResponse>('POST', '/v1/sessions', { mac }),
   /** ログアウト（この端末の覚えを消す。登録そのものは残る） */
   logout: () => request<null>('DELETE', '/v1/sessions'),
-  getMe: () => request<Me>('GET', '/v1/me'),
+  // silent: 画面の操作ではなく、裏で様子を見にいくとき（「バックエンドとの通信」に残さない）
+  getMe: (silent = false) => request<Me>('GET', '/v1/me', undefined, silent),
   updateMe: (patch: { displayName?: string; hidden?: boolean }) => request<Me>('PATCH', '/v1/me', patch),
   updateMac: (mac: string) => request<Me>('PUT', '/v1/me/mac', { mac }),
   // アイコンの画像（128px四方に縮めた data URL）
@@ -162,10 +163,10 @@ export const api = {
 
   // 在校確認とポイント
   check: () => request<CheckResponse>('POST', '/v1/checks'),
-  getPoints: () => request<PointsResponse>('GET', '/v1/points'),
+  getPoints: (silent = false) => request<PointsResponse>('GET', '/v1/points', undefined, silent),
 
   // フレンド
-  getFriends: () => request<FriendsResponse>('GET', '/v1/friends'),
+  getFriends: (silent = false) => request<FriendsResponse>('GET', '/v1/friends', undefined, silent),
   addFriend: (shareKey: string, via: 'qr' | 'link') => request<AddFriendResponse>('POST', '/v1/friends', { shareKey, via }),
   // 共有キーを渡せないとき用。相手の承認でフレンドになる（link と同じ扱い）
   addFriendByMac: (mac: string) => request<AddFriendResponse>('POST', '/v1/friends', { mac, via: 'mac' }),

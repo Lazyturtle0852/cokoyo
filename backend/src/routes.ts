@@ -411,30 +411,33 @@ export function createRoutes(repo: Repo, dtc: DtcClient) {
     const existing = repo.getFriendship(me.id, other.id);
     if (existing?.status === "friends") fail(409, "already_friends", "すでにフレンドです");
 
-    // 相手からの申請が来ていれば、その場でフレンドにする。
-    if (existing?.status === "pending" && existing.requested_by !== me.id) {
-      repo.acceptRequest(existing);
-      const response: AddFriendResponse = { status: "friends", user: toRef(other) };
-      return c.json(response, 201);
-    }
-
     // 相手にブロックされている場合は、それが分からないよう、
     // ふつうの申請と同じ 202 を返して申請は届けない。
     const blockedByThem = repo.isBlocking(other.id, me.id);
-
-    if (via === "qr" && !blockedByThem) {
-      repo.createFriends(me.id, other.id);
+    const friends = (): Response => {
       const response: AddFriendResponse = { status: "friends", user: toRef(other) };
       return c.json(response, 201);
-    }
+    };
 
-    if (existing?.requested_by === me.id) {
+    if (existing?.status === "pending") {
+      // 相手からの申請が来ていれば、その場でフレンドにする。
+      // 自分が出した申請が残っているときも、QRなら目の前にいるので、その場でフレンドにする
+      // （この行を残したままにすると、相手の画面に「承認待ち」がいつまでも出てしまう）。
+      if (existing.requested_by !== me.id || (via === "qr" && !blockedByThem)) {
+        repo.acceptRequest(existing);
+        return friends();
+      }
       const response: AddFriendResponse = {
         status: "requested",
         requestId: existing.request_id ?? "",
         user: toRef(other),
       };
       return c.json(response, 202);
+    }
+
+    if (via === "qr" && !blockedByThem) {
+      repo.createFriends(me.id, other.id);
+      return friends();
     }
 
     const requestId = blockedByThem

@@ -5,6 +5,7 @@
 // 共有メニューからしか追加できないので、やり方を絵で説明する。
 
 import { useCallback, useEffect, useState } from 'react';
+import { inAppBrowser } from './browser';
 
 export type InstallWay = 'prompt' | 'ios' | 'manual';
 
@@ -54,8 +55,14 @@ export function useInstall() {
 
   const way: InstallWay = deferred ? 'prompt' : isIOS() ? 'ios' : 'manual';
 
-  /** 案内を出す価値があるか。追加ずみ・「あとで」を押した・パソコンのときは出さない */
-  const canOffer = !isStandalone() && !skipped && (way === 'prompt' || (way === 'ios' && !!navigator.maxTouchPoints) || isAndroid());
+  /**
+   * 案内を出す価値があるか。
+   * 追加ずみ・「あとで」を押した・パソコンのときは出さない。
+   * LINE やインスタの中のブラウザからはホーム画面に追加できないので、そこでも出さない
+   * （先に「ふだんのブラウザで開いてください」の案内を読んでもらう）。
+   */
+  const canOffer = !isStandalone() && !skipped && !inAppBrowser()
+    && (way === 'prompt' || (way === 'ios' && !!navigator.maxTouchPoints) || isAndroid());
 
   /** Chrome の追加ダイアログを出す。追加されたら true */
   const install = useCallback(async () => {
