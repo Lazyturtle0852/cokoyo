@@ -9,7 +9,7 @@ import { pendingInvite } from '../app/invite';
 import { mockBackend } from './mockBackend';
 import type {
   AddFriendResponse, ApiErrorBody, BestResponse, BlockResponse, CheckResponse,
-  DebugDbResponse, FriendsResponse, MacAddressView, Me, PointsResponse, ReactionResponse, UserRef,
+  DebugDbResponse, FeedbackResponse, FriendsResponse, MacAddressView, Me, PointsResponse, ReactionResponse, UserRef,
 } from './types';
 
 // ---------------------------------------------------------------
@@ -123,5 +123,8 @@ export const api = {
   react: (userId: string, count: number) => request<ReactionResponse>('POST', `/v1/friends/${id(userId)}/reactions`, { count }),
 
   // 説明用ページ（/explain）だけが使う。アプリ本体は使わない。
+  // 問い合わせ・ご意見（アプリの中から送る）
+  sendFeedback: (message: string) => request<FeedbackResponse>('POST', '/v1/feedback', { message }),
+
   debugDb: () => request<DebugDbResponse>('GET', '/v1/debug/db', undefined, true),
 };

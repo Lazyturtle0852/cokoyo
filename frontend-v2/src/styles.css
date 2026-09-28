@@ -600,3 +600,47 @@ body.plain .map-screen { border-radius: 0; }
 .inapp-title { font-size: 14px; font-weight: 700; color: var(--brand-dark); margin: 0 0 6px; }
 .inapp-body { font-size: 12.5px; color: var(--ink-2); line-height: 1.7; margin: 0 0 6px; }
 .inapp .btn { margin-top: 8px; }
+
+/* ---------- ログイン画面 ---------- */
+.login { margin-top: 26px; }
+.login .btn { margin-top: 0; }
+.login-note { font-size: 12px; color: var(--ink-2); line-height: 1.75; margin: 14px 2px 0; }
+.login-note .mono { font-size: 11.5px; word-break: break-all; }
+.login-note.muted { margin-top: 8px; font-size: 11.5px; }
+
+/* ---------- アイコンの切り抜き（丸い枠に重ねて見せる） ---------- */
+.crop { flex-basis: 100%; margin-top: 14px; }
+.crop-stage { position: relative; margin: 0 auto; border-radius: 18px; overflow: hidden; background: #1F1B17; touch-action: none; cursor: grab; }
+.crop-stage:active { cursor: grabbing; }
+.crop-stage img { position: absolute; max-width: none; user-select: none; -webkit-user-drag: none; display: block; }
+/* まんなかの丸だけを残して、外側を暗くする */
+.crop-mask { position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 9999px rgba(28,25,23,.55); border: 2px solid rgba(255,255,255,.9); pointer-events: none; }
+.crop-zoom { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 12px; color: var(--muted); }
+.crop-zoom input { flex: 1; accent-color: var(--brand); }
+.crop .inline-actions { margin-top: 10px; }
+.avatar-edit { flex-wrap: wrap; }
+
+/* ---------- 雨（天気が雨のときだけ） ---------- */
+.rain { position: absolute; inset: 0; overflow: hidden; pointer-events: none; opacity: 0; transition: opacity .4s ease; }
+.field-scene.raining .rain { opacity: 1; }
+/* 雨の日は、景色の色をほんの少し落とす */
+.field-scene.raining .scene { filter: saturate(.88) brightness(.97); transition: filter .4s ease; }
+.rain i { position: absolute; top: -14%; left: var(--x); width: 1.6px; height: 18px; border-radius: 1px;
+          background: linear-gradient(180deg, rgba(190,220,240,0), rgba(140,190,225,.95));
+          animation: rain-fall .9s linear infinite; animation-delay: var(--d); transform: scaleY(var(--s)); }
+@keyframes rain-fall { to { transform: translateY(240px) scaleY(var(--s)); } }
+/* スライムが雨を弾く（白い輪が上で小さく開く） */
+.field-scene.raining .slime-body::after {
+  content: ''; position: absolute; left: 50%; top: -6px; width: 16px; height: 8px; margin-left: -8px;
+  border-radius: 50%; border: 1.5px solid rgba(255,255,255,.85); border-bottom-color: transparent;
+  opacity: 0; animation: splash 2.2s ease-out infinite;
+}
+.field-scene.raining .slime:nth-child(2n) .slime-body::after { animation-delay: .7s; }
+.field-scene.raining .slime:nth-child(3n) .slime-body::after { animation-delay: 1.4s; }
+@keyframes splash { 0% { opacity: 0; transform: scale(.3); } 12% { opacity: .95; transform: scale(.7); }
+                    40% { opacity: 0; transform: scale(1.25); } 100% { opacity: 0; transform: scale(1.25); } }
+@media (prefers-reduced-motion: reduce) { .rain { display: none; } .field-scene.raining .slime-body::after { display: none; } }
+
+/* ---------- ご意見・問い合わせ ---------- */
+.fb-text { min-height: 120px; resize: vertical; line-height: 1.6; font-family: inherit; }
+.fb-count { text-align: right; margin-top: 4px; }

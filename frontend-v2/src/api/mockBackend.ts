@@ -57,6 +57,9 @@ interface Db {
 
 export interface MockResult { status: number; json: unknown }
 
+/** 問い合わせ（模擬。ページを閉じると消える） */
+const feedback: { uid: string; message: string; at: string }[] = [];
+
 // ---------------------------------------------------------------
 // 日付
 // ---------------------------------------------------------------
@@ -514,6 +517,14 @@ function route(method: string, path: string, _headers: Record<string, string>, b
     if (macs.length <= 1) return E(409, 'last_mac', '最後の端末は削除できません');
     db.users[uid].macs = macs.filter((m) => m.id !== Number(macMatch[1]));
     return { status: 204, json: null };
+  }
+  if (method === 'POST' && path === '/v1/feedback') {
+    const message = String(body.message ?? '').trim();
+    if (message.length < 2 || message.length > 1000) return E(400, 'invalid_message', '2〜1000文字で書いてください');
+    feedback.push({ uid, message, at: new Date().toISOString() });
+    const today = feedback.filter((f) => f.uid === uid && f.at.slice(0, 10) === new Date().toISOString().slice(0, 10)).length;
+    if (today > 5) return E(429, 'too_many', '今日はもう送れません（1日5件まで）。明日またお願いします');
+    return ok({ remaining: 5 - today }, 201);
   }
   if (method === 'GET' && path === '/v1/points') return ok(pointsView(uid));
   if (method === 'POST' && path === '/v1/checks') return check(uid);

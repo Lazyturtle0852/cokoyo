@@ -125,6 +125,11 @@ export function createRepo(db: Db) {
       "SELECT COALESCE(SUM(pts), 0) AS total FROM point_events WHERE user_id = ?",
     ),
 
+    feedbackCount: db.prepare("SELECT COUNT(*) AS n FROM feedback WHERE user_id = ? AND date = ?"),
+    insertFeedback: db.prepare(
+      "INSERT INTO feedback (user_id, date, message, created_at) VALUES (?, ?, ?, ?)",
+    ),
+
     addReaction: db.prepare(
       `INSERT INTO reactions (from_id, to_id, count, updated_at) VALUES (?, ?, ?, ?)
        ON CONFLICT(from_id, to_id) DO UPDATE SET
@@ -316,6 +321,13 @@ export function createRepo(db: Db) {
       many<PointRow>(q.pointsOfDay.all(userId, date)),
     pointsTotal: (userId: number) =>
       Number((one<{ total: number }>(q.pointsTotal.get(userId)) ?? { total: 0 }).total),
+
+    // ── feedback ─────────────────────────────────────────────
+    /** その日に何件送ったか（送りすぎを止めるため） */
+    feedbackCount: (userId: number, date: string) =>
+      Number((one<{ n: number }>(q.feedbackCount.get(userId, date)) ?? { n: 0 }).n),
+    addFeedback: (userId: number, date: string, message: string) =>
+      void q.insertFeedback.run(userId, date, message, new Date().toISOString()),
 
     // ── reactions ────────────────────────────────────────────
     addReaction(from: number, to: number, count: number, max: number): void {

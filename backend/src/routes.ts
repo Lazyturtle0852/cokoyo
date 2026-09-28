@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type {
   AddFriendResponse, BestResponse, BestState, BlockResponse, BuildingKey, CheckResponse,
-  DebugDbResponse, FriendsResponse, Me, PointItem, PointsResponse, Reaction, ReactionResponse,
+  DebugDbResponse, FeedbackResponse, FriendsResponse, Me, PointItem, PointsResponse, Reaction, ReactionResponse,
   MacAddressView, UserRef,
 } from "../../shared/app-types.js";
 import { BUILDING_LABELS } from "../../shared/app-types.js";
@@ -111,6 +111,9 @@ function validMac(input: unknown): string {
   if (!mac) fail(400, "invalid_mac", "MACアドレスの形式が正しくありません");
   return mac;
 }
+
+/** 1日に送れる問い合わせの数 */
+const FEEDBACK_PER_DAY = 5;
 
 /** 1組（送り手→受け手）にためておけるリアクションの数と、届かないまま捨てるまでの時間。 */
 export const REACTION = { MAX: 99, TTL_MS: 3 * 24 * 60 * 60 * 1000 } as const;
@@ -597,6 +600,32 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
     if (!repo.isBlocking(other.id, me.id)) repo.addReaction(me.id, other.id, count as number, REACTION.MAX);
     const response: ReactionResponse = { userId: other.user_id, count: count as number };
     return c.json(response, 202);
+  });
+
+  // ── 問い合わせ・ご意見 ────────────────────────────────────
+  /**
+   * アプリの中から送ってもらう。DBに貯めるだけで、誰かに自動で届くことはない。
+   * 読むときは backend/README.md の手順で取り出す。
+   *
+   * 悪意なく連投されても困るので、1日5件までにしてある。
+   */
+  app.post("/v1/feedback", async (c) => {
+    const me = requireUser(c, repo);
+    const raw = (await c.req.json().catch(() => null))?.message;
+    const message = typeof raw === "string" ? raw.trim() : "";
+    if (message.length < 2 || message.length > 1000) {
+      fail(400, "invalid_message", "2〜1000文字で書いてください");
+    }
+
+    const today = jstDate();
+    const sent = repo.feedbackCount(me.id, today);
+    if (sent >= FEEDBACK_PER_DAY) {
+      fail(429, "too_many", `今日はもう送れません（1日${FEEDBACK_PER_DAY}件まで）。明日またお願いします`);
+    }
+
+    repo.addFeedback(me.id, today, message);
+    const response: FeedbackResponse = { remaining: FEEDBACK_PER_DAY - sent - 1 };
+    return c.json(response, 201);
   });
 
   // ── 説明用 ────────────────────────────────────────────────

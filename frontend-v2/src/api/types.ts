@@ -111,6 +111,12 @@ export interface BlockResponse {
   blocked: boolean;
 }
 
+/** 問い合わせ・ご意見を送ったときの返事 */
+export interface FeedbackResponse {
+  /** その日あと何回送れるか */
+  remaining: number;
+}
+
 export interface ApiErrorBody {
   error: { code: string; message: string };
 }
