@@ -91,6 +91,11 @@ export function Phone() {
                     <p className="login-note muted">パスワードをこのアプリに渡すことはありません。Googleの画面で入力します。</p>
                   </div>
                 )}
+                {/* 相対パスにしてあるので、/explain/ と /test/ でも同じビルドの中のページが開く */}
+                <p className="login-note legal">
+                  ログインすると、<a href="./terms/">利用規約</a>と<a href="./privacy/">プライバシーポリシー</a>に同意したものとみなします。
+                  COKOYOは実験を兼ねた試作品です（<a href="./about/">COKOYOについて</a>）。
+                </p>
               </div>
             )}
             {view === 'error' && (

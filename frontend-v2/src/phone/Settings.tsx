@@ -118,6 +118,8 @@ export function Settings() {
     <div className="card"><Feedback /></div>
 
     <div className="sec"><h3>このアプリについて</h3></div>
-    <div className="card about"><p>位置情報は使いません。キャンパスのWiFiにつながっているかどうかを、大学側のAPIに問い合わせて確認します。</p><p className="muted">試作品・{useMockBackend ? 'バックエンドは模擬' : `接続先 ${config.apiBaseUrl}`}</p></div>
+    <div className="card about"><p>位置情報は使いません。キャンパスのWiFiにつながっているかどうかを、大学側のAPIに問い合わせて確認します。</p>
+      <p className="legal-links"><a href="./about/">COKOYOについて</a><a href="./terms/">利用規約</a><a href="./privacy/">プライバシーポリシー</a></p>
+      <p className="muted">試作品・{useMockBackend ? 'バックエンドは模擬' : `接続先 ${config.apiBaseUrl}`}</p></div>
   </>;
 }
