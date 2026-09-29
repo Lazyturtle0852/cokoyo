@@ -44,7 +44,7 @@ describe("ご意見・問い合わせ", () => {
 });
 
 describe("DBの引き上げ", () => {
-  it("v2のDBを開くと、足りない列と表を入れて最新（v4）にする", () => {
+  it("v2のDBを開くと、足りない列と表を入れて最新（v5）にする", () => {
     const dir = mkdtempSync(join(tmpdir(), "cokoyo-v2-"));
     const path = join(dir, "v2.db");
     try {
@@ -57,11 +57,14 @@ describe("DBの引き上げ", () => {
       old.close();
 
       const db = openDb(path);
-      expect(db.prepare("PRAGMA user_version").get()).toEqual({ user_version: 4 });
+      expect(db.prepare("PRAGMA user_version").get()).toEqual({ user_version: 5 });
       expect(db.prepare("SELECT name FROM sqlite_master WHERE name = 'feedback'").get()).toBeTruthy();
       // 「知り合いかも」に出すかどうかの列（既定は出す）
       const columns = (db.prepare("PRAGMA table_info(users)").all() as { name: string }[]).map((r) => r.name);
       expect(columns).toContain("discoverable");
+      // アクセス数の表
+      expect(db.prepare("SELECT name FROM sqlite_master WHERE name = 'access_daily'").get()).toBeTruthy();
+      expect(db.prepare("SELECT name FROM sqlite_master WHERE name = 'access_routes'").get()).toBeTruthy();
       db.close();
     } finally {
       rmSync(dir, { recursive: true });

@@ -25,7 +25,7 @@ npm run typecheck
 - `src/field/`: キャンパスの描画
 - `docs/api-for-backend.md`: API の現行契約
 
-`VITE_SHELL=app` はアプリのみ、既定の `explain` はスマホ枠とデモ・通信ログを表示します。本番は `/` が実データのアプリ、`/explain/` が実データの説明画面、`/test/` が模擬データです。公開 DB 表は全行を表示しますが、メール・Google ID・認証情報・MAC 原文・共有キーを除外します。
+`VITE_SHELL=app` はアプリのみ、既定の `explain` はスマホ枠とデモ・通信ログを表示します。本番は `/` が実データのアプリ、`/explain/` が実データの説明画面（管理用パスワードが必要）、`/test/` が模擬データ、`/admin/` が管理画面（同じパスワード）です。説明画面の DB 表は全行を表示しますが、メール・Google ID・認証情報・MAC 原文・共有キーを除外します。
 
 PWA はネットワーク優先で、`/api/` をキャッシュしません。カメラとサービスワーカーは HTTPS または localhost が必要です。
 

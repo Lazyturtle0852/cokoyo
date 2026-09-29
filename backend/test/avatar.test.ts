@@ -18,7 +18,7 @@ describe("アイコンの写真", () => {
     const seen = await h.json<FriendsResponse>(await bob.get("/v1/friends"));
     expect(seen.friends[0]?.avatar).toBe(PNG);
 
-    const dump = await h.json<{ tables: { name: string; columns: string[]; rows: unknown[][] }[] }>(await h.call("/v1/debug/db"));
+    const dump = await h.json<{ tables: { name: string; columns: string[]; rows: unknown[][] }[] }>(await (await h.adminLogin())("/v1/debug/db"));
     const users = dump.tables.find((table) => table.name === "users");
     expect(users?.columns).toContain("avatar");
     expect(JSON.stringify(dump)).not.toContain(PNG);

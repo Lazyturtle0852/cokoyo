@@ -23,6 +23,8 @@ main() {
   grep -qE '^APP_ORIGIN=https://cokoyo\.lazyta-toru\.net$' "$env_file" || { echo "APP_ORIGIN が本番URLと一致しません" >&2; exit 1; }
   grep -qE '^GOOGLE_CLIENT_ID=.+$' "$env_file" || { echo "GOOGLE_CLIENT_ID が未設定です" >&2; exit 1; }
   grep -qE '^GOOGLE_CLIENT_SECRET=.+$' "$env_file" || { echo "GOOGLE_CLIENT_SECRET が未設定です" >&2; exit 1; }
+  # 無くても動くが、/admin と /explain に入れなくなる。
+  grep -qE '^ADMIN_PASSWORD=.+$' "$env_file" || echo "警告: ADMIN_PASSWORD が未設定です（/admin と /explain に入れません）" >&2
 
   echo "==> git pull"
   git pull
@@ -41,6 +43,7 @@ main() {
   for d in dist dist-explain dist-test; do
     test -f "frontend-v2/$d/index.html" || { echo "frontend-v2/$d が作られていない"; exit 1; }
   done
+  test -f frontend-v2/dist/admin/index.html || { echo "frontend-v2/dist/admin が作られていない"; exit 1; }
 
   echo "==> バックエンド"
   docker compose -f deploy/docker-compose.yml up -d --build
@@ -57,7 +60,7 @@ main() {
   echo "==> 確認"
   local b=https://cokoyo.lazyta-toru.net
   local path status
-  for path in / /explain/ /test/ /documents/ /about/ /terms/ /privacy/; do
+  for path in / /explain/ /test/ /admin/ /documents/ /about/ /terms/ /privacy/; do
     status=$(curl --silent --show-error -o /dev/null -w '%{http_code}' "$b$path")
     echo "$path $status"
     test "$status" = 200
@@ -65,6 +68,9 @@ main() {
   curl --fail --silent --show-error $b/api/health; echo
   # 認証Cookieなしなら401。Googleの資格情報をログに出さずに疎通を確認する。
   test "$(curl -s -o /dev/null -w '%{http_code}' "$b/api/v1/auth/session")" = 401
+  # 管理用パスワードなしでは、集計もDBの中身も返さない。
+  test "$(curl -s -o /dev/null -w '%{http_code}' "$b/api/v1/admin/stats")" = 401
+  test "$(curl -s -o /dev/null -w '%{http_code}' "$b/api/v1/debug/db")" = 401
 }
 
 main "$@"

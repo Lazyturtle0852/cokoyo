@@ -1,7 +1,8 @@
 // 画面右の「バックエンドのDBの中身」。アプリ本体ではない（説明用のページだけで出す）
 //
-// 出るのは、自分に関係する行だけ。他人の行は user_id と表示名しか返ってこない。
-// 取りに行くのは GET /v1/debug/db。この通信は「バックエンドとの通信」には記録しない。
+// 全員ぶんの行を出す。メール・認証情報・MAC原文・共有キーは伏せてある。
+// 取りに行くのは GET /v1/debug/db（管理用パスワードで入っていないと 401）。
+// この通信は「バックエンドとの通信」には記録しない。
 
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../app/AppContext';
@@ -33,7 +34,7 @@ export function DbPanel() {
         <h2>バックエンドのDBの中身</h2>
         <p className="desc">このページは模擬バックエンドなので、DBはありません。</p>
         <p className="empty">
-          本物のDBの中身は <a href="/explain/">/explain</a> で見られます（実データ）。
+          本物のDBの中身は <span className="mono">/explain</span> で見られます（実データ。管理用パスワードが必要）。
         </p>
       </section>
     );
@@ -50,7 +51,22 @@ export function DbPanel() {
       {error && <p className="empty">読めませんでした：{error}</p>}
       {!error && !tables && <p className="empty">読み込み中…</p>}
 
-      {tables?.map((t) => (
+      {tables && <DbTables tables={tables} />}
+
+      <div className="callout">
+        アプリはこの表を直接は見ません。見えるのは
+        <span className="mono">GET /v1/me</span> や <span className="mono">POST /v1/checks</span> が返す形に
+        直したものだけです（上の「バックエンドとの通信」）。
+      </div>
+    </section>
+  );
+}
+
+/** DBの表を、テーブルごとにそのまま並べる。管理画面（/admin）でも使う。 */
+export function DbTables({ tables }: { tables: DbTable[] }) {
+  return (
+    <>
+      {tables.map((t) => (
         <div className="dbt" key={t.name}>
           <p className="plabel first">
             <span className="mono">{t.name}</span>
@@ -78,12 +94,6 @@ export function DbPanel() {
           </div>
         </div>
       ))}
-
-      <div className="callout">
-        アプリはこの表を直接は見ません。見えるのは
-        <span className="mono">GET /v1/me</span> や <span className="mono">POST /v1/checks</span> が返す形に
-        直したものだけです（上の「バックエンドとの通信」）。
-      </div>
-    </section>
+    </>
   );
 }

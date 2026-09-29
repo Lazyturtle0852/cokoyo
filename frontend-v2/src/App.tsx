@@ -3,6 +3,7 @@
 // 本番（shell = app）はアプリだけを画面いっぱいに出す。
 // 説明用（shell = explain）は左にスマホ、右にデモ操作と通信の中身を並べる。
 
+import { AdminGate } from './admin/AdminGate';
 import { AppProvider } from './app/AppContext';
 import { CallLog } from './demo/CallLog';
 import { DbPanel } from './demo/DbPanel';
@@ -35,9 +36,10 @@ function Explain() {
 }
 
 export function App() {
-  return (
-    <AppProvider>
-      {shell === 'app' ? <Phone /> : <Explain />}
-    </AppProvider>
-  );
+  if (shell === 'app') return <AppProvider><Phone /></AppProvider>;
+  // 実データの説明画面（/explain）は、管理用パスワードで入った人にだけ見せる。
+  // 模擬データ（/test）は誰でも触れる。
+  // AppProvider は開いてから置く（入る前にアプリ側の通信を始めないため）。
+  const page = <AppProvider><Explain /></AppProvider>;
+  return useMockBackend ? page : <AdminGate title="COKOYO（仮称）— 説明用ページ">{page}</AdminGate>;
 }

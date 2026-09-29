@@ -25,8 +25,8 @@ npm run build
 
 SQLite は起動時に新規 DB の v2 スキーマを作ります。旧 v1 DB は拒否します。旧データの移行はなく、別ボリュームを使うため、旧 DB を保存したまま切り替えられます。
 
-API 契約は [api-for-backend.md](../frontend-v2/docs/api-for-backend.md) と `shared/app-types.ts` を参照してください。MAC はアプリにはマスク表示のみ、フレンドには返しません。公開 `/explain/` の DB 表は全行ですがメール・Google ID・認証情報・MAC 原文・共有キーを出しません。
-プロフィール画像は縮小済みの JPEG・PNG・WebP の data URL を登録でき、フレンドにも返します。公開 DB 表には画像の大きさだけを表示します。
+API 契約は [api-for-backend.md](../frontend-v2/docs/api-for-backend.md) と `shared/app-types.ts` を参照してください。MAC はアプリにはマスク表示のみ、フレンドには返しません。`/explain/` の DB 表（`/v1/debug/db`）は全行ですがメール・Google ID・認証情報・MAC 原文・共有キーを出しません。管理用パスワードで入った人にだけ返します。
+プロフィール画像は縮小済みの JPEG・PNG・WebP の data URL を登録でき、フレンドにも返します。DB 表には画像の大きさだけを表示します。
 
 ## DTC とポイント
 
@@ -38,13 +38,21 @@ DTC の最新接続情報と天気だけを問い合わせます。履歴は取�
 
 ## ご意見・問い合わせ
 
-`POST /api/v1/feedback` を `feedback` テーブルに貯めます（1日5件、2〜1000文字）。自動通知はないので、ときどき見にいきます。公開 DB 表には出しません。
+`POST /api/v1/feedback` を `feedback` テーブルに貯めます（1日5件、2〜1000文字）。自動通知はないので、ときどき見にいきます。管理画面（`/admin/`）に一覧が出ます。説明画面の DB 表には出しません。
 
 ```sh
 docker compose exec api node -e "const{DatabaseSync}=require('node:sqlite');const db=new DatabaseSync(process.env.DB_PATH);for(const r of db.prepare('SELECT created_at, message FROM feedback ORDER BY id DESC LIMIT 20').all())console.log(r.created_at, r.message)"
 ```
 
-DB の形を変えるときは `src/db.ts` の `MIGRATIONS` に足します（`user_version` 管理、現在 3）。v2 の DB は起動時に `feedback` を足して v3 に上げます。
+DB の形を変えるときは `src/db.ts` の `MIGRATIONS` に足します（`user_version` 管理、現在 5）。古い DB は起動時に足りない表と列を足して上げます。
+
+## 管理画面と管理用パスワード
+
+`ADMIN_PASSWORD` を設定すると、`/admin/`（管理画面）と `/explain/`（説明画面）にそのパスワードで入れます。空なら両方とも入れません。
+
+- `POST /api/v1/admin/login` `{password}` で 12 時間有効の Cookie（HttpOnly、SameSite=Strict）を発行します。署名の鍵は起動ごとに作るので、再起動すると入り直しです。同じ IP から 15 分に 5 回間違えると、しばらく受け付けません。
+- `GET /api/v1/admin/stats` は利用者数、使った人数（今日・7日・30日）、日ごとの推移、よく呼ばれる API、利用者一覧（メール付き）、ご意見を返します。`GET /api/v1/admin/db` は DB 表にメール・ご意見・アクセス数を足したものです。
+- アクセス数は API の呼び出しを `access_daily`（日・利用者ごと）と `access_routes`（日・ルートごと）に足していきます。URL の中の値や IP は残しません。`/api/health`、`/v1/admin/*`、`/v1/debug/*` と 404 は数えません。ページを開いただけ（静的ファイル）は数えません。
 
 ## 知り合いかも
 

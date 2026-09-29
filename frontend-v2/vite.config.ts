@@ -19,6 +19,10 @@ export default defineConfig({
   ],
   // 公開用に1ファイルへまとめるとき（tools/build-app-share.js）、相対パスのほうが扱いやすい
   base: './',
+  // 入口は2つ。アプリ（index.html）と管理画面（admin/index.html → /admin/）。
+  build: {
+    rollupOptions: { input: { main: 'index.html', admin: 'admin/index.html' } },
+  },
   // 開発中は /api をローカルのバックエンドへ流す。同一オリジンになるので CORS が要らない。
   //   端末A: cd backend && npm run dev     （http://localhost:8080）
   //   端末B: cd frontend-v2 && npm run dev → http://localhost:5173/?api=/api

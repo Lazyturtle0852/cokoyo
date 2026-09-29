@@ -1,7 +1,8 @@
-import type { DbTable } from "../../shared/app-types.js";
+import type { AdminStatsResponse, DbTable } from "../../shared/app-types.js";
 import type { Db } from "./db.js";
 import { hashToken, newRequestId, newShareKey, newUserId } from "./lib/ids.js";
 import { maskMac } from "./lib/mac.js";
+import { jstDate, shiftDate } from "./lib/time.js";
 
 export interface User {
   id: number;
@@ -195,6 +196,59 @@ export function createRepo(db: Db) {
     ),
   };
 
+  // アクセス数。1日・1人ごと、1日・1ルートごとに足し込むだけにして、行が増えすぎないようにする。
+  const accessQ = {
+    byUser: db.prepare(
+      `INSERT INTO access_daily (date, user_id, hits) VALUES (?, ?, 1)
+       ON CONFLICT(date, user_id) DO UPDATE SET hits = hits + 1`,
+    ),
+    byRoute: db.prepare(
+      `INSERT INTO access_routes (date, method, route, hits) VALUES (?, ?, ?, 1)
+       ON CONFLICT(date, method, route) DO UPDATE SET hits = hits + 1`,
+    ),
+  };
+
+  // 管理画面の集計。users.created_at は UTC の ISO なので、日本時間の日付に直して数える。
+  const statsQ = {
+    totals: db.prepare(`SELECT
+      (SELECT COUNT(*) FROM users WHERE onboarding_completed_at IS NOT NULL) AS users,
+      (SELECT COUNT(*) FROM users WHERE onboarding_completed_at IS NULL) AS onboarding,
+      (SELECT COUNT(*) FROM users WHERE hidden = 1) AS hidden,
+      (SELECT COUNT(*) FROM mac_addresses) AS macs,
+      (SELECT COUNT(*) FROM friendships WHERE status = 'friends') AS friendships,
+      (SELECT COUNT(*) FROM friendships WHERE status = 'friends' AND best_low = 1 AND best_high = 1) AS bestFriends,
+      (SELECT COUNT(*) FROM friendships WHERE status = 'pending') AS pendingRequests,
+      (SELECT COUNT(*) FROM blocks) AS blocks,
+      (SELECT COUNT(*) FROM feedback) AS feedback,
+      (SELECT COALESCE(SUM(pts), 0) FROM point_events) AS points`),
+    activeSince: db.prepare("SELECT COUNT(DISTINCT user_id) AS n FROM access_daily WHERE user_id > 0 AND date >= ?"),
+    signups: db.prepare(
+      `SELECT date(created_at, '+9 hours') AS date, COUNT(*) AS n FROM users
+       WHERE date(created_at, '+9 hours') >= ? GROUP BY 1`,
+    ),
+    access: db.prepare(
+      `SELECT date, SUM(CASE WHEN user_id > 0 THEN 1 ELSE 0 END) AS users,
+              SUM(hits) AS hits, SUM(CASE WHEN user_id = 0 THEN hits ELSE 0 END) AS anon
+       FROM access_daily WHERE date >= ? GROUP BY date`,
+    ),
+    visits: db.prepare("SELECT date, COUNT(*) AS n FROM visits WHERE date >= ? GROUP BY date"),
+    routes: db.prepare(
+      `SELECT method, route, SUM(hits) AS hits FROM access_routes
+       WHERE date >= ? GROUP BY method, route ORDER BY hits DESC`,
+    ),
+    users: db.prepare(`SELECT u.user_id, u.display_name, u.email, u.created_at,
+        u.onboarding_completed_at IS NOT NULL AS onboarded, u.hidden,
+        (SELECT COUNT(*) FROM mac_addresses m WHERE m.user_id = u.id) AS macs,
+        (SELECT COUNT(*) FROM friendships f WHERE f.status = 'friends' AND u.id IN (f.user_low, f.user_high)) AS friends,
+        (SELECT COALESCE(SUM(pts), 0) FROM point_events p WHERE p.user_id = u.id) AS points,
+        (SELECT COUNT(*) FROM visits v WHERE v.user_id = u.id) AS visitDays,
+        (SELECT MAX(date) FROM access_daily a WHERE a.user_id = u.id) AS lastSeen,
+        (SELECT COALESCE(SUM(hits), 0) FROM access_daily a WHERE a.user_id = u.id AND a.date >= ?) AS recentHits
+      FROM users u ORDER BY u.id`),
+    feedback: db.prepare(`SELECT f.id, f.created_at, u.user_id, u.display_name, u.email, f.message
+      FROM feedback f JOIN users u ON u.id = f.user_id ORDER BY f.id DESC`),
+  };
+
   // /explain で中身を見せるためのもの。アプリ本体は使わない。
   // テーブルの全行を出す。秘密の列は dump() で除外する。
   const dumpQ = {
@@ -206,6 +260,9 @@ export function createRepo(db: Db) {
     visits: db.prepare("SELECT * FROM visits ORDER BY date DESC, user_id"),
     matches: db.prepare("SELECT * FROM matches ORDER BY user_id, other_user_id"),
     reactions: db.prepare("SELECT * FROM reactions ORDER BY updated_at"),
+    feedback: db.prepare("SELECT * FROM feedback ORDER BY id DESC"),
+    accessDaily: db.prepare("SELECT * FROM access_daily ORDER BY date DESC, hits DESC"),
+    accessRoutes: db.prepare("SELECT * FROM access_routes ORDER BY date DESC, hits DESC"),
   };
 
   type Cell = string | number | null;
@@ -401,11 +458,85 @@ export function createRepo(db: Db) {
     recordMatch: (userId: number, otherId: number, date: string) =>
       void q.upsertMatch.run(userId, otherId, date),
 
+    // ── アクセス数と管理画面 ─────────────────────────────────
+    /** API への呼び出しを1件数える。userId はログインしていなければ 0。 */
+    recordAccess(date: string, userId: number, method: string, route: string): void {
+      accessQ.byUser.run(date, userId);
+      accessQ.byRoute.run(date, method, route);
+    },
+
+    /** 管理画面の数字。daily は今日を含む直近 days 日。 */
+    adminStats(days = 30): AdminStatsResponse {
+      const today = jstDate();
+      const from = shiftDate(today, -(days - 1));
+      const num = (v: unknown) => Number(v ?? 0);
+      const byDate = (rows: unknown[]) =>
+        new Map((rows as Array<Record<string, unknown>>).map((r) => [String(r.date), r]));
+      const signups = byDate(statsQ.signups.all(from));
+      const access = byDate(statsQ.access.all(from));
+      const visits = byDate(statsQ.visits.all(from));
+      const totals = statsQ.totals.get() as Record<string, unknown>;
+      const active = (since: string) => num((statsQ.activeSince.get(since) as { n: number }).n);
+
+      return {
+        generatedAt: new Date().toISOString(),
+        today,
+        totals: {
+          users: num(totals.users), onboarding: num(totals.onboarding), hidden: num(totals.hidden),
+          macs: num(totals.macs), friendships: num(totals.friendships), bestFriends: num(totals.bestFriends),
+          pendingRequests: num(totals.pendingRequests), blocks: num(totals.blocks),
+          feedback: num(totals.feedback), points: num(totals.points),
+        },
+        active: { today: active(today), week: active(shiftDate(today, -6)), month: active(from) },
+        daily: Array.from({ length: days }, (_, i) => {
+          const date = shiftDate(from, i);
+          const a = access.get(date);
+          return {
+            date,
+            signups: num(signups.get(date)?.n),
+            activeUsers: num(a?.users),
+            hits: num(a?.hits),
+            anonHits: num(a?.anon),
+            visitors: num(visits.get(date)?.n),
+          };
+        }),
+        routes: (statsQ.routes.all(shiftDate(today, -6)) as Array<Record<string, unknown>>).map((r) => ({
+          method: String(r.method), route: String(r.route), hits: num(r.hits),
+        })),
+        users: (statsQ.users.all(from) as Array<Record<string, unknown>>).map((r) => ({
+          userId: String(r.user_id),
+          displayName: r.display_name === null ? "" : String(r.display_name),
+          email: String(r.email),
+          createdAt: String(r.created_at),
+          onboarded: num(r.onboarded) === 1,
+          hidden: num(r.hidden) === 1,
+          macs: num(r.macs),
+          friends: num(r.friends),
+          points: num(r.points),
+          visitDays: num(r.visitDays),
+          lastSeen: r.lastSeen === null ? null : String(r.lastSeen),
+          recentHits: num(r.recentHits),
+        })),
+        feedback: (statsQ.feedback.all() as Array<Record<string, unknown>>).map((r) => ({
+          id: num(r.id),
+          createdAt: String(r.created_at),
+          userId: String(r.user_id),
+          displayName: r.display_name === null ? "" : String(r.display_name),
+          email: String(r.email),
+          message: String(r.message),
+        })),
+      };
+    },
+
     // ── /explain 用のダンプ ───────────────────────────────────
-    /** 公開説明画面用。行は全件表示し、認証情報とMAC原文は列単位で除外する。 */
-    dump(): DbTable[] {
+    /**
+     * 説明画面・管理画面用。行は全件表示し、認証情報とMAC原文は列単位で除外する。
+     * full（管理画面）のときだけ、メールと問い合わせ、アクセス数も出す。
+     */
+    dump(full = false): DbTable[] {
       const uCols = [
-        "id", "user_id", "display_name", "avatar", "avatar_source", "hidden", "onboarding_completed_at", "created_at",
+        "id", "user_id", "display_name", ...(full ? ["email"] : []), "avatar", "avatar_source", "hidden",
+        "discoverable", "onboarding_completed_at", "created_at",
       ];
       const mCols = ["id", "user_id", "mac", "label", "registered_at"];
       const fCols = ["id", "user_low", "user_high", "status", "requested_by", "request_id",
@@ -417,7 +548,7 @@ export function createRepo(db: Db) {
       return [
         {
           name: "users",
-          note: "登録した人。メール、Google ID、共有キーは公開しない。",
+          note: full ? "登録した人。Google ID と共有キーは出さない。" : "登録した人。メール、Google ID、共有キーは公開しない。",
           columns: uCols,
           rows: (dumpQ.users.all() as Record<string, unknown>[]).map((r) => cells({
             ...r, avatar: r.avatar ? `（画像 ${Math.round(String(r.avatar).length / 1024)}KB）` : null,
@@ -465,6 +596,26 @@ export function createRepo(db: Db) {
           columns: ["user_id", "other_user_id", "last_date"],
           rows: rows(dumpQ.matches, ["user_id", "other_user_id", "last_date"]),
         },
+        ...(full ? [
+          {
+            name: "feedback",
+            note: "アプリの中から届いた問い合わせ・ご意見。新しい順。",
+            columns: ["id", "user_id", "date", "message", "created_at"],
+            rows: rows(dumpQ.feedback, ["id", "user_id", "date", "message", "created_at"]),
+          },
+          {
+            name: "access_daily",
+            note: "API を呼んだ回数を、日本時間の1日・1人ごとに数えたもの。user_id 0 はログインしていない呼び出し。",
+            columns: ["date", "user_id", "hits"],
+            rows: rows(dumpQ.accessDaily, ["date", "user_id", "hits"]),
+          },
+          {
+            name: "access_routes",
+            note: "API を呼んだ回数を、1日・1ルートごとに数えたもの。",
+            columns: ["date", "method", "route", "hits"],
+            rows: rows(dumpQ.accessRoutes, ["date", "method", "route", "hits"]),
+          },
+        ] : []),
       ];
     },
   };
