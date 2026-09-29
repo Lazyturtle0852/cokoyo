@@ -26,6 +26,26 @@ export interface DtcClient {
 const RETRY_DELAYS_MS = [400, 800];
 
 /**
+ * 時間を指定しない connection は「最後に見えた1件」を返す。何時間前でも、昨日でも返ってくる。
+ * そのため、帰宅したあとも最後に見えた建物で「在校」になっていた。
+ *
+ * DTC の記録は5分おき。処理済みの最新の記録から5分より前の観測は「もういない」とみなす。
+ * 最新と1つ前の記録までは在校なので、スマホがWiFiを一瞬切って1回取りこぼしても在校のまま。
+ * 記録の時刻は回ごとに数秒ずれるので、1つ前が5分ちょうどで外れないよう30秒だけ余裕を持たせる。
+ */
+export const FRESH_MS = 5 * 60 * 1000 + 30 * 1000;
+/** 処理済みの最新時刻が取れないときは、ふだんの遅れ（約5分）を今から引いて代わりにする。 */
+const TYPICAL_LAG_MS = 5 * 60 * 1000;
+/** /health/snmp は回数制限があるので、1分は使い回す。 */
+const REFERENCE_TTL_MS = 60 * 1000;
+
+/** 観測がまだ「いま」と言えるか。reference は DTC が処理を終えた最新の記録の時刻。 */
+export function isFresh(observedAt: string, reference: number): boolean {
+  const at = Date.parse(observedAt);
+  return Number.isFinite(at) && at >= reference - FRESH_MS;
+}
+
+/**
  * 実API。api.dtc.wide.ad.jp は認証が無いので資格情報は要らない。
  *
  * 観測が一度も無いMACは、404 ではなく 503 が返ることがある。
@@ -35,7 +55,28 @@ const RETRY_DELAYS_MS = [400, 800];
  * リクエスト全体を失敗させてもいけない — unavailable として個別に扱う。
  */
 export class RealDtcClient implements DtcClient {
+  private reference: { fetchedAt: number; value: Promise<number | null> } | null = null;
+
   constructor(private readonly baseUrl: string) {}
+
+  /**
+   * DTC が処理を終えた最新の記録の時刻。今の時刻ではなくこれと比べるのは、
+   * DTC の処理が遅れているあいだに、キャンパスにいる人まで「いない」にしないため。
+   * 処理が滞っているときは 503 でも同じ形で返ってくるので、そちらも読む。
+   */
+  private latestProcessedAt(): Promise<number | null> {
+    const now = Date.now();
+    if (this.reference && now - this.reference.fetchedAt < REFERENCE_TTL_MS) return this.reference.value;
+    const value = fetch(`${this.baseUrl}/health/snmp`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(4000) })
+      .then((res) => res.json() as Promise<{ latestProcessedAt?: string }>)
+      .then((body) => {
+        const at = Date.parse(body.latestProcessedAt ?? "");
+        return Number.isFinite(at) ? at : null;
+      })
+      .catch(() => null);
+    this.reference = { fetchedAt: now, value };
+    return value;
+  }
 
   async latest(mac: string): Promise<Lookup> {
     const url = `${this.baseUrl}/wifi/clients/${toColonMac(mac)}/connection`;
@@ -66,6 +107,10 @@ export class RealDtcClient implements DtcClient {
 
       const latest = body?.history?.[0];
       if (!latest) return { status: "absent" };
+
+      // 最後に見えたのが前の記録なら、もうキャンパスを出ている
+      const reference = (await this.latestProcessedAt()) ?? Date.now() - TYPICAL_LAG_MS;
+      if (!isFresh(latest.time, reference)) return { status: "absent" };
 
       // APが建物に紐づいていない場合 buildingKey は入らない。在校自体は真。
       return { status: "present", buildingKey: latest.buildingKey };
