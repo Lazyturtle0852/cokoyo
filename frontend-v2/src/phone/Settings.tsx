@@ -94,6 +94,26 @@ export function Settings() {
       <button className="btn btn-quiet" onClick={() => void logout(true)}>すべての端末からログアウト</button>
     </div>
 
+    <div className="sec"><h3>知り合いかも</h3></div>
+    <div className="card">
+      <div className="kv">
+        <div>
+          <div className="k">知り合いかもに出す</div>
+          <div className="row-note">
+            フレンドのフレンドの画面に、あなたが「知り合いかも」として出ます。
+            オフにすると出ません（すでにフレンドの人からの見え方は変わりません）。
+          </div>
+        </div>
+        <button className="swbtn" aria-pressed={me.discoverable}
+          onClick={() => void run('知り合いかもの設定', async () => {
+            setMe(await api.updateMe({ discoverable: !me.discoverable }));
+            showToast(me.discoverable ? '知り合いかもに出さないようにしました' : '知り合いかもに出るようにしました');
+          })}>
+          <span className={`switch${me.discoverable ? ' on' : ''}`} />{me.discoverable ? 'オン' : 'オフ'}
+        </button>
+      </div>
+    </div>
+
     <div className="sec"><h3>ご意見・問い合わせ</h3></div>
     <div className="card"><Feedback /></div>
 

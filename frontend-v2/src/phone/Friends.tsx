@@ -5,6 +5,7 @@ import { useApp } from '../app/AppContext';
 import { api } from '../api/client';
 import type { Friend } from '../api/types';
 import { HideCard } from './HideCard';
+import { Suggestions } from './Suggestions';
 import { Avatar, fullDate, Icon } from './ui';
 
 export function Friends() {
@@ -129,6 +130,8 @@ export function Friends() {
           );
         })}
       </div>
+
+      <Suggestions />
 
       {requests.outgoing.length > 0 && (
         <>

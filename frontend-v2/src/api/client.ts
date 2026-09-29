@@ -9,7 +9,7 @@ import { pendingInvite } from '../app/invite';
 import { mockBackend } from './mockBackend';
 import type {
   AddFriendResponse, ApiErrorBody, BestResponse, BlockResponse, CheckResponse,
-  DebugDbResponse, FeedbackResponse, FriendsResponse, MacAddressView, Me, PointsResponse, ReactionResponse, UserRef,
+  DebugDbResponse, FeedbackResponse, SuggestionsResponse, FriendsResponse, MacAddressView, Me, PointsResponse, ReactionResponse, UserRef,
 } from './types';
 
 // ---------------------------------------------------------------
@@ -96,7 +96,7 @@ export const api = {
   completeOnboarding: (displayName: string, mac: string, label: string) =>
     request<Me>('POST', '/v1/onboarding', { displayName, mac, label }),
   getMe: (silent = false) => request<Me>('GET', '/v1/me', undefined, silent),
-  updateMe: (patch: { displayName?: string; hidden?: boolean }) => request<Me>('PATCH', '/v1/me', patch),
+  updateMe: (patch: { displayName?: string; hidden?: boolean; discoverable?: boolean }) => request<Me>('PATCH', '/v1/me', patch),
   updateAvatar: (image: string) => request<Me>('PUT', '/v1/me/avatar', { image }),
   removeAvatar: () => request<Me>('DELETE', '/v1/me/avatar'),
   getMacs: () => request<{ macs: MacAddressView[]; limit: number }>('GET', '/v1/me/macs'),
@@ -111,6 +111,10 @@ export const api = {
 
   // フレンド
   getFriends: (silent = false) => request<FriendsResponse>('GET', '/v1/friends', undefined, silent),
+  // 知り合いかも（フレンドのフレンド）
+  getSuggestions: (silent = false) => request<SuggestionsResponse>('GET', '/v1/friends/suggestions', undefined, silent),
+  // おすすめから申請する（相手の承認でフレンドになる）
+  addFriendById: (userId: string) => request<AddFriendResponse>('POST', '/v1/friends', { userId, via: 'suggestion' }),
   addFriend: (shareKey: string, via: 'qr' | 'link') => request<AddFriendResponse>('POST', '/v1/friends', { shareKey, via }),
   acceptRequest: (requestId: string) => request<{ status: 'friends'; user: UserRef }>('POST', `/v1/friend-requests/${id(requestId)}/accept`),
   declineRequest: (requestId: string) => request<null>('POST', `/v1/friend-requests/${id(requestId)}/decline`),

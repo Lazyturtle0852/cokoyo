@@ -25,6 +25,8 @@ export interface Me extends UserRef {
   email: string;
   shareKey: string;
   hidden: boolean;
+  /** 「知り合いかも」に自分を出してよいか */
+  discoverable: boolean;
   macs: MacAddressView[];
 }
 
@@ -38,6 +40,23 @@ export interface MacAddressView {
 export interface Friend extends UserRef {
   friendsSince: string;
   best: BestState;
+}
+
+/**
+ * 「知り合いかも」に出す相手。
+ *   best-friend … ベストフレンドのフレンド
+ *   mutual      … 共通のフレンドが2人以上
+ */
+export interface Suggestion extends UserRef {
+  reason: "best-friend" | "mutual";
+  /** 共通のフレンドの人数 */
+  mutualCount: number;
+  /** reason が best-friend のときの、きっかけになったベストフレンド */
+  via?: UserRef;
+}
+
+export interface SuggestionsResponse {
+  suggestions: Suggestion[];
 }
 
 export interface FriendRequest extends UserRef {

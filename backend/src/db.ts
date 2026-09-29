@@ -23,6 +23,7 @@ CREATE TABLE users (
   avatar_source TEXT NOT NULL DEFAULT 'unset' CHECK (avatar_source IN ('unset', 'google', 'custom', 'disabled')),
   share_key TEXT UNIQUE,
   hidden INTEGER NOT NULL DEFAULT 0,
+  discoverable INTEGER NOT NULL DEFAULT 1,   -- 「知り合いかも」に自分を出してよいか
   onboarding_completed_at TEXT,
   created_at TEXT NOT NULL
 );
@@ -110,7 +111,7 @@ CREATE TABLE feedback (
   created_at TEXT NOT NULL
 );
 CREATE INDEX idx_feedback_user_date ON feedback(user_id, date);
-PRAGMA user_version = 3;
+PRAGMA user_version = 4;
 `;
 
 /**
@@ -129,9 +130,13 @@ const MIGRATIONS: Record<number, string> = {
     CREATE INDEX idx_feedback_user_date ON feedback(user_id, date);
     PRAGMA user_version = 3;
   `,
+  3: `
+    ALTER TABLE users ADD COLUMN discoverable INTEGER NOT NULL DEFAULT 1;
+    PRAGMA user_version = 4;
+  `,
 };
 
-const LATEST = 3;
+const LATEST = 4;
 
 export function openDb(path: string): Db {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });

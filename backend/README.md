@@ -46,3 +46,7 @@ docker compose exec api node -e "const{DatabaseSync}=require('node:sqlite');cons
 
 DB の形を変えるときは `src/db.ts` の `MIGRATIONS` に足します（`user_version` 管理、現在 3）。v2 の DB は起動時に `feedback` を足して v3 に上げます。
 
+## 知り合いかも
+
+`GET /api/v1/friends/suggestions` は、フレンドのフレンドから「ベストフレンド（相互）のフレンド」「共通のフレンドが2人以上」を最大10人返します（`src/repo.ts` の `suggestions`）。すでにフレンド・申請中・ブロック関係・登録途中・`users.discoverable = 0` は除きます。共通のフレンドが誰かは返さず、人数だけです。申請は `POST /api/v1/friends` の `{userId, via: "suggestion"}` で、常に承認待ちになります。
+

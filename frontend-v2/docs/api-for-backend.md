@@ -20,7 +20,7 @@
 | メソッド・パス | 内容 |
 |---|---|
 | `GET /me` | `{userId, displayName, email, shareKey, hidden, macs}` |
-| `PATCH /me` | `{displayName?, hidden?}`。更新した `Me` を返す |
+| `PATCH /me` | `{displayName?, hidden?, discoverable?}`。更新した `Me` を返す |
 | `PUT /me/avatar` | `{image}`。縮小済み JPEG・PNG・WebP の data URL を登録し、更新した `Me` を返す |
 | `DELETE /me/avatar` | 画像を削除し、更新した `Me` を返す |
 | `GET /me/macs` | `{macs, limit: 5}` |
@@ -38,7 +38,8 @@ MAC は 12 桁の 16 進数または `:` / `-` 区切り。アカウント間で
 | `POST /checks` | 登録 MAC を確認し、在校・天気・フレンド・今回のポイント・リアクションを返す |
 | `GET /points` | 今日と累計のポイント |
 | `GET /friends` | フレンド、申請、ブロックの一覧 |
-| `POST /friends` | `{shareKey, via: "qr"\|"link"}`。QR は即時成立、リンクは申請。MAC 検索は不可 |
+| `POST /friends` | `{shareKey, via: "qr"\|"link"}`。QR は即時成立、リンクは申請。`{userId, via: "suggestion"}` は「知り合いかも」からの申請。MAC 検索は不可 |
+| `GET /friends/suggestions` | 「知り合いかも」。`{suggestions: [{userId, displayName, avatar?, reason, mutualCount, via?}]}` |
 | `POST /friend-requests/:requestId/accept` / `decline` | 申請の承認・拒否 |
 | `POST` / `DELETE /friends/:userId/best` | ベストフレンド申請・解除 |
 | `POST` / `DELETE /friends/:userId/block` | ブロック・解除 |
@@ -55,4 +56,10 @@ MAC は 12 桁の 16 進数または `:` / `-` 区切り。アカウント間で
 
 1日5件まで（超えると `429 too_many`）。`feedback` テーブルに貯めるだけで、自動では誰にも届きません。
 本文が誰にでも読めてしまうため、公開の `GET /debug/db` には出しません。読み方は `backend/README.md`。
+
+## 知り合いかも
+
+`GET /v1/friends/suggestions` は、フレンドのフレンドのうち **ベストフレンド（相互）のフレンド**（`reason: "best-friend"`、`via` にそのベストフレンド）か、**共通のフレンドが2人以上**（`reason: "mutual"`）の相手を最大10人返します。すでにフレンド・申請中（どちらの向きも）・ブロックしている／されている相手、登録の途中の人、`discoverable` を切った人は出しません。共通のフレンドが誰かは返さず、人数（`mutualCount`）だけです。
+
+申請は `POST /v1/friends` に `{userId, via: "suggestion"}`。共有キーは渡さないので、常に相手の承認待ち（202）になります。`Me.discoverable` は「知り合いかもに自分を出すか」で、`PATCH /me` で切り替えます。
 
