@@ -645,8 +645,7 @@ body.plain .map-screen { border-radius: 0; }
 @media (prefers-reduced-motion: reduce) { .rain { display: none; } .field-scene.raining .slime-body::after { display: none; } }
 
 /* ---------- ご意見・問い合わせ ---------- */
-.fb-text { min-height: 120px; resize: vertical; line-height: 1.6; font-family: inherit; }
-.fb-count { text-align: right; margin-top: 4px; }
+a.btn { text-decoration: none; }
 
 /* ---------- 管理用パスワードの入口（/admin と /explain） ---------- */
 .gate { min-height: 70vh; display: grid; place-items: center; }

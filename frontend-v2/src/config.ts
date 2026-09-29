@@ -37,6 +37,13 @@ export const shareLink = (shareKey: string) => {
   } catch { return `?add=${shareKey}&openExternalBrowser=1`; }
 };
 
+/**
+ * 問い合わせ・ご意見の Google フォーム（設定タブ・/about/ などから開く）。
+ * フォームを作り直したときは VITE_FEEDBACK_URL で差し替えられる。
+ * public/ の静的ページ（about・terms・privacy）には直接書いてあるので、そちらも直す。
+ */
+export const feedbackFormUrl = import.meta.env.VITE_FEEDBACK_URL || 'https://forms.gle/7kGjMCf6GCTB4bWU6';
+
 export const useMockBackend = !config.apiBaseUrl;
 
 export type Shell = 'app' | 'explain';
