@@ -36,9 +36,8 @@ describe("知り合いかも", () => {
 
     const suggestions = await list(h, me);
     expect(suggestions.map((s) => s.displayName)).toEqual(["高橋"]);
-    expect(suggestions[0]).toMatchObject({ reason: "mutual", mutualCount: 2 });
-    // 共通のフレンドが誰かは出さない
-    expect(suggestions[0].via).toBeUndefined();
+    // 共通のフレンドの名前を渡す（申請するかどうかの手がかり）
+    expect(suggestions[0].mutual.map((u) => u.displayName).sort()).toEqual(["佐藤", "田中"]);
   });
 
   it("ベストフレンドのフレンドは、共通が1人でも出る", async () => {
@@ -53,10 +52,8 @@ describe("知り合いかも", () => {
 
     const suggestions = await list(h, me);
     expect(suggestions).toHaveLength(1);
-    expect(suggestions[0]).toMatchObject({
-      displayName: "高橋", reason: "best-friend", mutualCount: 1,
-    });
-    expect(suggestions[0].via?.displayName).toBe("佐藤");
+    expect(suggestions[0].displayName).toBe("高橋");
+    expect(suggestions[0].mutual.map((u) => u.displayName)).toEqual(["佐藤"]);
   });
 
   it("すでにフレンド・申請中・ブロックしている／されている相手は出ない", async () => {

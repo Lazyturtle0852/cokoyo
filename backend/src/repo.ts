@@ -130,7 +130,7 @@ export function createRepo(db: Db) {
       SELECT f.other AS other_id,
              COUNT(*) AS mutual,
              MAX(f.via_best) AS has_best,
-             MIN(CASE WHEN f.via_best THEN f.via END) AS best_via_id
+             GROUP_CONCAT(f.via) AS via_ids
       FROM foaf f
       JOIN users u ON u.id = f.other
       WHERE f.other <> ?1
@@ -348,9 +348,9 @@ export function createRepo(db: Db) {
     clearBest: (row: FriendshipRow) => void q.setBest.run(0, 0, row.id),
 
     // ── blocks ───────────────────────────────────────────────
-    /** 「知り合いかも」。多い順・ベストフレンド経由を先に */
+    /** 「知り合いかも」。ベストフレンドとつながっている人・共通の多い人が先 */
     suggestions: (me: number, limit: number) =>
-      many<{ other_id: number; mutual: number; has_best: number; best_via_id: number | null }>(
+      many<{ other_id: number; mutual: number; has_best: number; via_ids: string }>(
         q.suggestions.all(me, limit),
       ),
 

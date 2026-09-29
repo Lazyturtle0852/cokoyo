@@ -44,15 +44,13 @@ export interface Friend extends UserRef {
 
 /**
  * 「知り合いかも」に出す相手。
- *   best-friend … ベストフレンドのフレンド
- *   mutual      … 共通のフレンドが2人以上
+ *
+ * mutual は、あなたと相手に共通のフレンド。名前を出すのは、
+ * どちらもあなたのフレンドで、申請するかどうかの手がかりになるため。
+ * 並びは、ベストフレンドとつながっている人・共通が多い人が先（理由そのものは返さない）。
  */
 export interface Suggestion extends UserRef {
-  reason: "best-friend" | "mutual";
-  /** 共通のフレンドの人数 */
-  mutualCount: number;
-  /** reason が best-friend のときの、きっかけになったベストフレンド */
-  via?: UserRef;
+  mutual: UserRef[];
 }
 
 export interface SuggestionsResponse {

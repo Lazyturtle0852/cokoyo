@@ -461,7 +461,8 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
    * 「知り合いかも」。フレンドのフレンドから、
    *   ・ベストフレンドのフレンド
    *   ・共通のフレンドが2人以上
-   * を返す。共通のフレンドが誰かは出さない（人数だけ）。
+   * を返す。どちらの理由で出したかは返さず、共通のフレンドの名前だけを渡す
+   * （申請するかどうかの手がかりになるのはそこなので）。
    */
   app.get("/v1/friends/suggestions", (c) => {
     const me = requireUser(c, repo);
@@ -469,13 +470,13 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
     for (const row of repo.suggestions(me.id, SUGGESTION_LIMIT)) {
       const other = repo.findById(row.other_id);
       if (!other) continue;
-      const via = row.best_via_id === null ? undefined : repo.findById(row.best_via_id);
-      suggestions.push({
-        ...toRef(other),
-        reason: row.has_best ? "best-friend" : "mutual",
-        mutualCount: row.mutual,
-        ...(row.has_best && via ? { via: toRef(via) } : {}),
-      });
+      // 共通のフレンドは、どちらもこちらのフレンドなので名前を出してよい
+      const mutual = String(row.via_ids ?? "")
+        .split(",")
+        .map((id) => repo.findById(Number(id)))
+        .filter((u): u is User => Boolean(u))
+        .map(toRef);
+      suggestions.push({ ...toRef(other), mutual });
     }
     const response: SuggestionsResponse = { suggestions };
     return c.json(response);

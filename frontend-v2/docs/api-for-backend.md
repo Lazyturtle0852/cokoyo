@@ -39,7 +39,7 @@ MAC は 12 桁の 16 進数または `:` / `-` 区切り。アカウント間で
 | `GET /points` | 今日と累計のポイント |
 | `GET /friends` | フレンド、申請、ブロックの一覧 |
 | `POST /friends` | `{shareKey, via: "qr"\|"link"}`。QR は即時成立、リンクは申請。`{userId, via: "suggestion"}` は「知り合いかも」からの申請。MAC 検索は不可 |
-| `GET /friends/suggestions` | 「知り合いかも」。`{suggestions: [{userId, displayName, avatar?, reason, mutualCount, via?}]}` |
+| `GET /friends/suggestions` | 「知り合いかも」。`{suggestions: [{userId, displayName, avatar?, mutual: UserRef[]}]}` |
 | `POST /friend-requests/:requestId/accept` / `decline` | 申請の承認・拒否 |
 | `POST` / `DELETE /friends/:userId/best` | ベストフレンド申請・解除 |
 | `POST` / `DELETE /friends/:userId/block` | ブロック・解除 |
@@ -59,7 +59,9 @@ MAC は 12 桁の 16 進数または `:` / `-` 区切り。アカウント間で
 
 ## 知り合いかも
 
-`GET /v1/friends/suggestions` は、フレンドのフレンドのうち **ベストフレンド（相互）のフレンド**（`reason: "best-friend"`、`via` にそのベストフレンド）か、**共通のフレンドが2人以上**（`reason: "mutual"`）の相手を最大10人返します。すでにフレンド・申請中（どちらの向きも）・ブロックしている／されている相手、登録の途中の人、`discoverable` を切った人は出しません。共通のフレンドが誰かは返さず、人数（`mutualCount`）だけです。
+`GET /v1/friends/suggestions` は、フレンドのフレンドのうち **ベストフレンド（相互）のフレンド**か、**共通のフレンドが2人以上**の相手を最大10人返します。並びは前者が先、次に共通の多い順で、どちらの理由で出したかは返しません。すでにフレンド・申請中（どちらの向きも）・ブロックしている／されている相手、登録の途中の人、`discoverable` を切った人は出しません。
+
+`mutual` は共通のフレンドの一覧（`UserRef`）です。どちらもこちらのフレンドなので名前を返します（申請するかどうかを決める手がかりがこれしかないため）。
 
 申請は `POST /v1/friends` に `{userId, via: "suggestion"}`。共有キーは渡さないので、常に相手の承認待ち（202）になります。`Me.discoverable` は「知り合いかもに自分を出すか」で、`PATCH /me` で切り替えます。
 

@@ -336,7 +336,7 @@ function listFriends(uid: string) {
 function suggestions(uid: string) {
   const myFriends = friendIdsOf(uid).map((o) => o.id);
   const pendingWith = new Set(db.friendRequests.flatMap((r) => (r.from === uid ? [r.to] : r.to === uid ? [r.from] : [])));
-  const found = new Map<string, { mutual: number; bestVia?: string }>();
+  const found = new Map<string, { mutual: string[]; bestVia?: string }>();
 
   for (const friend of myFriends) {
     const best = isBest(uid, friend);
@@ -345,23 +345,18 @@ function suggestions(uid: string) {
       if (blockedBy(uid, other) || blockedBy(other, uid)) continue;
       const user = db.users[other];
       if (!user || user.discoverable === false) continue;
-      const found1 = found.get(other) ?? { mutual: 0 };
-      found1.mutual += 1;
-      if (best && !found1.bestVia) found1.bestVia = friend;
-      found.set(other, found1);
+      const entry = found.get(other) ?? { mutual: [] as string[] };
+      entry.mutual.push(friend);
+      if (best && !entry.bestVia) entry.bestVia = friend;
+      found.set(other, entry);
     }
   }
 
   const list = [...found.entries()]
-    .filter(([, v]) => v.bestVia || v.mutual >= 2)
-    .sort((a, b) => Number(!!b[1].bestVia) - Number(!!a[1].bestVia) || b[1].mutual - a[1].mutual)
+    .filter(([, v]) => v.bestVia || v.mutual.length >= 2)
+    .sort((a, b) => Number(!!b[1].bestVia) - Number(!!a[1].bestVia) || b[1].mutual.length - a[1].mutual.length)
     .slice(0, 10)
-    .map(([id, v]) => ({
-      ...publicUser(id),
-      reason: v.bestVia ? 'best-friend' : 'mutual',
-      mutualCount: v.mutual,
-      ...(v.bestVia ? { via: publicUser(v.bestVia) } : {}),
-    }));
+    .map(([id, v]) => ({ ...publicUser(id), mutual: v.mutual.map(publicUser) }));
   return ok({ suggestions: list });
 }
 
