@@ -57,7 +57,7 @@ main() {
   echo "==> 確認"
   local b=https://cokoyo.lazyta-toru.net
   local path status
-  for path in / /explain/ /test/ /documents/; do
+  for path in / /explain/ /test/ /documents/ /about/ /terms/ /privacy/; do
     status=$(curl --silent --show-error -o /dev/null -w '%{http_code}' "$b$path")
     echo "$path $status"
     test "$status" = 200
