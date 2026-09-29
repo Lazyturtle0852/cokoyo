@@ -165,6 +165,71 @@ export interface DebugDbResponse {
   tables: DbTable[];
 }
 
+/** GET /v1/admin/session。管理用パスワードで入っているか。 */
+export interface AdminSessionResponse {
+  admin: boolean;
+}
+
+/** GET /v1/admin/stats。管理画面の数字。日付はすべて日本時間の YYYY-MM-DD。 */
+export interface AdminStatsResponse {
+  generatedAt: string;
+  today: string;
+  totals: {
+    /** 初回登録まで終えた人 */
+    users: number;
+    /** Google ログインはしたが、初回登録が終わっていない人 */
+    onboarding: number;
+    hidden: number;
+    macs: number;
+    friendships: number;
+    bestFriends: number;
+    pendingRequests: number;
+    blocks: number;
+    feedback: number;
+    points: number;
+  };
+  /** API を1回でも呼んだ人数（今日・直近7日・直近30日） */
+  active: { today: number; week: number; month: number };
+  /** 直近30日、古い順 */
+  daily: Array<{
+    date: string;
+    signups: number;
+    activeUsers: number;
+    hits: number;
+    /** ログインしていない呼び出し */
+    anonHits: number;
+    /** 在校と判定された人数（visits） */
+    visitors: number;
+  }>;
+  /** 直近7日の、ルートごとの呼び出し回数。多い順 */
+  routes: Array<{ method: string; route: string; hits: number }>;
+  users: Array<{
+    userId: string;
+    displayName: string;
+    email: string;
+    createdAt: string;
+    onboarded: boolean;
+    hidden: boolean;
+    macs: number;
+    friends: number;
+    points: number;
+    visitDays: number;
+    /** 最後に API を呼んだ日 */
+    lastSeen: string | null;
+    /** 直近30日の呼び出し回数 */
+    recentHits: number;
+  }>;
+  /** 新しい順 */
+  feedback: Array<{
+    id: number;
+    createdAt: string;
+    userId: string;
+    displayName: string;
+    email: string;
+    message: string;
+  }>;
+}
+
 /** DTC が返す buildingKey（api.dtc.wide.ad.jp の enum と一致させること）。 */
 export const BUILDING_KEYS = [
   "kappa", "epsilon", "iota", "omicron", "delta", "tau", "mu",

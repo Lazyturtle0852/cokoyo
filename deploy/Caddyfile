@@ -17,6 +17,7 @@ cokoyo.lazyta-toru.net {
 	redir /documents /documents/
 	redir /explain /explain/
 	redir /test /test/
+	redir /admin /admin/
 
 	handle_path /documents/* {
 		root * /srv/documents
@@ -37,7 +38,7 @@ cokoyo.lazyta-toru.net {
 
 	handle {
 		root * /srv/frontend
-		try_files {path} /index.html # SPAのクライアントルーティング
+		try_files {path} {path}/index.html /index.html # /admin/ は admin/index.html、それ以外はSPA
 		file_server
 	}
 

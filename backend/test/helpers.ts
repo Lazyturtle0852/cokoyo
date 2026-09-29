@@ -1,3 +1,4 @@
+import { createAdminAuth } from "../src/admin.js";
 import { createApp } from "../src/app.js";
 import { openDb } from "../src/db.js";
 import type { DtcClient, Lookup } from "../src/dtc.js";
@@ -28,7 +29,7 @@ export class StubDtc implements DtcClient {
 export function createHarness() {
   const dtc = new StubDtc();
   const repo = createRepo(openDb(":memory:"));
-  const app = createApp(repo, dtc);
+  const app = createApp(repo, dtc, null, createAdminAuth(ADMIN_PASSWORD));
 
   const call = async (
     path: string,
@@ -42,6 +43,14 @@ export function createHarness() {
   };
 
   const json = async <T>(res: Response): Promise<T> => (await res.json()) as T;
+
+  /** 管理用パスワードで入り、その Cookie を付けて呼ぶ関数を返す。 */
+  const adminLogin = async () => {
+    const res = await call("/v1/admin/login", { method: "POST", body: JSON.stringify({ password: ADMIN_PASSWORD }) });
+    if (res.status !== 204) throw new Error(`admin login failed: ${res.status}`);
+    const cookie = (res.headers.get("set-cookie") ?? "").split(";", 1)[0] ?? "";
+    return (path: string) => call(path, { headers: { cookie } });
+  };
 
   /** 登録して、その人を操作するための一式を返す。 */
   const signUp = async (displayName: string, mac: string) => {
@@ -64,8 +73,10 @@ export function createHarness() {
     };
   };
 
-  return { app, repo, dtc, call, json, signUp };
+  return { app, repo, dtc, call, json, signUp, adminLogin };
 }
+
+export const ADMIN_PASSWORD = "test-admin-password";
 
 export const MAC = {
   alice: "a2b41c9e7703",

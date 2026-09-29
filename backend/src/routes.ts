@@ -1,12 +1,14 @@
 import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import { routePath } from "hono/route";
 import type {
-  AddFriendResponse, BestResponse, BestState, BlockResponse, BuildingKey, CheckResponse,
+  AddFriendResponse, AdminSessionResponse, AdminStatsResponse, BestResponse, BestState, BlockResponse, BuildingKey, CheckResponse,
   DebugDbResponse, FeedbackResponse, Suggestion, SuggestionsResponse, FriendsResponse, Me, PointItem, PointsResponse, Reaction, ReactionResponse,
   MacAddressView, UserRef,
 } from "../../shared/app-types.js";
 import { BUILDING_LABELS } from "../../shared/app-types.js";
 import { config } from "./config.js";
+import type { AdminAuth } from "./admin.js";
 import { newSecret, type GoogleProvider } from "./auth.js";
 import type { DtcClient, Lookup } from "./dtc.js";
 import { fail } from "./lib/errors.js";
@@ -70,6 +72,7 @@ const otherIdOf = (row: FriendshipRow, me: number) =>
 const secureCookies = config.appOrigin.startsWith("https://");
 const sessionCookie = secureCookies ? "__Host-cokoyo_session" : "cokoyo_session";
 const oauthCookie = secureCookies ? "__Host-cokoyo_oauth" : "cokoyo_oauth";
+const adminCookie = secureCookies ? "__Host-cokoyo_admin" : "cokoyo_admin";
 const cookieOptions = { path: "/", httpOnly: true, secure: secureCookies, sameSite: "Lax" as const };
 
 function requireUser(c: Parameters<typeof getCookie>[0], repo: Repo, completed = true): User {
@@ -179,9 +182,41 @@ function friendTarget(repo: Repo, me: User, userId: string): User {
   return other;
 }
 
+/**
+ * 呼び出し元の IP。手前の Apache / Caddy が X-Forwarded-For の末尾に本当の接続元を足すので、
+ * 末尾だけを信じる（先頭は送り手が好きに書ける）。管理用パスワードの連続失敗を数えるのに使う。
+ */
+const clientIp = (c: Parameters<typeof getCookie>[0]) =>
+  c.req.header("x-forwarded-for")?.split(",").at(-1)?.trim() || "local";
+
+/** 管理画面と、その集計に使う呼び出しはアクセス数に入れない。 */
+const UNCOUNTED = /^\/api\/(health$|v1\/admin\/|v1\/debug\/)/;
+
 /** /v1 の下に生やす。フロントは apiBaseUrl + "/v1/..." で叩く。 */
-export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider | null = null) {
+export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider | null, admin: AdminAuth) {
   const app = new Hono();
+
+  const requireAdmin = (c: Parameters<typeof getCookie>[0]) => {
+    if (!admin.enabled) fail(503, "admin_unavailable", "管理用パスワードが設定されていません");
+    if (!admin.verify(getCookie(c, adminCookie))) fail(401, "admin_required", "管理用パスワードを入力してください");
+  };
+
+  // ── アクセス数 ────────────────────────────────────────────
+  // 1日・1人ごと、1日・ルートごとの回数だけを足す。URL の中の値（userId など）や IP は残さない。
+  app.use("*", async (c, next) => {
+    await next();
+    if (UNCOUNTED.test(c.req.path)) return;
+    const route = routePath(c, -1);
+    if (!route || route.endsWith("*")) return; // どのルートにも当たらなかった（404）
+    try {
+      const token = getCookie(c, sessionCookie);
+      const user = token ? repo.findByToken(token) : undefined;
+      repo.recordAccess(jstDate(), user?.id ?? 0, c.req.method, route);
+    } catch (error) {
+      // 数え損ねても、本来の応答は返す。
+      console.error("access count failed:", error instanceof Error ? error.name : "unknown");
+    }
+  });
 
   app.get("/health", (c) => c.json({ ok: true, mock_dtc: config.mockDtc }));
 
@@ -666,16 +701,54 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
     return c.json(response, 201);
   });
 
+  // ── 管理用パスワード（/admin と /explain） ───────────────
+  app.post("/v1/admin/login", async (c) => {
+    if (!admin.enabled) fail(503, "admin_unavailable", "管理用パスワードが設定されていません");
+    const ip = clientIp(c);
+    if (admin.locked(ip)) fail(429, "too_many", "間違いが続いたため、しばらく入れません。15分ほど待ってください");
+    const password = (await c.req.json().catch(() => null))?.password;
+    if (typeof password !== "string" || !admin.check(password, ip)) {
+      fail(401, "wrong_password", "パスワードが違います");
+    }
+    setCookie(c, adminCookie, admin.issue(), {
+      ...cookieOptions, sameSite: "Strict", maxAge: Math.floor(admin.TTL_MS / 1000),
+    });
+    return c.body(null, 204);
+  });
+
+  app.post("/v1/admin/logout", (c) => {
+    deleteCookie(c, adminCookie, cookieOptions);
+    return c.body(null, 204);
+  });
+
+  app.get("/v1/admin/session", (c) => {
+    const response: AdminSessionResponse = { admin: admin.verify(getCookie(c, adminCookie)) };
+    return c.json(response);
+  });
+
+  app.get("/v1/admin/stats", (c) => {
+    requireAdmin(c);
+    const response: AdminStatsResponse = repo.adminStats();
+    return c.json(response);
+  });
+
+  /** 管理画面のDB表。/debug/db に、メール・問い合わせ・アクセス数を足したもの。 */
+  app.get("/v1/admin/db", (c) => {
+    requireAdmin(c);
+    const response: DebugDbResponse = { tables: repo.dump(true) };
+    return c.json(response);
+  });
+
   // ── 説明用 ────────────────────────────────────────────────
   /**
    * /explain のページが「バックエンドのDBに何が入っているか」を出すために叩く。
    * アプリ本体は使わない。
    *
-   * PoC なので、テーブルを丸ごと・全員ぶん返す。登録していない人にも見せたい
-   * （説明のためのページなので）ため、ログインも要求しない。
-   * MAC だけは伏せる。理由は repo.dump() のコメント。
+   * テーブルを丸ごと・全員ぶん返すので、管理用パスワードで入った人にだけ見せる。
+   * メール・認証情報・MAC原文・共有キーは伏せる。理由は repo.dump() のコメント。
    */
   app.get("/v1/debug/db", (c) => {
+    requireAdmin(c);
     const response: DebugDbResponse = { tables: repo.dump() };
     return c.json(response);
   });

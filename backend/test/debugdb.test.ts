@@ -15,11 +15,16 @@ const col = (dump: DebugDbResponse, name: string, column: string) => {
 };
 
 describe("/v1/debug/db", () => {
-  it("登録していなくても見られる（説明用のページなので）", async () => {
+  it("管理用パスワードで入った人だけが見られる", async () => {
     const h = createHarness();
-    const res = await h.call("/v1/debug/db");
+    const alice = await h.signUp("ゆうき", MAC.alice);
+    expect((await h.call("/v1/debug/db")).status).toBe(401);
+    // アプリにログインしているだけでは見られない
+    expect((await alice.get("/v1/debug/db")).status).toBe(401);
+
+    const res = await (await h.adminLogin())("/v1/debug/db");
     expect(res.status).toBe(200);
-    expect(table(await h.json<DebugDbResponse>(res), "users").rows).toHaveLength(0);
+    expect(table(await h.json<DebugDbResponse>(res), "users").rows).toHaveLength(1);
   });
 
   it("全員ぶんの行を、テーブルの形のまま返す", async () => {
@@ -29,7 +34,7 @@ describe("/v1/debug/db", () => {
     await h.signUp("知らない人", MAC.carol); // 誰ともフレンドではない
     await alice.post("/v1/friends", { shareKey: bob.shareKey, via: "qr" });
 
-    const dump = await h.json<DebugDbResponse>(await h.call("/v1/debug/db"));
+    const dump = await h.json<DebugDbResponse>(await (await h.adminLogin())("/v1/debug/db"));
 
     // 関わりの無い人も含めて、users は丸ごと出る
     expect(col(dump, "users", "display_name")).toEqual(["ゆうき", "佐藤", "知らない人"]);
@@ -46,7 +51,7 @@ describe("/v1/debug/db", () => {
     const h = createHarness();
     const alice = await h.signUp("ゆうき", MAC.alice);
 
-    const dump = await h.json<DebugDbResponse>(await h.call("/v1/debug/db"));
+    const dump = await h.json<DebugDbResponse>(await (await h.adminLogin())("/v1/debug/db"));
     expect(col(dump, "mac_addresses", "mac")).toEqual(["a2:b4:••:••:••:03"]);
     expect(JSON.stringify(dump)).not.toContain(MAC.alice);
     expect(JSON.stringify(dump)).not.toContain(alice.sessionToken);
@@ -61,7 +66,7 @@ describe("/v1/debug/db", () => {
     const bob = await h.signUp("佐藤", MAC.bob);
     await bob.post(`/v1/friends/${alice.userId}/block`);
 
-    const dump = await h.json<DebugDbResponse>(await h.call("/v1/debug/db"));
+    const dump = await h.json<DebugDbResponse>(await (await h.adminLogin())("/v1/debug/db"));
     expect(table(dump, "blocks").rows).toHaveLength(1);
     expect(col(dump, "blocks", "blocker_id")).toEqual([2]);
     expect(col(dump, "blocks", "blocked_id")).toEqual([1]);
@@ -73,7 +78,7 @@ describe("/v1/debug/db", () => {
     const user = h.repo.findByUserId(alice.userId);
     if (!user) throw new Error("test user missing");
     for (let i = 0; i < 101; i++) h.repo.addPoint(user.id, "2026-09-28", `test-${i}`, "確認", 1, null, null);
-    const dump = await h.json<DebugDbResponse>(await h.call("/v1/debug/db"));
+    const dump = await h.json<DebugDbResponse>(await (await h.adminLogin())("/v1/debug/db"));
     expect(table(dump, "point_events").rows).toHaveLength(101);
   });
 });

@@ -18,4 +18,6 @@ export const config = {
   dtcBaseUrl: (process.env.DTC_BASE_URL ?? "https://api.dtc.wide.ad.jp").replace(/\/+$/, ""),
   /** 仕様06。打ち切られたリクエストが速く返ることで block を悟られないようにする。 */
   timingFloorMs: num("TIMING_FLOOR_MS", 250),
+  /** /admin と /explain に入るパスワード。空なら管理用の入口は閉じる。 */
+  adminPassword: process.env.ADMIN_PASSWORD ?? "",
 } as const;

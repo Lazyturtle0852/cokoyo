@@ -9,7 +9,7 @@ import { pendingInvite } from '../app/invite';
 import { mockBackend } from './mockBackend';
 import type {
   AddFriendResponse, ApiErrorBody, BestResponse, BlockResponse, CheckResponse,
-  DebugDbResponse, FeedbackResponse, SuggestionsResponse, FriendsResponse, MacAddressView, Me, PointsResponse, ReactionResponse, UserRef,
+  AdminSessionResponse, AdminStatsResponse, DebugDbResponse, FeedbackResponse, SuggestionsResponse, FriendsResponse, MacAddressView, Me, PointsResponse, ReactionResponse, UserRef,
 } from './types';
 
 // ---------------------------------------------------------------
@@ -131,4 +131,11 @@ export const api = {
   sendFeedback: (message: string) => request<FeedbackResponse>('POST', '/v1/feedback', { message }),
 
   debugDb: () => request<DebugDbResponse>('GET', '/v1/debug/db', undefined, true),
+
+  // 管理用パスワード（/admin と /explain の入口）。どれも「バックエンドとの通信」には記録しない。
+  adminSession: () => request<AdminSessionResponse>('GET', '/v1/admin/session', undefined, true),
+  adminLogin: (password: string) => request<null>('POST', '/v1/admin/login', { password }, true),
+  adminLogout: () => request<null>('POST', '/v1/admin/logout', undefined, true),
+  adminStats: () => request<AdminStatsResponse>('GET', '/v1/admin/stats', undefined, true),
+  adminDb: () => request<DebugDbResponse>('GET', '/v1/admin/db', undefined, true),
 };

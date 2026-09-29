@@ -111,7 +111,20 @@ CREATE TABLE feedback (
   created_at TEXT NOT NULL
 );
 CREATE INDEX idx_feedback_user_date ON feedback(user_id, date);
-PRAGMA user_version = 4;
+CREATE TABLE access_daily (
+  date TEXT NOT NULL,              -- JST の YYYY-MM-DD
+  user_id INTEGER NOT NULL,        -- users.id。ログインしていない呼び出しは 0
+  hits INTEGER NOT NULL,
+  PRIMARY KEY (date, user_id)
+);
+CREATE TABLE access_routes (
+  date TEXT NOT NULL,
+  method TEXT NOT NULL,
+  route TEXT NOT NULL,             -- Hono のルート（/api/v1/friends/:userId/best など。値は入れない）
+  hits INTEGER NOT NULL,
+  PRIMARY KEY (date, method, route)
+);
+PRAGMA user_version = 5;
 `;
 
 /**
@@ -134,9 +147,25 @@ const MIGRATIONS: Record<number, string> = {
     ALTER TABLE users ADD COLUMN discoverable INTEGER NOT NULL DEFAULT 1;
     PRAGMA user_version = 4;
   `,
+  4: `
+    CREATE TABLE access_daily (
+      date TEXT NOT NULL,              -- JST の YYYY-MM-DD
+      user_id INTEGER NOT NULL,        -- users.id。ログインしていない呼び出しは 0
+      hits INTEGER NOT NULL,
+      PRIMARY KEY (date, user_id)
+    );
+    CREATE TABLE access_routes (
+      date TEXT NOT NULL,
+      method TEXT NOT NULL,
+      route TEXT NOT NULL,             -- Hono のルート（/api/v1/friends/:userId/best など。値は入れない）
+      hits INTEGER NOT NULL,
+      PRIMARY KEY (date, method, route)
+    );
+    PRAGMA user_version = 5;
+  `,
 };
 
-const LATEST = 4;
+const LATEST = 5;
 
 export function openDb(path: string): Db {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });

@@ -33,6 +33,8 @@ assert<Exact<App.BlockResponse, Fe.BlockResponse>>(true);
 assert<Exact<App.ApiErrorBody, Fe.ApiErrorBody>>(true);
 assert<Exact<App.DbTable, Fe.DbTable>>(true);
 assert<Exact<App.DebugDbResponse, Fe.DebugDbResponse>>(true);
+assert<Exact<App.AdminSessionResponse, Fe.AdminSessionResponse>>(true);
+assert<Exact<App.AdminStatsResponse, Fe.AdminStatsResponse>>(true);
 assert<Exact<App.Reaction, Fe.Reaction>>(true);
 assert<Exact<App.ReactionResponse, Fe.ReactionResponse>>(true);
 assert<Exact<App.FeedbackResponse, Fe.FeedbackResponse>>(true);
