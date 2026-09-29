@@ -8,6 +8,7 @@ import { api, ApiError, callLog } from '../api/client';
 import type { CheckResponse, FriendsResponse, Me, PointsResponse } from '../api/types';
 import { createCampusField, type CampusField } from '../field/campusField';
 import { clearPendingInvite, pendingInvite, takeInviteFromUrl } from './invite';
+import { isToday } from '../phone/ui';
 
 export type View = 'loading' | 'login' | 'onboarding' | 'app' | 'error';
 export type Tab = 'home' | 'friends' | 'settings';
@@ -121,8 +122,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const loadAll = useCallback(async (silent = false) => {
     const [m, f, p] = await Promise.all([api.getMe(silent), api.getFriends(silent), api.getPoints(silent)]);
     setMe(m); setFriends(f); setPoints(p);
-    setLastCheck(readLastCheck(m.userId));
-  }, []);
+    const saved = readLastCheck(m.userId);
+    setLastCheck(saved);
+    // 前に確認したときが雨なら、開いた時点から降らせておく
+    if (saved && isToday(saved.checkedAt)) field.setRain(saved.weather.rainy);
+  }, [field]);
 
   const goOnboarding = useCallback(() => {
     field.clear();
@@ -228,6 +232,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const list = friendsRef.current?.friends ?? [];
     const nameOf = (id: string) => list.find((x) => x.userId === id)?.displayName ?? '';
     const present = r.friends.filter((f) => f.present).map((f) => ({ userId: f.userId, name: nameOf(f.userId) }));
+    field.setRain(r.weather.rainy);
     let landed = field.sync(present, { present: r.me.presence === 'present', ghost: r.me.hidden });
 
     // 届いていたリアクション（つんつん）を、そのフレンドのスライムで見せてから、ポイントに移る

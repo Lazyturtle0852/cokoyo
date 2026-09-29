@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type {
   AddFriendResponse, BestResponse, BestState, BlockResponse, BuildingKey, CheckResponse,
-  DebugDbResponse, FriendsResponse, Me, PointItem, PointsResponse, Reaction, ReactionResponse,
+  DebugDbResponse, FeedbackResponse, Suggestion, SuggestionsResponse, FriendsResponse, Me, PointItem, PointsResponse, Reaction, ReactionResponse,
   MacAddressView, UserRef,
 } from "../../shared/app-types.js";
 import { BUILDING_LABELS } from "../../shared/app-types.js";
@@ -50,6 +50,7 @@ const toMe = (u: User, repo: Repo): Me => ({
   email: u.email,
   shareKey: u.share_key ?? "",
   hidden: u.hidden !== 0,
+  discoverable: u.discoverable !== 0,
   macs: repo.listMacs(u.id).map(toMac),
 });
 
@@ -111,6 +112,12 @@ function validMac(input: unknown): string {
   if (!mac) fail(400, "invalid_mac", "MACアドレスの形式が正しくありません");
   return mac;
 }
+
+/** 「知り合いかも」に出す人数 */
+const SUGGESTION_LIMIT = 10;
+
+/** 1日に送れる問い合わせの数 */
+const FEEDBACK_PER_DAY = 5;
 
 /** 1組（送り手→受け手）にためておけるリアクションの数と、届かないまま捨てるまでの時間。 */
 export const REACTION = { MAX: 99, TTL_MS: 3 * 24 * 60 * 60 * 1000 } as const;
@@ -265,7 +272,11 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
       fail(400, "invalid_hidden", "かくれんぼの設定が正しくありません");
     }
     const hidden = body?.hidden === undefined ? me.hidden !== 0 : body.hidden;
-    repo.updateProfile(me.id, displayName, hidden);
+    if (body?.discoverable !== undefined && typeof body.discoverable !== "boolean") {
+      fail(400, "invalid_discoverable", "おすすめの設定が正しくありません");
+    }
+    const discoverable = body?.discoverable === undefined ? me.discoverable !== 0 : body.discoverable;
+    repo.updateProfile(me.id, displayName, hidden, discoverable);
     return c.json(toMe(repo.findById(me.id) as User, repo));
   });
 
@@ -446,14 +457,44 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
     return c.json(response);
   });
 
+  /**
+   * 「知り合いかも」。フレンドのフレンドから、
+   *   ・ベストフレンドのフレンド
+   *   ・共通のフレンドが2人以上
+   * を返す。どちらの理由で出したかは返さず、共通のフレンドの名前だけを渡す
+   * （申請するかどうかの手がかりになるのはそこなので）。
+   */
+  app.get("/v1/friends/suggestions", (c) => {
+    const me = requireUser(c, repo);
+    const suggestions: Suggestion[] = [];
+    for (const row of repo.suggestions(me.id, SUGGESTION_LIMIT)) {
+      const other = repo.findById(row.other_id);
+      if (!other) continue;
+      // 共通のフレンドは、どちらもこちらのフレンドなので名前を出してよい
+      const mutual = String(row.via_ids ?? "")
+        .split(",")
+        .map((id) => repo.findById(Number(id)))
+        .filter((u): u is User => Boolean(u))
+        .map(toRef);
+      suggestions.push({ ...toRef(other), mutual });
+    }
+    const response: SuggestionsResponse = { suggestions };
+    return c.json(response);
+  });
+
   app.post("/v1/friends", async (c) => {
     const me = requireUser(c, repo);
     const body = await c.req.json().catch(() => null);
     // QRは対面での追加。リンク・共有キーは承認待ち。
     if (body?.via === "mac" || body?.mac !== undefined) fail(400, "unsupported_friend_method", "MACでのフレンド検索は終了しました");
     const via = body?.via === "qr" ? "qr" : "link";
-    const other = typeof body?.shareKey === "string" ? repo.findByShareKey(body.shareKey) : undefined;
-    if (!other) {
+
+    // 「知り合いかも」からは共有キーを渡せないので、userId で申請する（link と同じ承認待ち）。
+    const other = body?.via === "suggestion"
+      ? (typeof body?.userId === "string" ? repo.findByUserId(body.userId) : undefined)
+      : (typeof body?.shareKey === "string" ? repo.findByShareKey(body.shareKey) : undefined);
+    if (!other || other.onboarding_completed_at === null) {
+      if (body?.via === "suggestion") fail(404, "user_not_found", "この相手は見つかりません");
       fail(404, "share_key_not_found", "この共有キーの相手が見つかりません");
     }
     if (other.id === me.id) fail(400, "self", "自分のキーです");
@@ -597,6 +638,32 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
     if (!repo.isBlocking(other.id, me.id)) repo.addReaction(me.id, other.id, count as number, REACTION.MAX);
     const response: ReactionResponse = { userId: other.user_id, count: count as number };
     return c.json(response, 202);
+  });
+
+  // ── 問い合わせ・ご意見 ────────────────────────────────────
+  /**
+   * アプリの中から送ってもらう。DBに貯めるだけで、誰かに自動で届くことはない。
+   * 読むときは backend/README.md の手順で取り出す。
+   *
+   * 悪意なく連投されても困るので、1日5件までにしてある。
+   */
+  app.post("/v1/feedback", async (c) => {
+    const me = requireUser(c, repo);
+    const raw = (await c.req.json().catch(() => null))?.message;
+    const message = typeof raw === "string" ? raw.trim() : "";
+    if (message.length < 2 || message.length > 1000) {
+      fail(400, "invalid_message", "2〜1000文字で書いてください");
+    }
+
+    const today = jstDate();
+    const sent = repo.feedbackCount(me.id, today);
+    if (sent >= FEEDBACK_PER_DAY) {
+      fail(429, "too_many", `今日はもう送れません（1日${FEEDBACK_PER_DAY}件まで）。明日またお願いします`);
+    }
+
+    repo.addFeedback(me.id, today, message);
+    const response: FeedbackResponse = { remaining: FEEDBACK_PER_DAY - sent - 1 };
+    return c.json(response, 201);
   });
 
   // ── 説明用 ────────────────────────────────────────────────

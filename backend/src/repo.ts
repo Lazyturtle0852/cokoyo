@@ -13,6 +13,7 @@ export interface User {
   avatar_source: "unset" | "google" | "custom" | "disabled";
   share_key: string | null;
   hidden: number;
+  discoverable: number;
   onboarding_completed_at: string | null;
 }
 
@@ -46,7 +47,7 @@ export interface PointRow {
 }
 
 const USER_COLS =
-  "id, user_id, google_sub, email, display_name, avatar, avatar_source, share_key, hidden, onboarding_completed_at";
+  "id, user_id, google_sub, email, display_name, avatar, avatar_source, share_key, hidden, onboarding_completed_at, discoverable";
 
 /** 常に (小さい方, 大きい方) の順に揃える。 */
 const pair = (a: number, b: number): [number, number] => (a < b ? [a, b] : [b, a]);
@@ -64,7 +65,7 @@ export function createRepo(db: Db) {
     insertUser: db.prepare("INSERT INTO users (user_id, google_sub, email, created_at) VALUES (?, ?, ?, ?)"),
     updateEmail: db.prepare("UPDATE users SET email = ? WHERE id = ?"),
     completeUser: db.prepare("UPDATE users SET display_name = ?, share_key = ?, onboarding_completed_at = ? WHERE id = ?"),
-    updateProfile: db.prepare("UPDATE users SET display_name = ?, hidden = ? WHERE id = ?"),
+    updateProfile: db.prepare("UPDATE users SET display_name = ?, hidden = ?, discoverable = ? WHERE id = ?"),
     updateAvatar: db.prepare("UPDATE users SET avatar = ?, avatar_source = ? WHERE id = ?"),
     setGoogleName: db.prepare("UPDATE users SET display_name = ? WHERE id = ? AND display_name IS NULL AND onboarding_completed_at IS NULL"),
     setGoogleAvatar: db.prepare("UPDATE users SET avatar = ?, avatar_source = 'google' WHERE id = ? AND avatar_source = 'unset'"),
@@ -103,6 +104,50 @@ export function createRepo(db: Db) {
     deleteFriendship: db.prepare("DELETE FROM friendships WHERE id = ?"),
     setBest: db.prepare("UPDATE friendships SET best_low = ?, best_high = ? WHERE id = ?"),
 
+    /**
+     * 「知り合いかも」。フレンドのフレンドを集めて、
+     *   ・共通のフレンドが2人以上
+     *   ・ベストフレンド（お互いに立てている相手）のフレンド
+     * のどちらかに当てはまる人を返す。
+     *
+     * すでにフレンド・申請中（どちらの向きも）・ブロックしている／されている相手、
+     * 「おすすめに出さない」にしている人、登録の途中の人は外す。
+     */
+    suggestions: db.prepare(`
+      WITH mine AS (
+        SELECT CASE WHEN user_low = ?1 THEN user_high ELSE user_low END AS fid,
+               (best_low = 1 AND best_high = 1) AS is_best
+        FROM friendships
+        WHERE status = 'friends' AND (user_low = ?1 OR user_high = ?1)
+      ),
+      foaf AS (
+        SELECT CASE WHEN g.user_low = m.fid THEN g.user_high ELSE g.user_low END AS other,
+               m.fid AS via, m.is_best AS via_best
+        FROM mine m
+        JOIN friendships g
+          ON g.status = 'friends' AND (g.user_low = m.fid OR g.user_high = m.fid)
+      )
+      SELECT f.other AS other_id,
+             COUNT(*) AS mutual,
+             MAX(f.via_best) AS has_best,
+             GROUP_CONCAT(f.via) AS via_ids
+      FROM foaf f
+      JOIN users u ON u.id = f.other
+      WHERE f.other <> ?1
+        AND u.onboarding_completed_at IS NOT NULL
+        AND u.discoverable = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM friendships r
+          WHERE (r.user_low = ?1 AND r.user_high = f.other) OR (r.user_low = f.other AND r.user_high = ?1)
+        )
+        AND NOT EXISTS (SELECT 1 FROM blocks b WHERE b.blocker_id = ?1 AND b.blocked_id = f.other)
+        AND NOT EXISTS (SELECT 1 FROM blocks b WHERE b.blocker_id = f.other AND b.blocked_id = ?1)
+      GROUP BY f.other
+      HAVING mutual >= 2 OR has_best = 1
+      ORDER BY has_best DESC, mutual DESC, f.other
+      LIMIT ?2
+    `),
+
     block: db.prepare("SELECT 1 FROM blocks WHERE blocker_id = ? AND blocked_id = ?"),
     insertBlock: db.prepare(
       "INSERT OR IGNORE INTO blocks (blocker_id, blocked_id, created_at) VALUES (?, ?, ?)",
@@ -123,6 +168,11 @@ export function createRepo(db: Db) {
     ),
     pointsTotal: db.prepare(
       "SELECT COALESCE(SUM(pts), 0) AS total FROM point_events WHERE user_id = ?",
+    ),
+
+    feedbackCount: db.prepare("SELECT COUNT(*) AS n FROM feedback WHERE user_id = ? AND date = ?"),
+    insertFeedback: db.prepare(
+      "INSERT INTO feedback (user_id, date, message, created_at) VALUES (?, ?, ?, ?)",
     ),
 
     addReaction: db.prepare(
@@ -241,8 +291,8 @@ export function createRepo(db: Db) {
       return flow && flow.expires_at > new Date().toISOString() ? flow : null;
     },
 
-    updateProfile(id: number, displayName: string, hidden: boolean): void {
-      q.updateProfile.run(displayName, hidden ? 1 : 0, id);
+    updateProfile(id: number, displayName: string, hidden: boolean, discoverable: boolean): void {
+      q.updateProfile.run(displayName, hidden ? 1 : 0, discoverable ? 1 : 0, id);
     },
     updateAvatar: (id: number, avatar: string | null) =>
       void q.updateAvatar.run(avatar, avatar ? "custom" : "disabled", id),
@@ -298,6 +348,12 @@ export function createRepo(db: Db) {
     clearBest: (row: FriendshipRow) => void q.setBest.run(0, 0, row.id),
 
     // ── blocks ───────────────────────────────────────────────
+    /** 「知り合いかも」。ベストフレンドとつながっている人・共通の多い人が先 */
+    suggestions: (me: number, limit: number) =>
+      many<{ other_id: number; mutual: number; has_best: number; via_ids: string }>(
+        q.suggestions.all(me, limit),
+      ),
+
     isBlocking: (blocker: number, blocked: number) => Boolean(q.block.get(blocker, blocked)),
     addBlock: (blocker: number, blocked: number) =>
       void q.insertBlock.run(blocker, blocked, new Date().toISOString()),
@@ -316,6 +372,13 @@ export function createRepo(db: Db) {
       many<PointRow>(q.pointsOfDay.all(userId, date)),
     pointsTotal: (userId: number) =>
       Number((one<{ total: number }>(q.pointsTotal.get(userId)) ?? { total: 0 }).total),
+
+    // ── feedback ─────────────────────────────────────────────
+    /** その日に何件送ったか（送りすぎを止めるため） */
+    feedbackCount: (userId: number, date: string) =>
+      Number((one<{ n: number }>(q.feedbackCount.get(userId, date)) ?? { n: 0 }).n),
+    addFeedback: (userId: number, date: string, message: string) =>
+      void q.insertFeedback.run(userId, date, message, new Date().toISOString()),
 
     // ── reactions ────────────────────────────────────────────
     addReaction(from: number, to: number, count: number, max: number): void {

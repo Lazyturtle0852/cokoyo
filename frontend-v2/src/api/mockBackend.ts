@@ -11,7 +11,7 @@ import type { BestState, BuildingKey, PointItem, PointKind, Reaction } from './t
 import { BUILDING_KEYS, BUILDING_LABELS } from './types';
 
 // Google アカウントと複数MACの形に変わったため、旧デモの保存は使わない。
-const STORE_KEY = 'cokoyo-mock-backend:v5';
+const STORE_KEY = 'cokoyo-mock-backend:v6'; // 「知り合いかも」用のつながりを足したので作り直す
 
 // ---------------------------------------------------------------
 // ポイントの決まり
@@ -32,7 +32,9 @@ export const buildingLabel = (key: BuildingKey) => BUILDING_LABELS[key];
 // ---------------------------------------------------------------
 // データの形（バックエンドの中だけで使う）
 // ---------------------------------------------------------------
-interface DbUser { name: string; mac: string; shareKey: string; hidden: boolean; macRegisteredAt: string; createdAt: string; email?: string; avatar?: string; avatarSource?: 'google' | 'custom' | 'disabled'; macs?: { id: number; mac: string; label: string; registeredAt: string }[]; onboarded?: boolean }
+interface DbUser {
+  /** 「知り合いかも」に出してよいか（無ければ出す） */
+  discoverable?: boolean; name: string; mac: string; shareKey: string; hidden: boolean; macRegisteredAt: string; createdAt: string; email?: string; avatar?: string; avatarSource?: 'google' | 'custom' | 'disabled'; macs?: { id: number; mac: string; label: string; registeredAt: string }[]; onboarded?: boolean }
 interface Campus { connected: boolean; buildingKey: BuildingKey; unavailable?: boolean }
 interface Ledger {
   total: number;
@@ -56,6 +58,9 @@ interface Db {
 }
 
 export interface MockResult { status: number; json: unknown }
+
+/** 問い合わせ（模擬。ページを閉じると消える） */
+const feedback: { uid: string; message: string; at: string }[] = [];
 
 // ---------------------------------------------------------------
 // 日付
@@ -114,6 +119,7 @@ function seed(): Db {
       u_yamada:    user('山田',   '3a:f7:c4:58:0b:6e', 'sk_y6hp3bnq'),
       u_takahashi: user('高橋',   '9e:12:6b:d0:44:c7', 'sk_k2xa5gvw'),
       u_ito:       user('伊藤',   'f2:58:a1:3c:9d:06', 'sk_i7jt4qzs'),
+      u_kobayashi: user('小林',   '6b:3e:f1:82:57:ac', 'sk_b5nk9wdt'),
     },
     campus: {
       u_me:        { connected: false, buildingKey: 'kappa' },
@@ -123,12 +129,17 @@ function seed(): Db {
       u_yamada:    { connected: true,  buildingKey: 'theta' },
       u_takahashi: { connected: false, buildingKey: 'iota' },
       u_ito:       { connected: true,  buildingKey: 'tau' },
+      u_kobayashi: { connected: true,  buildingKey: 'lounge' },
     },
     friendships: [
       { a: 'u_me', b: 'u_sato',   since: ago(90) },
       { a: 'u_me', b: 'u_tanaka', since: ago(120) },
       { a: 'u_me', b: 'u_suzuki', since: ago(60) },
       { a: 'u_me', b: 'u_ito',    since: ago(200) },
+      // 「知り合いかも」を試すための、フレンドどうしのつながり
+      { a: 'u_sato',   b: 'u_yamada',    since: ago(50) },  // 山田＝共通のフレンド2人（佐藤・田中）
+      { a: 'u_tanaka', b: 'u_yamada',    since: ago(30) },
+      { a: 'u_sato',   b: 'u_kobayashi', since: ago(20) },  // 小林＝ベストフレンド（佐藤）のフレンド
     ],
     friendRequests: [{ id: 'fr_takahashi', from: 'u_takahashi', to: 'u_me', createdAt: ago(1) }],
     best: [{ a: 'u_me', b: 'u_sato', since: ago(40) }],
@@ -142,7 +153,7 @@ function seed(): Db {
         lastMatch: { u_sato: fmt(wd[1]), u_tanaka: fmt(addDays(today, -45)), u_suzuki: fmt(addDays(today, -20)), u_ito: fmt(addDays(today, -60)) },
         days: {},
       },
-      u_sato: empty(), u_tanaka: empty(), u_suzuki: empty(), u_yamada: empty(), u_takahashi: empty(), u_ito: empty(),
+      u_sato: empty(), u_tanaka: empty(), u_suzuki: empty(), u_yamada: empty(), u_takahashi: empty(), u_ito: empty(), u_kobayashi: empty(),
     },
     reactions: [],
   };
@@ -220,7 +231,8 @@ const ok = (json: unknown, status = 200): MockResult => ({ status, json });
 
 function meView(uid: string) {
   const u = db.users[uid];
-  return { ...publicUser(uid), email: u.email ?? 'demo@keio.jp', shareKey: u.shareKey, hidden: u.hidden, macs: macsOf(uid).map(macView) };
+  return { ...publicUser(uid), email: u.email ?? 'demo@keio.jp', shareKey: u.shareKey, hidden: u.hidden,
+    discoverable: u.discoverable !== false, macs: macsOf(uid).map(macView) };
 }
 
 const AVATAR_MAX = 120 * 1024;
@@ -295,6 +307,10 @@ function updateMe(uid: string, body: Body) {
     if (typeof body.hidden !== 'boolean') return E(400, 'invalid_hidden', 'hidden は true か false で指定してください');
     u.hidden = body.hidden;
   }
+  if ('discoverable' in body) {
+    if (typeof body.discoverable !== 'boolean') return E(400, 'invalid_discoverable', 'discoverable は true か false で指定してください');
+    u.discoverable = body.discoverable;
+  }
   return ok(meView(uid));
 }
 
@@ -312,6 +328,38 @@ function listFriends(uid: string) {
   return ok({ friends, requests: { incoming, outgoing }, blocked });
 }
 
+/**
+ * GET /v1/friends/suggestions — 知り合いかも
+ * フレンドのフレンドから、ベストフレンドのフレンドか、共通のフレンドが2人以上の人を返す。
+ * 本物のバックエンド（backend/src/repo.ts の suggestions）と同じ決まり。
+ */
+function suggestions(uid: string) {
+  const myFriends = friendIdsOf(uid).map((o) => o.id);
+  const pendingWith = new Set(db.friendRequests.flatMap((r) => (r.from === uid ? [r.to] : r.to === uid ? [r.from] : [])));
+  const found = new Map<string, { mutual: string[]; bestVia?: string }>();
+
+  for (const friend of myFriends) {
+    const best = isBest(uid, friend);
+    for (const other of friendIdsOf(friend).map((o) => o.id)) {
+      if (other === uid || myFriends.includes(other) || pendingWith.has(other)) continue;
+      if (blockedBy(uid, other) || blockedBy(other, uid)) continue;
+      const user = db.users[other];
+      if (!user || user.discoverable === false) continue;
+      const entry = found.get(other) ?? { mutual: [] as string[] };
+      entry.mutual.push(friend);
+      if (best && !entry.bestVia) entry.bestVia = friend;
+      found.set(other, entry);
+    }
+  }
+
+  const list = [...found.entries()]
+    .filter(([, v]) => v.bestVia || v.mutual.length >= 2)
+    .sort((a, b) => Number(!!b[1].bestVia) - Number(!!a[1].bestVia) || b[1].mutual.length - a[1].mutual.length)
+    .slice(0, 10)
+    .map(([id, v]) => ({ ...publicUser(id), mutual: v.mutual.map(publicUser) }));
+  return ok({ suggestions: list });
+}
+
 function makeFriends(a: string, b: string) {
   if (!isFriend(a, b)) db.friendships.push({ a, b, since: new Date().toISOString() });
   db.friendRequests = db.friendRequests.filter((r) => !((r.from === a && r.to === b) || (r.from === b && r.to === a)));
@@ -321,9 +369,14 @@ function makeFriends(a: string, b: string) {
 function addFriend(uid: string, body: Body) {
   if (body.via === 'mac' || body.mac !== undefined) return E(400, 'unsupported_friend_method', 'MACでのフレンド検索は終了しました');
   const via = body.via === 'qr' ? 'qr' : 'link';
-  const key = String(body.shareKey ?? '').trim();
-  const target = Object.keys(db.users).find((id) => db.users[id].shareKey === key);
-  if (!target) return E(404, 'share_key_not_found', 'このQRコード・リンクは見つかりません');
+  // 「知り合いかも」からは共有キーを渡せないので、userId で申請する（link と同じ承認待ち）
+  const target = body.via === 'suggestion'
+    ? (db.users[String(body.userId ?? '')] ? String(body.userId) : undefined)
+    : Object.keys(db.users).find((id) => db.users[id].shareKey === String(body.shareKey ?? '').trim());
+  if (!target) {
+    if (body.via === 'suggestion') return E(404, 'user_not_found', 'この相手は見つかりません');
+    return E(404, 'share_key_not_found', 'このQRコード・リンクは見つかりません');
+  }
   if (target === uid) return E(400, 'self', '自分のQRコードです');
   if (blockedBy(uid, target)) return E(409, 'blocked_by_you', 'ブロック中の相手です。フレンド画面で解除してください');
   if (isFriend(uid, target)) return E(409, 'already_friends', `${db.users[target].name}さんとはすでにフレンドです`);
@@ -515,9 +568,18 @@ function route(method: string, path: string, _headers: Record<string, string>, b
     db.users[uid].macs = macs.filter((m) => m.id !== Number(macMatch[1]));
     return { status: 204, json: null };
   }
+  if (method === 'POST' && path === '/v1/feedback') {
+    const message = String(body.message ?? '').trim();
+    if (message.length < 2 || message.length > 1000) return E(400, 'invalid_message', '2〜1000文字で書いてください');
+    feedback.push({ uid, message, at: new Date().toISOString() });
+    const today = feedback.filter((f) => f.uid === uid && f.at.slice(0, 10) === new Date().toISOString().slice(0, 10)).length;
+    if (today > 5) return E(429, 'too_many', '今日はもう送れません（1日5件まで）。明日またお願いします');
+    return ok({ remaining: 5 - today }, 201);
+  }
   if (method === 'GET' && path === '/v1/points') return ok(pointsView(uid));
   if (method === 'POST' && path === '/v1/checks') return check(uid);
   if (method === 'GET' && path === '/v1/friends') return listFriends(uid);
+  if (method === 'GET' && path === '/v1/friends/suggestions') return suggestions(uid);
   if (method === 'POST' && path === '/v1/friends') return addFriend(uid, body);
 
   let m = /^\/v1\/friend-requests\/([\w-]+)\/(accept|decline)$/.exec(path);

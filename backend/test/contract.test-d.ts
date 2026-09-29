@@ -35,3 +35,6 @@ assert<Exact<App.DbTable, Fe.DbTable>>(true);
 assert<Exact<App.DebugDbResponse, Fe.DebugDbResponse>>(true);
 assert<Exact<App.Reaction, Fe.Reaction>>(true);
 assert<Exact<App.ReactionResponse, Fe.ReactionResponse>>(true);
+assert<Exact<App.FeedbackResponse, Fe.FeedbackResponse>>(true);
+assert<Exact<App.Suggestion, Fe.Suggestion>>(true);
+assert<Exact<App.SuggestionsResponse, Fe.SuggestionsResponse>>(true);

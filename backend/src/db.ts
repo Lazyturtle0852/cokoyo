@@ -23,6 +23,7 @@ CREATE TABLE users (
   avatar_source TEXT NOT NULL DEFAULT 'unset' CHECK (avatar_source IN ('unset', 'google', 'custom', 'disabled')),
   share_key TEXT UNIQUE,
   hidden INTEGER NOT NULL DEFAULT 0,
+  discoverable INTEGER NOT NULL DEFAULT 1,   -- 「知り合いかも」に自分を出してよいか
   onboarding_completed_at TEXT,
   created_at TEXT NOT NULL
 );
@@ -102,18 +103,58 @@ CREATE TABLE matches (
   last_date TEXT NOT NULL,
   PRIMARY KEY (user_id, other_user_id)
 );
-PRAGMA user_version = 2;
+CREATE TABLE feedback (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,              -- JST の YYYY-MM-DD。1日の上限に使う
+  message TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX idx_feedback_user_date ON feedback(user_id, date);
+PRAGMA user_version = 4;
 `;
+
+/**
+ * 古いスキーマを、今の形まで上げる。
+ * 鍵は「上げる前のバージョン」。入れたら user_version も上げること。
+ */
+const MIGRATIONS: Record<number, string> = {
+  2: `
+    CREATE TABLE feedback (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      date TEXT NOT NULL,
+      message TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX idx_feedback_user_date ON feedback(user_id, date);
+    PRAGMA user_version = 3;
+  `,
+  3: `
+    ALTER TABLE users ADD COLUMN discoverable INTEGER NOT NULL DEFAULT 1;
+    PRAGMA user_version = 4;
+  `,
+};
+
+const LATEST = 4;
 
 export function openDb(path: string): Db {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
   const db = new Sqlite(path);
   db.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;");
-  const version = Number((db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version);
-  if (version === 2) return db;
+  let version = Number((db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version);
+  if (version === LATEST) return db;
+
+  // 動いているDBは、足りないぶんだけ足して上げる
+  for (let step = MIGRATIONS[version]; version < LATEST && step; step = MIGRATIONS[version]) {
+    db.exec(step);
+    version = Number((db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version);
+  }
+  if (version === LATEST) return db;
+
   if (version !== 0 || db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='users'").get()) {
     db.close();
-    throw new Error("Unsupported database schema; use a fresh v2 volume");
+    throw new Error(`Unsupported database schema (v${version}); use a fresh v${LATEST} volume`);
   }
   db.exec(SCHEMA);
   return db;

@@ -78,10 +78,19 @@ export function Phone() {
                   <li><span className="ob-ico best"><Icon.Friends size={18} /></span><span><b>見せる範囲は相手ごと</b>ベストフレンドにだけ建物まで。ブロックした相手には見えません</span></li>
                   <li><span className="ob-ico hide"><Icon.Hide /></span><span><b>いつでも隠れられます</b>かくれんぼ中は、フレンド全員から「いません」に見えます</span></li>
                 </ul>
-                {inAppBrowser()
-                  ? <InAppNotice />
-                  : <button className="btn btn-primary" onClick={api.beginLogin}>Googleでログイン</button>}
-                <p className="row-note">keio.jp のGoogleアカウントで利用できます。</p>
+                {inAppBrowser() ? <InAppNotice /> : (
+                  <div className="login">
+                    <button className="btn btn-primary" onClick={api.beginLogin}>keio.jp のGoogleでログイン</button>
+                    {/* Googleの画面には、アプリ名ではなくこのアプリが動いている住所が出ることがある。
+                        「何にログインするのか」が分からないと不安なので、先に書いておく。 */}
+                    <p className="login-note">
+                      ログインする先は、このアプリ <b>COKOYO</b> です。
+                      Googleの画面や iPhone の確認に <span className="mono">cokoyo.lazyta-toru.net</span>
+                      （COKOYOが動いている住所）が出ますが、そのまま進めて大丈夫です。
+                    </p>
+                    <p className="login-note muted">パスワードをこのアプリに渡すことはありません。Googleの画面で入力します。</p>
+                  </div>
+                )}
               </div>
             )}
             {view === 'error' && (

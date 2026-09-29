@@ -8,12 +8,12 @@
 
 import type { BuildingKey } from '../api/types';
 import { BUILDING_LABELS } from '../api/types';
-import { BUILDING_SHAPES, OTHER_SHAPES, PARKING_SHAPES, POND_SHAPE, RING_ROAD, WALKS } from './campusMapData';
+import { BETA_SHAPES, BUILDING_SHAPES, GROUND_SHAPES, OTHER_SHAPES, PARKING_SHAPES, POND_SHAPE, RING_ROAD, WALKS } from './campusMapData';
 
 type Pt = readonly [number, number];
 
-/** 図に入れる範囲（メートル）。北の体育館から、南の外周道路まで。 */
-const BOUNDS = { west: -26, east: 312, south: -92, north: 374 };
+/** 図に入れる範囲（メートル）。北の体育施設から南の外周道路、東のβヴィレッジまで。 */
+const BOUNDS = { west: -30, east: 428, south: -92, north: 380 };
 
 export const MAP_W = BOUNDS.east - BOUNDS.west;
 export const MAP_H = BOUNDS.north - BOUNDS.south;
@@ -56,13 +56,14 @@ function centroid(p: readonly Pt[]) {
   return a ? { x: cx / (3 * a), y: cy / (3 * a) } : { x: p[0][0], y: p[0][1] };
 }
 
-const GLYPH: Partial<Record<BuildingKey, string>> = { 'pe-buildings': '体育', lounge: 'ラウンジ' };
-const SOFT: BuildingKey[] = ['pe-buildings', 'lounge'];
+const GLYPH: Partial<Record<BuildingKey, string>> = { 'pe-buildings': '体育施設', lounge: 'ラウンジ' };
+/** 建物というより区画。字を大きくしない */
+const SOFT: BuildingKey[] = ['pe-buildings'];
 
 /** 奥にあるものが先。あとのものが上に重なる。 */
 const ORDER: BuildingKey[] = [
   'pe-buildings', 'tau', 'lambda', 'theta', 'omicron', 'iota', 'delta', 'alpha',
-  'mu', 'epsilon', 'kappa', 'omega', 'lounge', 'sigma',
+  'mu', 'epsilon', 'kappa', 'omega', 'sigma', 'lounge',
 ];
 
 export const MAP_BUILDINGS: MapBuilding[] = ORDER.map((key) => {
@@ -80,7 +81,7 @@ export const MAP_BUILDINGS: MapBuilding[] = ORDER.map((key) => {
     cx: X(c.x),
     cy: Y(c.y),
     top: Y(Math.max(...ys)),
-    size: glyph.length === 1 ? Math.min(20, Math.max(13, Math.min(w, h) * 0.6)) : Math.min(13, (w * 0.8) / glyph.length),
+    size: glyph.length === 1 ? Math.min(20, Math.max(13, Math.min(w, h) * 0.6)) : Math.max(8, Math.min(12, (w * 0.86) / glyph.length)),
     ...(SOFT.includes(key) ? { soft: true } : {}),
   };
 });
@@ -110,9 +111,15 @@ export const MAP_SCENE = `<g aria-hidden="true">
     <!-- 鴨池 -->
     <polygon points="${pts(POND_SHAPE)}" fill="#57ABD4" transform="translate(0 1.5)"/>
     <polygon points="${pts(POND_SHAPE)}" fill="#8BCEEB"/>
+    <!-- グラウンド -->
+    ${GROUND_SHAPES.map((g) => `<polygon points="${pts(g.pts)}" fill="#D3E8C3"/>`).join('')}
     <!-- DTC にない建物 -->
     ${OTHER_SHAPES.map((p) => `<polygon points="${pts(p)}" fill="#E1DBD3"/>`).join('')}
+    <!-- βヴィレッジ（SBC）。小屋が寄り集まっているので、下じきを敷いてから建てる -->
+    <rect x="${X(292)}" y="${Y(340)}" width="${132}" height="${112}" rx="16" fill="#E9F0DF"/>
+    ${BETA_SHAPES.map((b) => `<polygon points="${pts(b.pts)}" fill="#D8CFC2"/>`).join('')}
   </g>
+  <text x="${X(358)}" y="${Y(346)}" text-anchor="middle" font-size="12" font-weight="700" fill="#7B8B63">βヴィレッジ</text>
   <text x="${X(pond.x)}" y="${Y(pond.y) + 4}" text-anchor="middle" font-size="11" font-weight="700" fill="#2E7FA6">鴨池</text>
   <text x="${MAP_W - 10}" y="${MAP_H - 8}" text-anchor="end" font-size="7" fill="#A29A91">© OpenStreetMap contributors</text>
 </g>`;

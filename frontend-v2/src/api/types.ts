@@ -17,6 +17,8 @@ export interface Me extends UserRef {
   email: string;
   shareKey: string;
   hidden: boolean;
+  /** 「知り合いかも」に自分を出してよいか */
+  discoverable: boolean;
   macs: MacAddressView[];
 }
 
@@ -30,6 +32,21 @@ export interface MacAddressView {
 export interface Friend extends UserRef {
   friendsSince: string;
   best: BestState;
+}
+
+/**
+ * 「知り合いかも」に出す相手。
+ *
+ * mutual は、あなたと相手に共通のフレンド。名前を出すのは、
+ * どちらもあなたのフレンドで、申請するかどうかの手がかりになるため。
+ * 並びは、ベストフレンドとつながっている人・共通が多い人が先（理由そのものは返さない）。
+ */
+export interface Suggestion extends UserRef {
+  mutual: UserRef[];
+}
+
+export interface SuggestionsResponse {
+  suggestions: Suggestion[];
 }
 
 export interface FriendRequest extends UserRef {
@@ -111,6 +128,12 @@ export interface BlockResponse {
   blocked: boolean;
 }
 
+/** 問い合わせ・ご意見を送ったときの返事 */
+export interface FeedbackResponse {
+  /** その日あと何回送れるか */
+  remaining: number;
+}
+
 export interface ApiErrorBody {
   error: { code: string; message: string };
 }
@@ -155,5 +178,5 @@ export const BUILDING_LABELS: Record<BuildingKey, string> = {
   lambda: 'λ館',
   'pe-buildings': '体育施設',
   sigma: 'σ館',
-  lounge: 'ラウンジ',
+  lounge: '鴨池ラウンジ',
 };

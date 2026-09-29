@@ -3,6 +3,8 @@ import { useApp } from '../app/AppContext';
 import { api } from '../api/client';
 import { config, useMockBackend } from '../config';
 import { AvatarPicker } from './AvatarPicker';
+import { Feedback } from './Feedback';
+import { MacGuide } from './MacGuide';
 import { fullDate } from './ui';
 
 const normalizeMac = (value: string) => value.trim().toLowerCase().replace(/-/g, ':');
@@ -67,6 +69,10 @@ export function Settings() {
       </div>)}
       {editingMacId !== null && <div className="mac-editor">
         <h4>{editingMacId === 'new' ? '端末を追加' : '端末を編集'}</h4>
+        <details className="manual">
+          <summary>MACアドレスの調べ方</summary>
+          <MacGuide />
+        </details>
         <label className="field-label" htmlFor="macLabel">端末の名前</label>
         <input className="field" id="macLabel" maxLength={30} value={label} onChange={(e) => setLabel(e.target.value)} />
         <label className="field-label" htmlFor="macValue">MACアドレス{editingMacId === 'new' ? '' : '（変更する場合のみ）'}</label>
@@ -87,6 +93,29 @@ export function Settings() {
       <button className="btn btn-quiet" onClick={() => void logout(false)}>ログアウト</button>
       <button className="btn btn-quiet" onClick={() => void logout(true)}>すべての端末からログアウト</button>
     </div>
+
+    <div className="sec"><h3>知り合いかも</h3></div>
+    <div className="card">
+      <div className="kv">
+        <div>
+          <div className="k">知り合いかもに出す</div>
+          <div className="row-note">
+            フレンドのフレンドの画面に、あなたが「知り合いかも」として出ます。
+            オフにすると出ません（すでにフレンドの人からの見え方は変わりません）。
+          </div>
+        </div>
+        <button className="swbtn" aria-pressed={me.discoverable}
+          onClick={() => void run('知り合いかもの設定', async () => {
+            setMe(await api.updateMe({ discoverable: !me.discoverable }));
+            showToast(me.discoverable ? '知り合いかもに出さないようにしました' : '知り合いかもに出るようにしました');
+          })}>
+          <span className={`switch${me.discoverable ? ' on' : ''}`} />{me.discoverable ? 'オン' : 'オフ'}
+        </button>
+      </div>
+    </div>
+
+    <div className="sec"><h3>ご意見・問い合わせ</h3></div>
+    <div className="card"><Feedback /></div>
 
     <div className="sec"><h3>このアプリについて</h3></div>
     <div className="card about"><p>位置情報は使いません。キャンパスのWiFiにつながっているかどうかを、大学側のAPIに問い合わせて確認します。</p><p className="muted">試作品・{useMockBackend ? 'バックエンドは模擬' : `接続先 ${config.apiBaseUrl}`}</p></div>

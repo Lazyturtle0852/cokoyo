@@ -32,6 +32,8 @@ export interface CampusField {
   onReact(fn: ((userId: string, count: number) => void) | null): void;
   /** 届いたリアクションを、そのフレンドのスライムで見せる。スライムがいなければ false */
   react(userId: string, count: number): boolean;
+  /** 雨を降らせる／止める（スライムも雨を弾く） */
+  setRain(raining: boolean): void;
   clear(): void;
 }
 
@@ -64,8 +66,39 @@ const mullions = (x0: number, x1: number, step: number, y: number, h: number, fi
 };
 const grid = (xs: number[], ys: number[], w: number, h: number, fill: string) =>
   xs.map((x) => ys.map((y) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx=".6" fill="${fill}"/>`).join('')).join('');
-const tree = (x: number, y: number, r: number, leaf = '#63B452', light = '#7FC76A') => `<rect x="${x - 1.5}" y="${y}" width="3" height="${r + 6}" fill="#8A6B4E"/>
-  <circle cx="${x}" cy="${y}" r="${r}" fill="${leaf}"/><circle cx="${x - r * 0.3}" cy="${y - r * 0.3}" r="${r * 0.45}" fill="${light}"/>`;
+/**
+ * 季節。木の色を変える。
+ *   春（3〜4月）  … 桜のピンク
+ *   秋（11月）    … 紅葉
+ *   冬（12〜2月） … 緑の上に雪
+ *   ほか          … 緑
+ * SFCの紅葉は11月ごろなので、9〜10月はまだ緑のまま。
+ */
+export type Season = 'sakura' | 'green' | 'autumn' | 'winter';
+
+export function seasonOf(date = new Date()): Season {
+  const month = date.getMonth() + 1;
+  if (month === 3 || month === 4) return 'sakura';
+  if (month === 11) return 'autumn';
+  if (month === 12 || month <= 2) return 'winter';
+  return 'green';
+}
+
+const LEAVES: Record<Season, { leaf: string; light: string; snow?: boolean }> = {
+  sakura: { leaf: '#F4A9C0', light: '#FBC9D9' },
+  green: { leaf: '#63B452', light: '#7FC76A' },
+  autumn: { leaf: '#D9723F', light: '#EE9460' },
+  winter: { leaf: '#4E9A46', light: '#66B25C', snow: true },
+};
+
+const tree = (x: number, y: number, r: number, season: Season) => {
+  const { leaf, light, snow } = LEAVES[season];
+  return `<rect x="${x - 1.5}" y="${y}" width="3" height="${r + 6}" fill="#8A6B4E"/>
+  <circle cx="${x}" cy="${y}" r="${r}" fill="${leaf}"/><circle cx="${x - r * 0.3}" cy="${y - r * 0.3}" r="${r * 0.45}" fill="${light}"/>${
+    // 雪はてっぺんに積もらせる
+    snow ? `<path d="M${x - r * 0.95} ${y - r * 0.25} a${r} ${r} 0 0 1 ${r * 1.9} 0 q-${r * 0.5} -${r * 0.45} -${r * 0.95} -${r * 0.1} q-${r * 0.45} -${r * 0.35} -${r * 0.95} ${r * 0.1}z" fill="#FFFFFF" opacity=".92"/>` : ''
+  }`;
+};
 
 /** 屋上の鉄骨のフレーム（SFCの研究棟の屋上にある格子） */
 const roofFrame = (x0: number, x1: number, y: number) =>
@@ -102,7 +135,7 @@ function drum(cx: number, r: number, top: number) {
   <rect x="${cx - r - 1.5}" y="${top - 1}" width="${r * 2 + 3}" height="2.4" rx="1" fill="#CFCBC4"/>`;
 }
 
-const SCENE = `<svg class="scene" viewBox="0 0 ${VW} ${VH}" aria-hidden="true" focusable="false">
+const scene = (season: Season) => `<svg class="scene" viewBox="0 0 ${VW} ${VH}" aria-hidden="true" focusable="false">
   <!-- 右奥：円筒のうしろの箱 -->
   <rect x="232" y="68" width="112" height="48" fill="#E9E8E4"/>
   <rect x="232" y="68" width="112" height="3" fill="#D3D0CA"/>
@@ -113,18 +146,18 @@ const SCENE = `<svg class="scene" viewBox="0 0 ${VW} ${VH}" aria-hidden="true" f
   <rect x="176" y="36" width="54" height="80" fill="#F6F6F4"/>
   <rect x="176" y="36" width="54" height="3" fill="#D6D3CD"/>
   ${grid([182, 194, 206, 218], [46, 58, 70, 82, 94], 7, 6, '#6E7C89')}
-  ${tree(12, 96, 14)}${tree(356, 94, 15)}
+  ${tree(12, 96, 14, season)}${tree(356, 94, 15, season)}
   <!-- 左：研究棟が2つ、渡り廊下でつながる -->
   ${lab(20, 70, 74)}
   <rect x="90" y="90" width="14" height="9" fill="#E3E2DE"/><rect x="92" y="92" width="10" height="4" fill="#687785"/>
   ${lab(104, 64, 70)}
-  ${tree(172, 100, 11, '#D9723F', '#EE9460')}
+  ${tree(172, 100, 11, season)}
   <!-- 右：本館の塔 -->
   ${drum(286, 30, 44)}
-  ${tree(232, 104, 9)}
-  <!-- 芝生 -->
-  <ellipse cx="184" cy="156" rx="200" ry="50" fill="#7EBF5D"/>
-  <ellipse cx="184" cy="150" rx="198" ry="47" fill="#99D476"/>
+  ${tree(232, 104, 9, season)}
+  <!-- 芝生（冬はうっすら雪をかぶる） -->
+  <ellipse cx="184" cy="156" rx="200" ry="50" fill="${season === 'winter' ? '#9FC79A' : '#7EBF5D'}"/>
+  <ellipse cx="184" cy="150" rx="198" ry="47" fill="${season === 'winter' ? '#D7E9D2' : '#99D476'}"/>
   <g stroke="#86C666" stroke-width="2" stroke-linecap="round" fill="none">
     <path d="M150 128 l2 -5 l2 5"/><path d="M262 172 l2 -5 l2 5"/><path d="M318 140 l2 -5 l2 5"/><path d="M196 186 l2 -5 l2 5"/>
   </g>
@@ -256,7 +289,10 @@ const ease = (p: number) => (p < 0.5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2);
 export function createCampusField(): CampusField {
   const el = document.createElement('div');
   el.className = 'field-scene';
-  el.innerHTML = `${SCENE}<div class="slimes"></div>`;
+  el.innerHTML = `${scene(seasonOf())}<div class="slimes"></div><div class="rain" aria-hidden="true">${
+    // 雨は天気が雨のときだけ出す（CSSで降らせるので、動かしても軽い）
+    Array.from({ length: 20 }, (_, i) => `<i style="--x:${(i * 23 + 7) % 100}%;--d:${(i % 5) * 0.18}s;--s:${0.8 + (i % 3) * 0.18}"></i>`).join('')
+  }</div>`;
   const layer = el.querySelector('.slimes') as HTMLDivElement;
   const slimes = new Map<string, Slime>();
   let raf = 0;
@@ -540,6 +576,8 @@ export function createCampusField(): CampusField {
     },
 
     onReact(fn) { reactHandler = fn; },
+
+    setRain(raining) { el.classList.toggle('raining', raining && !reduceMotion()); },
 
     react(userId, count) {
       const s = slimes.get(userId);
