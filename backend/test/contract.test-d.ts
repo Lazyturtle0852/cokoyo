@@ -28,6 +28,7 @@ assert<Exact<App.BuildingKey, Fe.BuildingKey>>(true);
 assert<Exact<App.FriendPresence, Fe.FriendPresence>>(true);
 assert<Exact<App.CheckResponse, Fe.CheckResponse>>(true);
 assert<Exact<App.AddFriendResponse, Fe.AddFriendResponse>>(true);
+assert<Exact<App.InviteResponse, Fe.InviteResponse>>(true);
 assert<Exact<App.BestResponse, Fe.BestResponse>>(true);
 assert<Exact<App.BlockResponse, Fe.BlockResponse>>(true);
 assert<Exact<App.ApiErrorBody, Fe.ApiErrorBody>>(true);

@@ -353,7 +353,8 @@ function suggestions(uid: string) {
   }
 
   const list = [...found.entries()]
-    .filter(([, v]) => v.bestVia || v.mutual.length >= 2)
+    // フレンドがまだ1人なら、そのフレンドのフレンドは全員出す（バックエンドと同じ）
+    .filter(([, v]) => v.bestVia || v.mutual.length >= 2 || myFriends.length === 1)
     .sort((a, b) => Number(!!b[1].bestVia) - Number(!!a[1].bestVia) || b[1].mutual.length - a[1].mutual.length)
     .slice(0, 10)
     .map(([id, v]) => ({ ...publicUser(id), mutual: v.mutual.map(publicUser) }));
@@ -363,6 +364,18 @@ function suggestions(uid: string) {
 function makeFriends(a: string, b: string) {
   if (!isFriend(a, b)) db.friendships.push({ a, b, since: new Date().toISOString() });
   db.friendRequests = db.friendRequests.filter((r) => !((r.from === a && r.to === b) || (r.from === b && r.to === a)));
+}
+
+// GET /v1/invites/:shareKey — 招待の相手を調べる（申請はしない）
+function invite(uid: string, shareKey: string) {
+  const target = Object.keys(db.users).find((id) => db.users[id].shareKey === shareKey);
+  if (!target || db.users[target].onboarded === false) return E(404, 'share_key_not_found', 'この招待の相手が見つかりません');
+  if (target === uid) return E(400, 'self', 'あなた自身の招待です');
+  if (blockedBy(uid, target)) return E(409, 'blocked_by_you', 'ブロック中の相手です。先にブロックを解除してください');
+  const relation = isFriend(uid, target) ? 'friends'
+    : db.friendRequests.some((r) => r.from === uid && r.to === target) ? 'requested'
+    : db.friendRequests.some((r) => r.from === target && r.to === uid) ? 'incoming' : 'none';
+  return ok({ user: publicUser(target), relation });
 }
 
 // POST /v1/friends — QRコード（すぐ成立）かリンク（相手の承認が必要）でフレンド追加
@@ -576,6 +589,8 @@ function route(method: string, path: string, _headers: Record<string, string>, b
     if (today > 5) return E(429, 'too_many', '今日はもう送れません（1日5件まで）。明日またお願いします');
     return ok({ remaining: 5 - today }, 201);
   }
+  const inviteMatch = /^\/v1\/invites\/([^/]+)$/.exec(path);
+  if (inviteMatch && method === 'GET') return invite(uid, decodeURIComponent(inviteMatch[1]));
   if (method === 'GET' && path === '/v1/points') return ok(pointsView(uid));
   if (method === 'POST' && path === '/v1/checks') return check(uid);
   if (method === 'GET' && path === '/v1/friends') return listFriends(uid);

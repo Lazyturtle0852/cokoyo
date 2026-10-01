@@ -51,7 +51,7 @@ export function Onboarding() {
       <p className="ob-step">1 / 2</p>
       <h2 className="ob-title">フレンドに表示される名前</h2>
       <p className="ob-lead">あとから設定で変えられます。</p>
-      {pendingInvite() && <p className="row-note">登録後に招待リンクの相手へ申請します。</p>}
+      {pendingInvite() && <p className="row-note">登録が終わったら、招待してくれた人にフレンド申請するかを確かめます。</p>}
       <label className="field-label" htmlFor="obName">表示名</label>
       <input className="field" id="obName" maxLength={20} placeholder="例）ゆうき" value={name} autoComplete="nickname" autoFocus
         onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) go('mac'); }} />

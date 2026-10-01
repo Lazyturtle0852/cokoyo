@@ -415,6 +415,12 @@ body.plain .sheet { border-radius: 28px 28px 0 0; padding-bottom: max(22px, env(
 .camera-ask b { color: #fff; }
 .camera .camera-text { position: relative; z-index: 1; background: rgba(0,0,0,.45); padding: 4px 10px; border-radius: 999px; }
 .scan-msg { font-size: 12px; color: var(--ink-2); line-height: 1.65; margin: 12px 0 0; }
+.ig-howto { margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: #FDF2F8; }
+.ig-howto-title { font-size: 13px; font-weight: 700; margin: 0 0 6px; }
+.ig-howto .steps { margin: 0 0 8px; }
+.ig-howto-sub { font-size: 12px; font-weight: 700; color: var(--ink-2); margin: 10px 0 4px; }
+.scan-warn { color: #B45309; background: #FFF7ED; border-radius: 10px; padding: 8px 10px; }
+.scanner > .btn-quiet { margin-top: 12px; }
 .scan-help { margin-top: 14px; background: var(--brand-tint); border-radius: 14px; padding: 12px 14px; }
 .scan-help-title { font-size: 13px; font-weight: 700; margin: 0; color: var(--brand-dark); }
 .scan-help .steps { margin-top: 10px; }
@@ -716,3 +722,13 @@ a.btn { text-decoration: none; }
 .admin-filter select { font-size: 12.5px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); }
 table.admin-users td { font-family: inherit; font-size: 12.5px; }
 table.admin-users .rel { margin-right: 4px; }
+
+/* 招待リンク・QRで開いたときの確認 */
+.invite-card { position: absolute; left: 18px; right: 18px; top: 50%; transform: translateY(-50%); z-index: 60;
+  background: var(--card, #fff); border-radius: 22px; padding: 22px 20px 14px; text-align: center;
+  box-shadow: 0 20px 50px rgba(28,25,23,.28); display: flex; flex-direction: column; align-items: center; }
+.invite-card .av { width: 64px; height: 64px; font-size: 24px; }
+.invite-name { font-size: 15px; font-weight: 700; margin: 10px 0 2px; }
+.invite-card h4 { font-size: 18px; margin: 0 0 8px; }
+.invite-body { font-size: 12.5px; color: var(--ink-2); line-height: 1.65; margin: 0 0 14px; }
+.invite-card .btn { width: 100%; }

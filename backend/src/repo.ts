@@ -109,7 +109,9 @@ export function createRepo(db: Db) {
      * 「知り合いかも」。フレンドのフレンドを集めて、
      *   ・共通のフレンドが2人以上
      *   ・ベストフレンド（お互いに立てている相手）のフレンド
-     * のどちらかに当てはまる人を返す。
+     *   ・フレンドがまだ1人だけなら、そのフレンドのフレンド全員
+     *     （はじめたばかりの人は「共通2人以上」が出ようがないため）
+     * のどれかに当てはまる人を返す。
      *
      * すでにフレンド・申請中（どちらの向きも）・ブロックしている／されている相手、
      * 「おすすめに出さない」にしている人、登録の途中の人は外す。
@@ -144,7 +146,7 @@ export function createRepo(db: Db) {
         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE b.blocker_id = ?1 AND b.blocked_id = f.other)
         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE b.blocker_id = f.other AND b.blocked_id = ?1)
       GROUP BY f.other
-      HAVING mutual >= 2 OR has_best = 1
+      HAVING mutual >= 2 OR has_best = 1 OR (SELECT COUNT(*) FROM mine) = 1
       ORDER BY has_best DESC, mutual DESC, f.other
       LIMIT ?2
     `),

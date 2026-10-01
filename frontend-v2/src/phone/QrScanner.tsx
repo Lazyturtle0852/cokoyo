@@ -8,6 +8,10 @@
 // 無ければ jsQR（iPhone の Safari など）で読む。jsQR は使うときだけ読み込む。
 //
 // カメラが使えるのは https のページだけ（本番は https、手元の localhost も可）。
+//
+// 写真（スクショ）からも読める。インスタのストーリーズに載ったQRは、スクショするしかないため。
+// ただし写真から読んだときは、目の前に相手がいるとは限らないので、すぐにはフレンドにせず
+// 申請にする（呼び出し側が from === 'photo' を見て決める）。
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -24,6 +28,49 @@ export function shareKeyFrom(text: string): string | null {
 }
 
 type Detect = (source: HTMLVideoElement, canvas: HTMLCanvasElement) => Promise<string | null>;
+
+/**
+ * どこから読んだか。
+ *   camera … アプリのカメラで、目の前の相手のQRを読んだ（すぐフレンド）
+ *   photo  … 写真（スクショ）から読んだ（申請）
+ *   story  … カメラで読んだが、ストーリーズの画像のQRだった（申請）
+ */
+export type QrSource = 'camera' | 'photo' | 'story';
+
+/** ストーリーズの画像に載せたQRか（src/config.ts の storyLink が付ける印） */
+const isStoryQr = (text: string) => {
+  try { return new URL(text.trim()).searchParams.get('from') === 'story'; } catch { return false; }
+};
+
+/** 写真の中のQRを読む。見つからなければ null */
+async function readPhoto(file: File): Promise<string | null> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const BD = (window as unknown as { BarcodeDetector?: new (o: { formats: string[] }) => { detect(s: CanvasImageSource): Promise<{ rawValue: string }[]> } }).BarcodeDetector;
+    if (BD) {
+      try {
+        const found = (await new BD({ formats: ['qr_code'] }).detect(img))[0]?.rawValue;
+        if (found) return found;
+      } catch { /* 読めなければ jsQR でもう一度 */ }
+    }
+    const { default: jsQR } = await import('jsqr');
+    // スクショは大きいので縮める。ただ、QRが画面の一部に小さく写っていることが多いので、カメラより大きめに残す
+    const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.naturalWidth * k);
+    canvas.height = Math.round(img.naturalHeight * k);
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    return jsQR(data.data, data.width, data.height, { inversionAttempts: 'attemptBoth' })?.data ?? null;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
 
 async function makeDetector(): Promise<Detect> {
   const BD = (window as unknown as { BarcodeDetector?: new (o: { formats: string[] }) => { detect(s: CanvasImageSource): Promise<{ rawValue: string }[]> } }).BarcodeDetector;
@@ -53,9 +100,12 @@ async function makeDetector(): Promise<Detect> {
 const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const isStandalone = () => window.matchMedia?.('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true;
 
-export function QrScanner({ onKey }: { onKey(shareKey: string): void }) {
+export function QrScanner({ onKey }: { onKey(shareKey: string, from: QrSource): void }) {
   const [state, setState] = useState<State>('idle');
   const [wrong, setWrong] = useState(false);
+  const [photoMsg, setPhotoMsg] = useState('');
+  const [reading, setReading] = useState(false);
+  const file = useRef<HTMLInputElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const stream = useRef<MediaStream | null>(null);
@@ -92,7 +142,7 @@ export function QrScanner({ onKey }: { onKey(shareKey: string): void }) {
         const text = v.readyState >= 2 ? await detect(v, canvas.current as HTMLCanvasElement).catch(() => null) : null;
         if (text) {
           const key = shareKeyFrom(text);
-          if (key) { done.current = true; stop(); onKeyRef.current(key); return; }
+          if (key) { done.current = true; stop(); onKeyRef.current(key, isStoryQr(text) ? 'story' : 'camera'); return; }
           setWrong(true);
         }
         timer.current = window.setTimeout(() => void loop(), 180);
@@ -104,6 +154,25 @@ export function QrScanner({ onKey }: { onKey(shareKey: string): void }) {
         : name === 'NotFoundError' || name === 'OverconstrainedError' ? 'nocamera' : 'error');
     }
   }, [stop]);
+
+  const choosePhoto = async (f: File | undefined) => {
+    if (file.current) file.current.value = ''; // 同じ写真をもう一度選べるようにする
+    if (!f) return;
+    setPhotoMsg('');
+    setReading(true);
+    try {
+      const text = await readPhoto(f);
+      const key = text ? shareKeyFrom(text) : null;
+      if (key) { stop(); onKeyRef.current(key, 'photo'); return; }
+      setPhotoMsg(!text
+        ? 'この写真からはQRコードが見つかりませんでした。QRが大きく写るようにスクショし直してみてください。'
+        : 'COKOYOのフレンド用のQRではないようです。相手の「フレンドを追加」に出ているQRか、ストーリーズの画像のQRを読み込んでください。');
+    } catch {
+      setPhotoMsg('写真を読み込めませんでした。');
+    } finally {
+      setReading(false);
+    }
+  };
 
   // すでに許可されていれば、ボタンを待たずに起動する
   useEffect(() => {
@@ -132,6 +201,14 @@ export function QrScanner({ onKey }: { onKey(shareKey: string): void }) {
         )}
       </div>
 
+      <button className="btn btn-quiet btn-icon" disabled={reading} onClick={() => file.current?.click()}>
+        <PhotoIcon />{reading ? '読み込んでいます…' : '写真から読み込む'}
+      </button>
+      <p className="scan-msg">ストーリーズなどのQRは、スクショしてから読み込めます。写真から読み込んだときは<b>申請</b>になり、相手が承認するとフレンドになります。</p>
+      {photoMsg && <p className="scan-msg scan-warn" role="alert">{photoMsg}</p>}
+      <input ref={file} className="hidden-file" type="file" accept="image/*" aria-label="QRコードの写真"
+        onChange={(e) => void choosePhoto(e.target.files?.[0])} />
+
       {state === 'denied' && <DeniedHelp onRetry={() => void start()} />}
       {state === 'nocamera' && <p className="scan-msg">カメラが見つかりませんでした。「リンクで共有」のタブから、共有キーでも追加できます。</p>}
       {state === 'unsupported' && (
@@ -143,6 +220,14 @@ export function QrScanner({ onKey }: { onKey(shareKey: string): void }) {
         <p className="scan-msg">カメラを起動できませんでした。ほかのアプリがカメラを使っていないか確かめて、<button className="linkish" onClick={() => void start()}>もう一度</button></p>
       )}
     </div>
+  );
+}
+
+function PhotoIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="16" rx="2.5" /><circle cx="9" cy="10" r="1.8" /><path d="m21 16-5-5-9 9" />
+    </svg>
   );
 }
 
@@ -182,7 +267,7 @@ function DeniedHelp({ onRetry }: { onRetry(): void }) {
         </ol>
       )}
       <button className="btn btn-quiet" onClick={onRetry}>設定したので、もう一度試す</button>
-      <p className="scan-msg">うまくいかないときは、「リンクで共有」のタブから共有キーでも追加できます。</p>
+      <p className="scan-msg">うまくいかないときは、上の「写真から読み込む」か、「リンクで共有」のタブの共有キーでも追加できます。</p>
     </div>
   );
 }

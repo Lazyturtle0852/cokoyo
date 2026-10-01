@@ -128,6 +128,15 @@ export interface AddFriendResponse {
   user: UserRef;
 }
 
+/**
+ * 招待リンク・QRの相手。申請する前に「この人に申請しますか？」と名前を見せるために使う。
+ * relation は、いまのあなたとの関係（すでにフレンド・申請ずみなら、確認を出さずに知らせる）。
+ */
+export interface InviteResponse {
+  user: UserRef;
+  relation: "none" | "friends" | "requested" | "incoming";
+}
+
 export interface BestResponse {
   userId: string;
   best: BestState;
