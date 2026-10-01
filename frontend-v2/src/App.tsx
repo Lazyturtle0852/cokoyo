@@ -15,7 +15,7 @@ function Explain() {
   return (
     <>
       <div className="masthead">
-        <h1>COKOYO（仮称）— 中で何が起きているか</h1>
+        <h1>COKOYO — 中で何が起きているか</h1>
         <p>
           本番（<span className="mono">/</span>）と同じ画面です。右にバックエンドとのやりとりを出しています。
           {useMockBackend
@@ -41,5 +41,5 @@ export function App() {
   // 模擬データ（/test）は誰でも触れる。
   // AppProvider は開いてから置く（入る前にアプリ側の通信を始めないため）。
   const page = <AppProvider><Explain /></AppProvider>;
-  return useMockBackend ? page : <AdminGate title="COKOYO（仮称）— 説明用ページ">{page}</AdminGate>;
+  return useMockBackend ? page : <AdminGate title="COKOYO — 説明用ページ">{page}</AdminGate>;
 }

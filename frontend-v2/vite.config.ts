@@ -14,7 +14,7 @@ export default defineConfig({
     {
       name: 'cokoyo-title',
       transformIndexHtml: (html: string) =>
-        isApp ? html.replace(/<title>.*<\/title>/, '<title>COKOYO（仮称）</title>') : html,
+        isApp ? html.replace(/<title>.*<\/title>/, '<title>COKOYO</title>') : html,
     },
   ],
   // 公開用に1ファイルへまとめるとき（tools/build-app-share.js）、相対パスのほうが扱いやすい
