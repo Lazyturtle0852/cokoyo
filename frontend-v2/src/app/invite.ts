@@ -25,6 +25,7 @@ export function takeInviteFromUrl() {
     if (!key) return;
     url.searchParams.delete(PARAM);
     url.searchParams.delete('openExternalBrowser'); // LINE向けの印。残しておく意味は無い
+    url.searchParams.delete('from'); // ストーリーズのQRの印。開いた後は使わない（どこから来ても申請の前に確かめる）
     // 履歴に残すと「戻る」で申請をやり直すことになるので、今の履歴を置き換える
     window.history.replaceState(null, '', url.pathname + url.search + url.hash);
     if (isShareKey(key)) sessionStorage.setItem(STORE, key);

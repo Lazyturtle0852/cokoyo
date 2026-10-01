@@ -39,6 +39,7 @@ MAC は 12 桁の 16 進数または `:` / `-` 区切り。アカウント間で
 | `GET /points` | 今日と累計のポイント |
 | `GET /friends` | フレンド、申請、ブロックの一覧 |
 | `POST /friends` | `{shareKey, via: "qr"\|"link"}`。QR は即時成立、リンクは申請。`{userId, via: "suggestion"}` は「知り合いかも」からの申請。MAC 検索は不可 |
+| `GET /invites/:shareKey` | 招待リンク・QR の相手を調べる（申請はしない）。`{user: UserRef, relation: "none"\|"friends"\|"requested"\|"incoming"}`。自分は 400、見つからない 404、こちらがブロック中は 409。相手にブロックされていても分からないよう普通に返す |
 | `GET /friends/suggestions` | 「知り合いかも」。`{suggestions: [{userId, displayName, avatar?, mutual: UserRef[]}]}` |
 | `POST /friend-requests/:requestId/accept` / `decline` | 申請の承認・拒否 |
 | `POST` / `DELETE /friends/:userId/best` | ベストフレンド申請・解除 |
@@ -61,7 +62,7 @@ MAC は 12 桁の 16 進数または `:` / `-` 区切り。アカウント間で
 
 ## 知り合いかも
 
-`GET /v1/friends/suggestions` は、フレンドのフレンドのうち **ベストフレンド（相互）のフレンド**か、**共通のフレンドが2人以上**の相手を最大10人返します。並びは前者が先、次に共通の多い順で、どちらの理由で出したかは返しません。すでにフレンド・申請中（どちらの向きも）・ブロックしている／されている相手、登録の途中の人、`discoverable` を切った人は出しません。
+`GET /v1/friends/suggestions` は、フレンドのフレンドのうち **ベストフレンド（相互）のフレンド**か、**共通のフレンドが2人以上**の相手を最大10人返します。フレンドがまだ1人のあいだは、そのフレンドのフレンド全員を返します。並びは前者が先、次に共通の多い順で、どちらの理由で出したかは返しません。すでにフレンド・申請中（どちらの向きも）・ブロックしている／されている相手、登録の途中の人、`discoverable` を切った人は出しません。
 
 `mutual` は共通のフレンドの一覧（`UserRef`）です。どちらもこちらのフレンドなので名前を返します（申請するかどうかを決める手がかりがこれしかないため）。
 

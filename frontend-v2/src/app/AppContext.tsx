@@ -5,7 +5,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, ApiError, callLog } from '../api/client';
-import type { CheckResponse, FriendsResponse, Me, PointsResponse } from '../api/types';
+import type { CheckResponse, FriendsResponse, InviteResponse, Me, PointsResponse } from '../api/types';
 import { createCampusField, type CampusField } from '../field/campusField';
 import { clearPendingInvite, pendingInvite, takeInviteFromUrl } from './invite';
 import { isToday } from '../phone/ui';
@@ -37,6 +37,8 @@ interface AppState {
   /** ポイント加算の演出中に、右上に出している累計 */
   displayTotal: number | null;
   toast: { id: number; message: string } | null;
+  /** 招待リンク・QRで開かれたときの相手。申請するかを確かめているあいだだけ入る */
+  invite: { shareKey: string; user: InviteResponse['user']; incoming: boolean } | null;
 }
 
 interface AppActions {
@@ -58,6 +60,9 @@ interface AppActions {
   toggleHide(): Promise<void>;
   reloadFriends(silent?: boolean): Promise<void>;
   setMe(me: Me): void;
+  /** 招待の相手に申請する（相手から申請が来ていれば、その場でフレンドになる） */
+  acceptInvite(): Promise<void>;
+  dismissInvite(): void;
 
   // 登録
   completeRegistration(): Promise<void>;
@@ -186,9 +191,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ---------------------------------------------------------------
   // 招待リンク（?add=<共有キー>）で開かれたとき
   //
-  // 登録ずみならそのまま申請する。まだなら invite.ts が預かっているので、
-  // 登録が終わってアプリの画面に入った時点でここに来る。
+  // 登録ずみならすぐ、まだなら invite.ts が預かっているので、登録が終わって
+  // アプリの画面に入った時点でここに来る。
+  // 黙って申請はしない。相手の名前を出して「申請しますか？」と確かめる
+  // （ストーリーズのQRなどは知らない人の手にも渡るので、本人が選べるようにする）。
   // ---------------------------------------------------------------
+  const [invite, setInvite] = useState<AppState['invite']>(null);
   const inviting = useRef(false);
   useEffect(() => {
     if (view !== 'app' || !me || inviting.current) return;
@@ -202,24 +210,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    void run('招待リンクからフレンド申請', async () => {
-      // 断られた場合（すでにフレンド・ブロック中など）も預かったキーは捨てる。
-      // 残すと画面を開くたびに同じ申請を繰り返すことになる。
+    void (async () => {
       try {
-        const r = await api.addFriend(shareKey, 'link');
-        await reloadFriends();
-        setTabState('friends');
-        showToast(r.status === 'friends'
-          ? `${r.user.displayName}さんとフレンドになりました`
-          : `${r.user.displayName}さんに申請しました。相手が承認するとフレンドになります`);
-      } finally {
-        clearPendingInvite();
+        const r = await api.getInvite(shareKey);
+        if (r.relation === 'none' || r.relation === 'incoming') {
+          setInvite({ shareKey, user: r.user, incoming: r.relation === 'incoming' });
+          return; // 預かったキーは、答えを聞いてから捨てる
+        }
+        showToast(r.relation === 'friends'
+          ? `${r.user.displayName}さんとは、すでにフレンドです`
+          : `${r.user.displayName}さんには申請ずみです。相手の承認を待っています`);
+      } catch (e) {
+        showToast(e instanceof ApiError ? e.message : '招待の相手を確かめられませんでした');
       }
-    }).then((ok) => {
-      // ほかの操作の最中で run が動かなかったときは、次の機会にやり直す
-      if (!ok && pendingInvite()) inviting.current = false;
+      clearPendingInvite();
+    })();
+  }, [view, me, showToast]);
+
+  const acceptInvite = useCallback(async () => {
+    const target = invite;
+    if (!target) return;
+    await run('招待の相手にフレンド申請', async () => {
+      const r = await api.addFriend(target.shareKey, 'link');
+      await reloadFriends();
+      setTabState('friends');
+      showToast(r.status === 'friends'
+        ? `${r.user.displayName}さんとフレンドになりました`
+        : `${r.user.displayName}さんに申請しました。相手が承認するとフレンドになります`);
     });
-  }, [view, me, run, reloadFriends, showToast]);
+    // 失敗しても（すでにフレンド・ブロック中など）同じ確認を出し続けないよう、預かりは捨てる
+    clearPendingInvite();
+    setInvite(null);
+  }, [invite, run, reloadFriends, showToast]);
+
+  const dismissInvite = useCallback(() => { clearPendingInvite(); setInvite(null); }, []);
 
   // ---------------------------------------------------------------
   // 在校確認のあとの演出：スライムが現れ、ポイントが1つずつ累計に足される
@@ -347,7 +371,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [boot, field]);
 
   const value = useMemo<Ctx>(() => ({
-    view, initialDisplayName, error, tab, me, friends, points, lastCheck, checking, sheet, mapOpen, displayTotal, toast,
+    view, initialDisplayName, error, tab, me, friends, points, lastCheck, checking, sheet, mapOpen, displayTotal, toast, invite,
     field, counter, screenRef,
     // タブを移ると地図は閉じる
     setTab: (t) => { setMapOpen(false); setTabState(t); },
@@ -362,17 +386,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     toggleHide,
     reloadFriends,
     setMe: (m) => setMe(m),
+    acceptInvite,
+    dismissInvite,
     completeRegistration: loadAll,
     finishOnboarding: (t) => {
       setView('app');
       setTabState(t);
-      if (t === 'friends') setSheet({ open: true, mode: 'show' });
+      // 招待リンクから来た人には、先に「申請しますか？」を出すので、追加のシートは開かない
+      if (t === 'friends' && !pendingInvite()) setSheet({ open: true, mode: 'show' });
     },
     refresh,
     restart,
     restartFromOnboarding: () => { void api.logout().finally(() => { setTabState('home'); goLogin(); }); },
-  }), [view, initialDisplayName, error, tab, me, friends, points, lastCheck, checking, sheet, mapOpen, displayTotal, toast,
-    field, showToast, run, check, toggleHide, reloadFriends, loadAll, refresh, restart, goLogin]);
+  }), [view, initialDisplayName, error, tab, me, friends, points, lastCheck, checking, sheet, mapOpen, displayTotal, toast, invite,
+    field, showToast, run, check, toggleHide, reloadFriends, acceptInvite, dismissInvite, loadAll, refresh, restart, goLogin]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

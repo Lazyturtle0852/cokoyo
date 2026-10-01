@@ -4,16 +4,16 @@
 //   リンクで共有 … 招待リンクを送る・コピーする。共有キーも出しておく。
 //                  相手の共有キーを入力して申請するのもここ
 //
-// インスタのストーリーズは、アプリの紹介の画像を作って渡す。招待リンクはインスタ側の
-// 「リンク」スタンプに本人が貼る（画像を渡すときにクリップボードへ入れておく）。
-// リンクから来た人は申請になり、本人が承認するまではフレンドにならない。
+// インスタのストーリーズは、あなたへのフレンド申請用のQRを載せた画像を作って渡す。
+// インスタの「リンク」スタンプに招待リンクを貼ることもできる（画像を渡すときにクリップボードへ入れておく）。
+// どちらから来た人も、申請するかを確かめてから申請になり、本人が承認するまではフレンドにならない。
 
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../app/AppContext';
 import { api } from '../api/client';
 import { mockBackend } from '../api/mockBackend';
-import { shareLink, useMockBackend } from '../config';
+import { shareLink, storyLink, useMockBackend } from '../config';
 import { QrScanner } from './QrScanner';
 import { appUrl, drawStory, shareStory, tweetUrl } from './share';
 import { Avatar } from './ui';
@@ -79,7 +79,7 @@ export function AddFriendSheet() {
     if (!qr || !me) { showToast('画像を作れませんでした'); return; }
     navigator.clipboard?.writeText(link).catch(() => undefined);
     try {
-      const message = await shareStory(drawStory(qr, me.displayName, new URL(appUrl(link)).host), link);
+      const message = await shareStory(drawStory(qr, me.displayName, new URL(appUrl(link)).host), storyLink(me.shareKey));
       if (message) showToast(message);
     } catch (e) {
       showToast((e as Error).message);
@@ -122,9 +122,9 @@ export function AddFriendSheet() {
                 <p className="lead">相手の「フレンドを追加」に出ているQRを読み取ります。カメラで読み取ると、すぐにフレンドになります。</p>
                 <QrScanner onKey={(key, from) => {
                   if (key === me.shareKey) { showToast('これはあなた自身のQRコードです'); return; }
-                  // 写真のQRは目の前の相手とは限らない（ストーリーズのスクショなど）ので、申請にする
-                  if (from === 'photo') void add(key, 'link', '写真のQRで申請');
-                  else void add(key, 'qr', 'QRコードを読み取った');
+                  // 写真やストーリーズのQRは、目の前の相手とは限らないので申請にする
+                  if (from === 'camera') void add(key, 'qr', 'QRコードを読み取った');
+                  else void add(key, 'link', from === 'photo' ? '写真のQRで申請' : 'ストーリーズのQRで申請');
                 }} />
                 {candidates.length > 0 && (
                   <>
@@ -161,7 +161,7 @@ export function AddFriendSheet() {
                 <p className="note">リンクが開けない相手には、このキーを伝えて「相手の共有キーを入力」から申請してもらえます。</p>
 
                 <div className="sns">
-                  <p className="sns-cap">SNSでアプリを知らせる</p>
+                  <p className="sns-cap">SNSで知らせる</p>
                   <div className="sns-row">
                     <button className="sns-btn x" onClick={() => window.open(tweetUrl(link), '_blank', 'noopener')}>
                       <XIcon />Xで共有
@@ -171,7 +171,12 @@ export function AddFriendSheet() {
                     </button>
                   </div>
                   <div className="ig-howto">
-                    <p className="ig-howto-title">ストーリーズに招待リンクを付けるには</p>
+                    <p className="ig-howto-title">ストーリーズで知らせるとき</p>
+                    <p className="row-note">
+                      画像には、<b>あなたへのフレンド申請用のQR</b>が入ります。見た人が読み取ると、
+                      まだ登録していない人は登録から始まり、登録が終わると「{me.displayName}さんにフレンド申請しますか？」と出ます。
+                    </p>
+                    <p className="ig-howto-sub">招待リンクも付けるなら</p>
                     <ol className="steps">
                       <li><span>上の<b>「招待リンクをコピー」</b>を押す（「ストーリーズ」を押したときも、自動でコピーされます）</span></li>
                       <li><span>「ストーリーズ」で作った画像をインスタに渡す</span></li>
@@ -179,15 +184,14 @@ export function AddFriendSheet() {
                       <li><span>URLの欄を長押しして<b>ペースト</b>し、<b>「完了」</b>を押す</span></li>
                     </ol>
                     <p className="row-note">
-                      画像のQRはアプリのページで、招待リンクは入っていません。招待リンクは、手順のとおり<b>自分で「リンク」スタンプに貼って</b>ください。
-                      リンクから来た人は<b>申請</b>になり、あなたが承認するまではフレンドになりません。
+                      QRからもリンクからも、来るのは<b>申請</b>で、あなたが承認するまではフレンドになりません。
                       ストーリーズは知らない人も見るので、知らない人からの申請は断ってください。
                     </p>
                   </div>
                 </div>
-                {/* 画像を作るときだけ使うQRコード（アプリのページ。招待リンクではない）。画面には出さない */}
+                {/* 画像を作るときだけ使うQRコード（ストーリーズの印つきの招待リンク）。画面には出さない */}
                 <div ref={qrBox} className="qr-hidden" aria-hidden="true">
-                  <QRCodeCanvas value={appUrl(link)} size={480} level="M" marginSize={2} fgColor="#1C1917" bgColor="#FFFFFF" />
+                  <QRCodeCanvas value={storyLink(me.shareKey)} size={480} level="M" marginSize={2} fgColor="#1C1917" bgColor="#FFFFFF" />
                 </div>
 
                 <details className="manual">

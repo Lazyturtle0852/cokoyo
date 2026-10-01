@@ -3,7 +3,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { routePath } from "hono/route";
 import type {
   AddFriendResponse, AdminSessionResponse, AdminStatsResponse, BestResponse, BestState, BlockResponse, BuildingKey, CheckResponse,
-  DebugDbResponse, FeedbackResponse, Suggestion, SuggestionsResponse, FriendsResponse, Me, PointItem, PointsResponse, Reaction, ReactionResponse,
+  DebugDbResponse, FeedbackResponse, InviteResponse, Suggestion, SuggestionsResponse, FriendsResponse, Me, PointItem, PointsResponse, Reaction, ReactionResponse,
   MacAddressView, UserRef,
 } from "../../shared/app-types.js";
 import { BUILDING_LABELS } from "../../shared/app-types.js";
@@ -496,6 +496,7 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
    * 「知り合いかも」。フレンドのフレンドから、
    *   ・ベストフレンドのフレンド
    *   ・共通のフレンドが2人以上
+   *   ・フレンドがまだ1人だけなら、そのフレンドのフレンド全員
    * を返す。どちらの理由で出したかは返さず、共通のフレンドの名前だけを渡す
    * （申請するかどうかの手がかりになるのはそこなので）。
    */
@@ -514,6 +515,26 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
       suggestions.push({ ...toRef(other), mutual });
     }
     const response: SuggestionsResponse = { suggestions };
+    return c.json(response);
+  });
+
+  /**
+   * 招待リンク・QRの相手を調べる。申請はしない。
+   * 招待リンクを開いた人に、申請する前に相手の名前を見せて確かめるため
+   * （ストーリーズのQRなどは、知らない人の手にも渡るので、黙って申請しない）。
+   * 相手にブロックされているときも、それが分からないよう none を返す（申請しても届かない）。
+   */
+  app.get("/v1/invites/:shareKey", (c) => {
+    const me = requireUser(c, repo);
+    const other = repo.findByShareKey(c.req.param("shareKey"));
+    if (!other || other.onboarding_completed_at === null) fail(404, "share_key_not_found", "この招待の相手が見つかりません");
+    if (other.id === me.id) fail(400, "self", "あなた自身の招待です");
+    if (repo.isBlocking(me.id, other.id)) fail(409, "blocked_by_you", "ブロック中の相手です。先にブロックを解除してください");
+    const row = repo.getFriendship(me.id, other.id);
+    const relation: InviteResponse["relation"] = row?.status === "friends" ? "friends"
+      : row?.status === "pending" ? (row.requested_by === me.id ? "requested" : "incoming")
+      : "none";
+    const response: InviteResponse = { user: toRef(other), relation };
     return c.json(response);
   });
 

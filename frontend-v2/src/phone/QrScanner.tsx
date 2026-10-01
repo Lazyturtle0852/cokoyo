@@ -29,8 +29,18 @@ export function shareKeyFrom(text: string): string | null {
 
 type Detect = (source: HTMLVideoElement, canvas: HTMLCanvasElement) => Promise<string | null>;
 
-/** どこから読んだか。camera は目の前の相手、photo は写真（スクショ）から */
-export type QrSource = 'camera' | 'photo';
+/**
+ * どこから読んだか。
+ *   camera … アプリのカメラで、目の前の相手のQRを読んだ（すぐフレンド）
+ *   photo  … 写真（スクショ）から読んだ（申請）
+ *   story  … カメラで読んだが、ストーリーズの画像のQRだった（申請）
+ */
+export type QrSource = 'camera' | 'photo' | 'story';
+
+/** ストーリーズの画像に載せたQRか（src/config.ts の storyLink が付ける印） */
+const isStoryQr = (text: string) => {
+  try { return new URL(text.trim()).searchParams.get('from') === 'story'; } catch { return false; }
+};
 
 /** 写真の中のQRを読む。見つからなければ null */
 async function readPhoto(file: File): Promise<string | null> {
@@ -132,7 +142,7 @@ export function QrScanner({ onKey }: { onKey(shareKey: string, from: QrSource): 
         const text = v.readyState >= 2 ? await detect(v, canvas.current as HTMLCanvasElement).catch(() => null) : null;
         if (text) {
           const key = shareKeyFrom(text);
-          if (key) { done.current = true; stop(); onKeyRef.current(key, 'camera'); return; }
+          if (key) { done.current = true; stop(); onKeyRef.current(key, isStoryQr(text) ? 'story' : 'camera'); return; }
           setWrong(true);
         }
         timer.current = window.setTimeout(() => void loop(), 180);
@@ -156,7 +166,7 @@ export function QrScanner({ onKey }: { onKey(shareKey: string, from: QrSource): 
       if (key) { stop(); onKeyRef.current(key, 'photo'); return; }
       setPhotoMsg(!text
         ? 'この写真からはQRコードが見つかりませんでした。QRが大きく写るようにスクショし直してみてください。'
-        : 'COKOYOのフレンド用のQRではないようです（ストーリーズの画像のQRはアプリのページで、フレンド用ではありません）。相手の招待リンクか、フレンド追加のQRを読み込んでください。');
+        : 'COKOYOのフレンド用のQRではないようです。相手の「フレンドを追加」に出ているQRか、ストーリーズの画像のQRを読み込んでください。');
     } catch {
       setPhotoMsg('写真を読み込めませんでした。');
     } finally {

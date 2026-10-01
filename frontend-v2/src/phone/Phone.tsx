@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useApp, type Tab } from '../app/AppContext';
 import { AddFriendSheet } from './AddFriendSheet';
+import { InviteConfirm } from './InviteConfirm';
 import { CampusMap } from './CampusMap';
 import { FieldView } from './FieldView';
 import { Friends } from './Friends';
@@ -110,6 +111,7 @@ export function Phone() {
           </div>
           {view === 'app' && mapOpen && <CampusMap />}
           <AddFriendSheet />
+          <InviteConfirm />
           {toast && <div className="toast show" key={toast.id} role="status" aria-live="polite">{toast.message}</div>}
         </div>
       </div>

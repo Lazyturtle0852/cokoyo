@@ -56,6 +56,26 @@ describe("知り合いかも", () => {
     expect(suggestions[0].mutual.map((u) => u.displayName)).toEqual(["佐藤"]);
   });
 
+  it("フレンドが1人のあいだは、そのフレンドのフレンドが全員出る（2人目からは元の条件）", async () => {
+    const h = createHarness();
+    const me = await h.signUp("ゆうき", MAC.alice);
+    const first = await h.signUp("佐藤", MAC.bob);
+    const x = await h.signUp("高橋", mac(1));
+    const y = await h.signUp("伊藤", mac(2));
+    const second = await h.signUp("田中", MAC.carol);
+
+    await befriend(me, first);      // ベストフレンドではない、ただのフレンドが1人
+    await befriend(first, x);
+    await befriend(first, y);
+
+    const one = await list(h, me);
+    expect(one.map((s) => s.displayName).sort()).toEqual(["伊藤", "高橋"]);
+    expect(one[0].mutual.map((u) => u.displayName)).toEqual(["佐藤"]);
+
+    await befriend(me, second);     // 2人目。共通が1人の相手はもう出ない
+    expect(await list(h, me)).toEqual([]);
+  });
+
   it("すでにフレンド・申請中・ブロックしている／されている相手は出ない", async () => {
     const h = createHarness();
     const me = await h.signUp("ゆうき", MAC.alice);

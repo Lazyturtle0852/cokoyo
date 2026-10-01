@@ -38,6 +38,19 @@ export const shareLink = (shareKey: string) => {
 };
 
 /**
+ * ストーリーズの画像に載せるQR。招待リンクに from=story の印を付ける。
+ * ストーリーズは知らない人も見るので、アプリのカメラで読まれたときも
+ * すぐにはフレンドにせず、申請にする（src/phone/QrScanner.tsx）。
+ */
+export const storyLink = (shareKey: string) => {
+  try {
+    const url = new URL(shareLink(shareKey));
+    url.searchParams.set('from', 'story');
+    return url.toString();
+  } catch { return `${shareLink(shareKey)}&from=story`; }
+};
+
+/**
  * 問い合わせ・ご意見の Google フォーム（設定タブ・/about/ などから開く）。
  * フォームを作り直したときは VITE_FEEDBACK_URL で差し替えられる。
  * public/ の静的ページ（about・terms・privacy）には直接書いてあるので、そちらも直す。

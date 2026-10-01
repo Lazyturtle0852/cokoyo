@@ -8,7 +8,7 @@ import { config, useMockBackend } from '../config';
 import { pendingInvite } from '../app/invite';
 import { mockBackend } from './mockBackend';
 import type {
-  AddFriendResponse, ApiErrorBody, BestResponse, BlockResponse, CheckResponse,
+  AddFriendResponse, ApiErrorBody, InviteResponse, BestResponse, BlockResponse, CheckResponse,
   AdminSessionResponse, AdminStatsResponse, DebugDbResponse, FeedbackResponse, SuggestionsResponse, FriendsResponse, MacAddressView, Me, PointsResponse, ReactionResponse, UserRef,
 } from './types';
 
@@ -116,6 +116,8 @@ export const api = {
   // おすすめから申請する（相手の承認でフレンドになる）
   addFriendById: (userId: string) => request<AddFriendResponse>('POST', '/v1/friends', { userId, via: 'suggestion' }),
   addFriend: (shareKey: string, via: 'qr' | 'link') => request<AddFriendResponse>('POST', '/v1/friends', { shareKey, via }),
+  /** 招待リンク・QRの相手を調べる（申請はしない） */
+  getInvite: (shareKey: string) => request<InviteResponse>('GET', `/v1/invites/${id(shareKey)}`),
   acceptRequest: (requestId: string) => request<{ status: 'friends'; user: UserRef }>('POST', `/v1/friend-requests/${id(requestId)}/accept`),
   declineRequest: (requestId: string) => request<null>('POST', `/v1/friend-requests/${id(requestId)}/decline`),
   requestBest: (userId: string) => request<BestResponse>('POST', `/v1/friends/${id(userId)}/best`),

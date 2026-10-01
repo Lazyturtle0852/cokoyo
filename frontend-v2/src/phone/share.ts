@@ -3,18 +3,17 @@
 //   X          … 文字数の上限に収まる短い文と、アプリのページのURL
 //   ストーリーズ … 1080×1920（9:16）の画像を作って、共有シートに渡す
 //
-// どちらにも**招待リンク（?add=<共有キー>）は入れない**。
-// ストーリーズやXは不特定多数が見るので、そこに招待リンクを出すと知らない人にも
-// フレンド申請の入り口を配ることになる。インスタの中のブラウザで開かれると、
-// すでに登録している人でも登録し直しになってしまう、という問題もある。
+// X には招待リンクを入れず、アプリのページだけを出す。
 //
-// 出すのは「アプリのページ」だけにして、フレンドになるのは今までどおり、
-// DMで声をかけあってから QR・招待リンク・共有キーでつなぐ（2026-09-28 グループで決定）。
-//
-// 2026-10-01 追記：ストーリーズには、本人が招待リンクをインスタの「リンク」スタンプで
-// 付けられるようにした（画像を渡すときにクリップボードへ入れておく）。画像そのものには
-// 今も入れない。リンクから来た人は申請になり、本人が承認するまでフレンドにはならない。
-// ストーリーズのQRをスクショして読んだときも申請になる（src/phone/QrScanner.tsx）。
+// ストーリーズの画像には、本人へのフレンド申請用のQR（招待リンクに from=story の印）を載せる
+// （2026-10-01 に変更。それまではアプリのページのQRで、DMでつないでもらう形だった）。
+// 不特定多数が見るので、知らない人がいきなりフレンドになれないようにしてある。
+//   ・QRを開いた人には、申請する前に「〇〇さんにフレンド申請しますか？」と確かめる
+//     （まだ登録していない人は、登録が終わったところで出る。src/app/AppContext.tsx）
+//   ・アプリのカメラで読んでも、写真から読んでも、すぐにはフレンドにせず申請にする
+//     （src/phone/QrScanner.tsx）
+//   ・申請は本人が承認するまでフレンドにならない
+// 本人は、インスタの「リンク」スタンプに招待リンクを貼ることもできる（画像を渡すときにコピーしておく）。
 
 import { COLORS, SELF_COLOR, shade, SLIME } from '../field/campusField';
 
@@ -24,7 +23,7 @@ const H = 1920;
 const FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif';
 
 /**
- * 招待リンクからキーを外した、ただのアプリのページ。SNSに出すのはこちら。
+ * 招待リンクからキーを外した、ただのアプリのページ。X に出すのはこちら。
  * 手元で動かしているときは localhost のままになるが、それで構わない。
  */
 export function appUrl(link: string): string {
@@ -120,12 +119,12 @@ function headlineLines(ctx: CanvasRenderingContext2D, displayName: string, maxWi
 /**
  * ストーリーズ用の画像を作る。
  *
- * 出すのは「アプリの紹介」と「アプリのページのQRコード」まで。
- * 招待リンクは入れない（見た人が勝手にフレンドになれてしまうため）。
- * フレンドになるのは、見た人からDMをもらってから。
+ * 出すのは「アプリの紹介」と「あなたへのフレンド申請用のQRコード」。
+ * QRを開いた人は、申請する前に確かめる画面が出て、申請はあなたが承認するまでフレンドにならない。
+ * 本人がインスタの「リンク」スタンプを貼るとは限らないので、文言はリンクを前提にしない。
  *
  * qr は画面のどこかに描いてある QRコードの canvas（qrcode.react の QRCodeCanvas）で、
- * 中身はアプリのページのURL。
+ * 中身は招待リンク（from=story の印つき。src/config.ts の storyLink）。
  */
 export function drawStory(qr: HTMLCanvasElement, displayName: string, host: string): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
@@ -178,8 +177,8 @@ export function drawStory(qr: HTMLCanvasElement, displayName: string, host: stri
   drawSlime(ctx, W / 2, fieldY + 52, 9, SELF_COLOR);
   drawSlime(ctx, W / 2 + 205, fieldY + 18, 7, COLORS[3]);
 
-  // アプリのページのQRコード（白い下じきの上に置く）
-  const qrSize = 330;
+  // フレンド申請用のQRコード（白い下じきの上に置く）。見出しが2行のときは少し小さくして、下の文と重ならないようにする
+  const qrSize = headline.lines.length > 1 ? 280 : 330;
   const qrX = (W - qrSize) / 2;
   const qrY = fieldY + 150;
   ctx.fillStyle = '#F2EFEB';
@@ -191,15 +190,16 @@ export function drawStory(qr: HTMLCanvasElement, displayName: string, host: stri
   ctx.imageSmoothingEnabled = false; // QRはぼかさない
   ctx.drawImage(qr, qrX, qrY, qrSize, qrSize);
   ctx.imageSmoothingEnabled = true;
-  centered(ctx, 'カメラで読み取ると、登録の画面がひらきます', W / 2, qrY + qrSize + 64, `500 30px ${FONT}`, '#8B8580');
+  centered(ctx, 'カメラで読み取ると、フレンド申請の画面がひらきます', W / 2, qrY + qrSize + 62, `600 30px ${FONT}`, '#57534E');
+  centered(ctx, 'まだの人も、登録したあとにそのまま申請できます', W / 2, qrY + qrSize + 106, `500 28px ${FONT}`, '#8B8580');
 
-  // いちばん言いたいこと：登録したらDMをください
+  // 同じスマホで見ている人はカメラで読めないので、スクショからの読み込みを知らせる
   const pillY = cardY + cardH - 150;
   ctx.fillStyle = '#FFF4ED';
   roundRect(ctx, 150, pillY, W - 300, 108, 54);
   ctx.fill();
-  centered(ctx, '登録したら、DMで', W / 2, pillY + 46, `700 38px ${FONT}`, '#C2410C');
-  centered(ctx, 'フレンド追加をお願いします', W / 2, pillY + 90, `700 38px ${FONT}`, '#C2410C');
+  centered(ctx, 'スクショして、COKOYOの', W / 2, pillY + 46, `700 36px ${FONT}`, '#C2410C');
+  centered(ctx, '「写真から読み込む」でもOK', W / 2, pillY + 90, `700 36px ${FONT}`, '#C2410C');
 
   centered(ctx, host, W / 2, cardY + cardH + 82, `600 34px ${FONT}`, 'rgba(255,255,255,.92)');
   return canvas;
@@ -212,6 +212,7 @@ const toBlob = (canvas: HTMLCanvasElement) =>
  * 作った画像を共有シートに渡す。渡せないブラウザでは、画像として保存させる。
  * 返り値は画面に出す知らせ。
  */
+/** link は招待リンク（ストーリーズの印つき）。共有シートでほかのアプリに渡したときに文として付く */
 export async function shareStory(canvas: HTMLCanvasElement, link: string): Promise<string> {
   const blob = await toBlob(canvas);
   if (!blob) return '画像を作れませんでした';
@@ -219,9 +220,8 @@ export async function shareStory(canvas: HTMLCanvasElement, link: string): Promi
 
   if (navigator.canShare?.({ files: [file] })) {
     try {
-      // 渡すのはアプリのページ。招待リンクは載せない
-      await navigator.share({ files: [file], text: appUrl(link) });
-      return '招待リンクをコピーしました。ストーリーズの「リンク」スタンプに貼ってください';
+      await navigator.share({ files: [file], text: link });
+      return '招待リンクもコピーしました。「リンク」スタンプに貼ることもできます';
     } catch (e) {
       if ((e as DOMException).name === 'AbortError') return '';
       // 共有できなければ保存に切り替える
@@ -234,5 +234,5 @@ export async function shareStory(canvas: HTMLCanvasElement, link: string): Promi
   a.download = 'cokoyo.png';
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
-  return '画像を保存しました。招待リンクもコピーしたので、ストーリーズの「リンク」スタンプに貼ってください';
+  return '画像を保存しました。ストーリーズに貼ってください（招待リンクもコピーしました）';
 }
