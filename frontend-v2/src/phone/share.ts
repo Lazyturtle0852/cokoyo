@@ -10,6 +10,11 @@
 //
 // 出すのは「アプリのページ」だけにして、フレンドになるのは今までどおり、
 // DMで声をかけあってから QR・招待リンク・共有キーでつなぐ（2026-09-28 グループで決定）。
+//
+// 2026-10-01 追記：ストーリーズには、本人が招待リンクをインスタの「リンク」スタンプで
+// 付けられるようにした（画像を渡すときにクリップボードへ入れておく）。画像そのものには
+// 今も入れない。リンクから来た人は申請になり、本人が承認するまでフレンドにはならない。
+// ストーリーズのQRをスクショして読んだときも申請になる（src/phone/QrScanner.tsx）。
 
 import { COLORS, SELF_COLOR, shade, SLIME } from '../field/campusField';
 
@@ -216,7 +221,7 @@ export async function shareStory(canvas: HTMLCanvasElement, link: string): Promi
     try {
       // 渡すのはアプリのページ。招待リンクは載せない
       await navigator.share({ files: [file], text: appUrl(link) });
-      return 'ストーリーズに貼ってください。フレンド追加はDMで';
+      return '招待リンクをコピーしました。ストーリーズの「リンク」スタンプに貼ってください';
     } catch (e) {
       if ((e as DOMException).name === 'AbortError') return '';
       // 共有できなければ保存に切り替える
@@ -229,5 +234,5 @@ export async function shareStory(canvas: HTMLCanvasElement, link: string): Promi
   a.download = 'cokoyo.png';
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
-  return '画像を保存しました。ストーリーズに貼ってください';
+  return '画像を保存しました。招待リンクもコピーしたので、ストーリーズの「リンク」スタンプに貼ってください';
 }
