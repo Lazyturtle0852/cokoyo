@@ -48,7 +48,7 @@ export function Dashboard() {
     <div className="admin">
       <header className="admin-head">
         <div>
-          <h1>COKOYO（仮称）— 管理画面</h1>
+          <h1>COKOYO — 管理画面</h1>
           <p>{stats ? `${dateTime(stats.generatedAt)} 時点。日付は日本時間。` : '読み込み中…'}</p>
         </div>
         <div className="row">
