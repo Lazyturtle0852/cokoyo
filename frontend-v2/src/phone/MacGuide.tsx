@@ -3,9 +3,12 @@
 // 最初の登録（src/phone/Onboarding.tsx）と、あとから端末を足すとき（src/phone/Settings.tsx）で使う。
 //
 // 端末の種類（iPhone / Android / Mac / Windows）と、いまキャンパスにいるかどうかで
-// 手順が変わる。キャンパスの外でも、一度でも keiomobile2 につないだことがあれば、
+// 手順が変わる。キャンパスの外でも、一度でもそのネットワークにつないだことがあれば、
 // 保存されたネットワークの設定から同じ値を見られる（つないだことが無ければ見られない。
 // どのOSも、ネットワークごとに別のアドレスを作るため）。
+//
+// 同じ端末でも keiomobile2・eduroam・CNS でアドレスが違うので、
+// ふだんつなぐネットワークごとに1つずつ登録してもらう。
 
 import { useState, type ReactNode } from 'react';
 
@@ -26,7 +29,7 @@ export const GUIDE: Record<Os, Guide> = {
   ios: {
     label: 'iPhone',
     here: [
-      <>キャンパスのWiFi（keiomobile2 など）につなぐ</>,
+      <>キャンパスのWiFi（keiomobile2・eduroam・CNS のどれか）につなぐ</>,
       <><b>設定</b>アプリを開き、<b>Wi-Fi</b>をタップ</>,
       <>つながっているネットワーク名の右にある <b>ⓘ</b> をタップ</>,
       <><b>プライベートWi-Fiアドレス</b>が「ローテーション」なら「<b>固定</b>」にする</>,
@@ -36,7 +39,7 @@ export const GUIDE: Record<Os, Guide> = {
     away: [
       <><b>設定</b>アプリを開き、<b>Wi-Fi</b>をタップ</>,
       <>右上の<b>「編集」</b>を押す（前につないだネットワークの一覧が出る）</>,
-      <><b>keiomobile2</b> の右の <b>ⓘ</b> をタップ</>,
+      <>登録したいネットワーク（<b>keiomobile2</b>・<b>eduroam</b>・<b>CNS</b>）の右の <b>ⓘ</b> をタップ</>,
       <><b>プライベートWi-Fiアドレス</b>が「ローテーション」なら「<b>固定</b>」にする</>,
       <><b>Wi-Fiアドレス</b>を長押しして<b>コピー</b>し、下の欄に貼り付ける</>,
     ],
@@ -52,7 +55,7 @@ export const GUIDE: Record<Os, Guide> = {
   android: {
     label: 'Android',
     here: [
-      <>キャンパスのWiFi（keiomobile2 など）につなぐ</>,
+      <>キャンパスのWiFi（keiomobile2・eduroam・CNS のどれか）につなぐ</>,
       <><b>設定</b>アプリ →「<b>ネットワークとインターネット</b>」→「<b>インターネット</b>」（機種によっては「Wi-Fi」）</>,
       <>つながっているネットワークの <b>歯車</b> をタップ</>,
       <><b>プライバシー</b>は「ランダムMACを使用」のままでOK（このネットワークでは同じ値が使われます）</>,
@@ -62,7 +65,7 @@ export const GUIDE: Record<Os, Guide> = {
     away: [
       <><b>設定</b>アプリ →「<b>ネットワークとインターネット</b>」→「<b>インターネット</b>」</>,
       <>下のほうの<b>「保存済みネットワーク」</b>を開く</>,
-      <><b>keiomobile2</b> を選び、<b>詳細設定</b>を開く</>,
+      <>登録したいネットワーク（<b>keiomobile2</b>・<b>eduroam</b>・<b>CNS</b>）を選び、<b>詳細設定</b>を開く</>,
       <><b>MACアドレス</b>（「ランダムMACアドレス」と書かれていることもあります）の値を、下の欄に入力する</>,
     ],
     sample: (
@@ -78,7 +81,7 @@ export const GUIDE: Record<Os, Guide> = {
   mac: {
     label: 'Mac',
     here: [
-      <>キャンパスのWiFi（keiomobile2 など）につなぐ（<b>有線LANではなくWiFi</b>）</>,
+      <>キャンパスのWiFi（keiomobile2・eduroam・CNS のどれか）につなぐ（<b>有線LANではなくWiFi</b>）</>,
       <>アップルメニュー  →「<b>システム設定</b>」→「<b>Wi-Fi</b>」</>,
       <>つながっているネットワークの右の「<b>詳細…</b>」をクリック</>,
       <><b>プライベートWi-Fiアドレス</b>が「ローテーション」なら「<b>固定</b>」にする</>,
@@ -88,7 +91,7 @@ export const GUIDE: Record<Os, Guide> = {
     away: [
       <>「<b>システム設定</b>」→「<b>Wi-Fi</b>」を開く</>,
       <>下のほうの「<b>詳細…</b>」をクリック（前につないだネットワークの一覧が出る）</>,
-      <><b>keiomobile2</b> の右の「<b>⋯</b>」→「<b>このネットワークの詳細</b>」をクリック</>,
+      <>登録したいネットワーク（<b>keiomobile2</b>・<b>eduroam</b>・<b>CNS</b>）の右の「<b>⋯</b>」→「<b>このネットワークの詳細</b>」をクリック</>,
       <><b>プライベートWi-Fiアドレス</b>を「<b>固定</b>」にして、<b>Wi-Fiアドレス</b>をコピーする</>,
     ],
     sample: (
@@ -104,7 +107,7 @@ export const GUIDE: Record<Os, Guide> = {
   windows: {
     label: 'Windows',
     here: [
-      <>キャンパスのWiFi（keiomobile2 など）につなぐ（<b>有線LANではなくWiFi</b>）</>,
+      <>キャンパスのWiFi（keiomobile2・eduroam・CNS のどれか）につなぐ（<b>有線LANではなくWiFi</b>）</>,
       <><b>設定</b>→「<b>ネットワークとインターネット</b>」→「<b>Wi-Fi</b>」</>,
       <>つながっているネットワーク名（「<b>…のプロパティ</b>」）をクリック</>,
       <><b>ランダムなハードウェアアドレス</b>が「毎日変更する」なら「<b>オン</b>」にする（値が固定されます）</>,
@@ -114,7 +117,7 @@ export const GUIDE: Record<Os, Guide> = {
     away: [
       <><b>設定</b>→「<b>ネットワークとインターネット</b>」→「<b>Wi-Fi</b>」</>,
       <>「<b>既知のネットワークの管理</b>」を開く</>,
-      <><b>keiomobile2</b> を選び、<b>ランダムなハードウェアアドレス</b>を「<b>オン</b>」にする</>,
+      <>登録したいネットワーク（<b>keiomobile2</b>・<b>eduroam</b>・<b>CNS</b>）を選び、<b>ランダムなハードウェアアドレス</b>を「<b>オン</b>」にする</>,
       <>「<b>物理アドレス (MAC)</b>」の値を、下の欄に入力する</>,
     ],
     sample: (
@@ -155,6 +158,12 @@ export function MacGuide({ onOs }: { onOs?: (os: Os) => void }) {
         <button role="tab" className={away ? '' : 'on'} aria-selected={!away} onClick={() => setAway(false)}>いまキャンパスにいる</button>
         <button role="tab" className={away ? 'on' : ''} aria-selected={away} onClick={() => setAway(true)}>キャンパスの外にいる</button>
       </div>
+
+      <p className="row-note">
+        <b>同じ端末でも、keiomobile2・eduroam・CNS でアドレスが違います。</b>
+        ふだんつなぐネットワークごとに1つずつ登録してください（最大5個）。
+        端末の名前を「iPhone（eduroam）」のようにしておくと見分けやすくなります。
+      </p>
 
       {away && (
         <p className="row-note">
