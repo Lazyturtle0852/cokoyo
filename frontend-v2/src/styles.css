@@ -717,6 +717,12 @@ a.btn { text-decoration: none; }
 .fb-body { font-size: 13px; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .admin-filter { margin-bottom: 12px; }
+.rel.bad { color: var(--danger); background: var(--danger-tint); }
+.rel.warn { color: #B45309; background: #FEF3C7; }
+.log-counts { margin: 0 0 14px; padding-top: 0; border-top: none; }
+.log-wrap { max-height: 520px; overflow-y: auto; }
+.admin-logs td { vertical-align: top; }
+.admin-logs td .rel, .admin-logs td .muted { margin-right: 6px; }
 .admin-filter input { flex: 1 1 220px; padding: 7px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); font-size: 13px; }
 .admin-filter label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .admin-filter select { font-size: 12.5px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); }

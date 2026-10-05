@@ -1,8 +1,26 @@
-import type { AdminStatsResponse, DbTable } from "../../shared/app-types.js";
+import type { AdminStatsResponse, DbTable, OpsEvent } from "../../shared/app-types.js";
 import type { Db } from "./db.js";
 import { hashToken, newRequestId, newShareKey, newUserId } from "./lib/ids.js";
 import { maskMac } from "./lib/mac.js";
 import { jstDate, shiftDate } from "./lib/time.js";
+
+/** 運用ログに書く1件。at を省くと今の時刻 */
+export interface OpsInput {
+  source: OpsEvent["source"];
+  kind: OpsEvent["kind"];
+  at?: string;
+  method?: string | null;
+  route?: string | null;
+  status?: number | null;
+  ms?: number | null;
+  online?: boolean | null;
+  visible?: boolean | null;
+  sinceLoad?: number | null;
+  message?: string | null;
+}
+
+/** 運用ログ（ops_events）に残す件数。超えたら古いものから消す */
+export const OPS_KEEP = 5000;
 
 export interface User {
   id: number;
@@ -208,6 +226,17 @@ export function createRepo(db: Db) {
       `INSERT INTO access_routes (date, method, route, hits) VALUES (?, ?, ?, 1)
        ON CONFLICT(date, method, route) DO UPDATE SET hits = hits + 1`,
     ),
+  };
+
+  // 運用ログ。行が増え続けないよう、書くたびに OPS_KEEP 件より古いものを消す。
+  const opsQ = {
+    insert: db.prepare(
+      `INSERT INTO ops_events
+         (at, reported_at, source, kind, method, route, status, ms, online, visible, since_load_ms, message)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ),
+    trim: db.prepare("DELETE FROM ops_events WHERE id <= (SELECT MAX(id) FROM ops_events) - ?"),
+    recent: db.prepare("SELECT * FROM ops_events ORDER BY at DESC, id DESC LIMIT ?"),
   };
 
   // 管理画面の集計。users.created_at は UTC の ISO なので、日本時間の日付に直して数える。
@@ -465,6 +494,39 @@ export function createRepo(db: Db) {
     recordAccess(date: string, userId: number, method: string, route: string): void {
       accessQ.byUser.run(date, userId);
       accessQ.byRoute.run(date, method, route);
+    },
+
+    /** 運用ログを1件書く。 */
+    recordOps(e: OpsInput): void {
+      const now = new Date().toISOString();
+      const flag = (v: boolean | null | undefined) => (v == null ? null : v ? 1 : 0);
+      opsQ.insert.run(
+        e.at ?? now, now, e.source, e.kind, e.method ?? null, e.route ?? null, e.status ?? null, e.ms ?? null,
+        flag(e.online), flag(e.visible), e.sinceLoad ?? null, e.message ?? null,
+      );
+      opsQ.trim.run(OPS_KEEP);
+    },
+
+    /** 運用ログ。起きた時刻の新しい順 */
+    recentOps(limit = 500): OpsEvent[] {
+      const n = (v: unknown) => (v === null ? null : Number(v));
+      const b = (v: unknown) => (v === null ? null : Number(v) === 1);
+      const str = (v: unknown) => (v === null ? null : String(v));
+      return (opsQ.recent.all(limit) as Array<Record<string, unknown>>).map((r) => ({
+        id: Number(r.id),
+        at: String(r.at),
+        reportedAt: String(r.reported_at),
+        source: r.source as OpsEvent["source"],
+        kind: r.kind as OpsEvent["kind"],
+        method: str(r.method),
+        route: str(r.route),
+        status: n(r.status),
+        ms: n(r.ms),
+        online: b(r.online),
+        visible: b(r.visible),
+        sinceLoad: n(r.since_load_ms),
+        message: str(r.message),
+      }));
     },
 
     /** 管理画面の数字。daily は今日を含む直近 days 日。 */

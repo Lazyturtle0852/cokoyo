@@ -124,7 +124,23 @@ CREATE TABLE access_routes (
   hits INTEGER NOT NULL,
   PRIMARY KEY (date, method, route)
 );
-PRAGMA user_version = 5;
+CREATE TABLE ops_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  at TEXT NOT NULL,                -- 起きた時刻。ブラウザから届いたものは端末の時計
+  reported_at TEXT NOT NULL,       -- バックエンドが記録した時刻
+  source TEXT NOT NULL CHECK (source IN ('server', 'client')),
+  kind TEXT NOT NULL CHECK (kind IN ('start', 'error', 'slow', 'network')),
+  method TEXT,
+  route TEXT,                      -- ルートの形だけ（値は伏せる）
+  status INTEGER,
+  ms INTEGER,
+  online INTEGER,
+  visible INTEGER,
+  since_load_ms INTEGER,
+  message TEXT
+);
+CREATE INDEX idx_ops_events_at ON ops_events(at);
+PRAGMA user_version = 6;
 `;
 
 /**
@@ -163,9 +179,28 @@ const MIGRATIONS: Record<number, string> = {
     );
     PRAGMA user_version = 5;
   `,
+  5: `
+    CREATE TABLE ops_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      at TEXT NOT NULL,                -- 起きた時刻。ブラウザから届いたものは端末の時計
+      reported_at TEXT NOT NULL,       -- バックエンドが記録した時刻
+      source TEXT NOT NULL CHECK (source IN ('server', 'client')),
+      kind TEXT NOT NULL CHECK (kind IN ('start', 'error', 'slow', 'network')),
+      method TEXT,
+      route TEXT,                      -- ルートの形だけ（値は伏せる）
+      status INTEGER,
+      ms INTEGER,
+      online INTEGER,
+      visible INTEGER,
+      since_load_ms INTEGER,
+      message TEXT
+    );
+    CREATE INDEX idx_ops_events_at ON ops_events(at);
+    PRAGMA user_version = 6;
+  `,
 };
 
-const LATEST = 5;
+const LATEST = 6;
 
 export function openDb(path: string): Db {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });

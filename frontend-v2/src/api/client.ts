@@ -7,9 +7,10 @@
 import { config, useMockBackend } from '../config';
 import { pendingInvite } from '../app/invite';
 import { mockBackend } from './mockBackend';
+import { flushNetworkErrors, rememberNetworkError } from './networkReport';
 import type {
   AddFriendResponse, ApiErrorBody, InviteResponse, BestResponse, BlockResponse, CheckResponse,
-  AdminSessionResponse, AdminStatsResponse, DebugDbResponse, FeedbackResponse, SuggestionsResponse, FriendsResponse, MacAddressView, Me, PointsResponse, ReactionResponse, UserRef,
+  AdminLogsResponse, AdminSessionResponse, AdminStatsResponse, DebugDbResponse, FeedbackResponse, SuggestionsResponse, FriendsResponse, MacAddressView, Me, PointsResponse, ReactionResponse, UserRef,
 } from './types';
 
 // ---------------------------------------------------------------
@@ -59,13 +60,17 @@ async function request<T>(method: string, path: string, body?: Record<string, un
     await wait(160); // 通信している感じを出す
     ({ status, json } = await mockBackend.handle(method, path, headers, body));
   } else {
+    const base = config.apiBaseUrl.replace(/\/$/, '');
+    const started = performance.now();
     try {
-      const res = await fetch(config.apiBaseUrl.replace(/\/$/, '') + path, {
+      const res = await fetch(base + path, {
         method, headers, credentials: 'same-origin', body: body ? JSON.stringify(body) : undefined,
       });
       status = res.status;
       json = status === 204 ? null : await res.json().catch(() => null);
+      flushNetworkErrors(base); // 繋がらなかった記録が溜まっていれば、繋がった今のうちに送る
     } catch (e) {
+      rememberNetworkError({ method, path, ms: Math.round(performance.now() - started), message: String((e as Error).message ?? e) });
       if (!silent) push({ method, path, body, status: 0, json: { error: { message: String((e as Error).message ?? e) } }, withToken: withSession });
       throw new ApiError('バックエンドに接続できません。同じサイトのAPI設定を確認してください', 0);
     }
@@ -140,4 +145,5 @@ export const api = {
   adminLogout: () => request<null>('POST', '/v1/admin/logout', undefined, true),
   adminStats: () => request<AdminStatsResponse>('GET', '/v1/admin/stats', undefined, true),
   adminDb: () => request<DebugDbResponse>('GET', '/v1/admin/db', undefined, true),
+  adminLogs: () => request<AdminLogsResponse>('GET', '/v1/admin/logs', undefined, true),
 };
