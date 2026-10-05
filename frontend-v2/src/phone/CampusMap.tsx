@@ -4,6 +4,10 @@
 // 建物まで見えるのはベストフレンド同士のときだけなので、
 // キャンパスにはいるけれど場所が分からない人は、下のトレイにまとめる。
 // （出し分けはバックエンドがやっている。ここに来る時点で buildingKey が無い。）
+//
+// ベストフレンドや自分でも、建物が分からないことがある。大学のAPIが建物に結びつけていない
+// アクセスポイント（メディアセンター・βヴィレッジなど）につながっているとき。
+// そのときは「ベストフレンド同士だと見えます」とは出さず、「キャンパスのどこかにいます」とだけ出す。
 
 import { useState } from 'react';
 import { useApp } from '../app/AppContext';
@@ -18,6 +22,8 @@ interface Pin {
   name: string;
   color: string;
   self: boolean;
+  /** ベストフレンド同士か（建物が分からない理由の出し分けに使う） */
+  best: boolean;
 }
 
 export function CampusMap() {
@@ -27,6 +33,7 @@ export function CampusMap() {
   if (!me || !friends) return null;
 
   const named = new Map(friends.friends.map((f) => [f.userId, f.displayName]));
+  const bests = new Set(friends.friends.filter((f) => f.best === 'best').map((f) => f.userId));
 
   // 建物ごとに、そこにいる人を集める
   const byBuilding = new Map<string, Pin[]>();
@@ -37,7 +44,7 @@ export function CampusMap() {
   };
 
   if (lc?.me.presence === 'present' && lc.me.buildingKey) {
-    put(lc.me.buildingKey, { id: SELF_ID, name: 'あなた', color: SELF_COLOR, self: true });
+    put(lc.me.buildingKey, { id: SELF_ID, name: 'あなた', color: SELF_COLOR, self: true, best: true });
   }
   const somewhere: Pin[] = [];
   for (const f of lc?.friends ?? []) {
@@ -47,13 +54,14 @@ export function CampusMap() {
       name: named.get(f.userId) ?? '',
       color: colorOf(f.userId),
       self: false,
+      best: bests.has(f.userId),
     };
     if (f.buildingKey) put(f.buildingKey, pin);
     else somewhere.push(pin);
   }
   // 自分が在校していて、建物までは分からないとき
   if (lc?.me.presence === 'present' && !lc.me.buildingKey) {
-    somewhere.unshift({ id: SELF_ID, name: 'あなた', color: SELF_COLOR, self: true });
+    somewhere.unshift({ id: SELF_ID, name: 'あなた', color: SELF_COLOR, self: true, best: true });
   }
 
   const here = picked ? (byBuilding.get(picked) ?? []) : [];
@@ -145,7 +153,7 @@ export function CampusMap() {
                   <SelfOrAvatar pin={p} />
                   <div className="fbody">
                     <div className="fname">{p.name}</div>
-                    <div className="fmeta">建物までは、ベストフレンド同士だと見えます</div>
+                    <div className="fmeta">{p.best ? 'キャンパスのどこかにいます' : '建物までは、ベストフレンド同士だと見えます'}</div>
                   </div>
                 </div>
               ))}

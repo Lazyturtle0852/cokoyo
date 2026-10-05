@@ -5,7 +5,7 @@ import { useApp } from '../app/AppContext';
 import { api } from '../api/client';
 import type { Friend } from '../api/types';
 import { HideCard } from './HideCard';
-import { InstagramCard, useInstagramTapped } from './InstagramCard';
+import { InstagramCard } from './InstagramCard';
 import { Section } from './Section';
 import { Suggestions } from './Suggestions';
 import { Avatar, fullDate, Icon } from './ui';
@@ -14,7 +14,6 @@ export function Friends() {
   const { friends, run, reloadFriends, showToast, openAddSheet } = useApp();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [armedBlock, setArmedBlock] = useState<string | null>(null);
-  const [igTapped, markIg] = useInstagramTapped();
   if (!friends) return null;
 
   const { requests, blocked } = friends;
@@ -46,7 +45,7 @@ export function Friends() {
   return (
     <>
       <button className="btn btn-primary btn-add" onClick={() => openAddSheet()}><Icon.Plus />フレンドを追加</button>
-      <InstagramCard where="top" tapped={igTapped} onTap={markIg} />
+      <InstagramCard />
 
       <Section id="friends.visibility" title="あなたの見え方">
         <HideCard />
@@ -168,8 +167,6 @@ export function Friends() {
           <p className="footnote">ブロックしても、フレンドからは消えません。解除すると元のフレンドに戻ります。</p>
         </Section>
       )}
-
-      <InstagramCard where="bottom" tapped={igTapped} onTap={markIg} />
     </>
   );
 }
