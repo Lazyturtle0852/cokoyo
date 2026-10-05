@@ -46,6 +46,9 @@ export class ApiError extends Error {
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** 返事まで届かなかった GET を送り直すまでの待ち時間。長さが送り直す回数 */
+const NETWORK_RETRY_DELAYS = [500, 1500];
+
 /**
  * silent: 「バックエンドとの通信」に記録しない。
  * 説明用ページが裏で叩くもの（DBの中身）に使う。直前の操作の記録を汚さないため。
@@ -60,19 +63,38 @@ async function request<T>(method: string, path: string, body?: Record<string, un
     await wait(160); // 通信している感じを出す
     ({ status, json } = await mockBackend.handle(method, path, headers, body));
   } else {
+    // fetch が投げるのは、サーバーの返事まで届かなかったとき（電波の切れ目、
+    // 開いた直後や裏から戻った直後でまだ繋がっていない、など）。たいていは一瞬なので、
+    // 何度送っても結果が同じ GET だけ、少し待って送り直す。
+    // 書き込み（POST など）は、届いていたのに返事だけ失われた場合に二重になるので送り直さない。
     const base = config.apiBaseUrl.replace(/\/$/, '');
-    const started = performance.now();
-    try {
-      const res = await fetch(base + path, {
-        method, headers, credentials: 'same-origin', body: body ? JSON.stringify(body) : undefined,
-      });
-      status = res.status;
-      json = status === 204 ? null : await res.json().catch(() => null);
-      flushNetworkErrors(base); // 繋がらなかった記録が溜まっていれば、繋がった今のうちに送る
-    } catch (e) {
-      rememberNetworkError({ method, path, ms: Math.round(performance.now() - started), message: String((e as Error).message ?? e) });
-      if (!silent) push({ method, path, body, status: 0, json: { error: { message: String((e as Error).message ?? e) } }, withToken: withSession });
-      throw new ApiError('バックエンドに接続できません。同じサイトのAPI設定を確認してください', 0);
+    const retryDelays = method === 'GET' ? NETWORK_RETRY_DELAYS : [];
+    for (let attempt = 0; ; attempt++) {
+      const started = performance.now();
+      try {
+        const res = await fetch(base + path, {
+          method, headers, credentials: 'same-origin', body: body ? JSON.stringify(body) : undefined,
+        });
+        status = res.status;
+        json = status === 204 ? null : await res.json().catch(() => null);
+        flushNetworkErrors(base); // 繋がらなかった記録が溜まっていれば、繋がった今のうちに送る
+        break;
+      } catch (e) {
+        if (attempt < retryDelays.length) { await wait(retryDelays[attempt]); continue; }
+        // 送り直しても駄目だったものだけ残す。ms は最後の1回ぶん
+        const message = String((e as Error).message ?? e);
+        rememberNetworkError({
+          method, path, ms: Math.round(performance.now() - started),
+          message: attempt > 0 ? `${message}（${attempt + 1}回送って全部失敗）` : message,
+        });
+        if (!silent) push({ method, path, body, status: 0, json: { error: { message } }, withToken: withSession });
+        throw new ApiError(
+          navigator.onLine === false
+            ? 'インターネットに繋がっていないようです。電波の良いところでもう一度お試しください'
+            : '通信できませんでした。電波の良いところでもう一度お試しください',
+          0,
+        );
+      }
     }
   }
 

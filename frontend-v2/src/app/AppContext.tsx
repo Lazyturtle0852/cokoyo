@@ -370,6 +370,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await boot();
   }, [boot, field]);
 
+  // ---------------------------------------------------------------
+  // 開いたときに繋がらなかったら、繋がり直した・画面に戻ってきた時点で自動でやり直す
+  //
+  // 「もう一度試す」を押さなくても、電波が戻れば元の画面に戻れるようにする。
+  // ---------------------------------------------------------------
+  useEffect(() => {
+    if (view !== 'error') return;
+    const retry = () => {
+      if (document.visibilityState !== 'visible') return;
+      void restart();
+    };
+    window.addEventListener('online', retry);
+    document.addEventListener('visibilitychange', retry);
+    return () => {
+      window.removeEventListener('online', retry);
+      document.removeEventListener('visibilitychange', retry);
+    };
+  }, [view, restart]);
+
   const value = useMemo<Ctx>(() => ({
     view, initialDisplayName, error, tab, me, friends, points, lastCheck, checking, sheet, mapOpen, displayTotal, toast, invite,
     field, counter, screenRef,
