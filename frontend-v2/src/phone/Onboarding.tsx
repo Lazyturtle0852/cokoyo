@@ -65,6 +65,10 @@ export function Onboarding() {
         <p className="ob-step">2 / 2</p>
         <h2 className="ob-title">最初の端末を登録</h2>
         <p className="ob-lead">キャンパスのWiFiで使うMACアドレスを入力してください。あとから最大5台まで追加できます。</p>
+        <div className="ssid-chips" aria-label="判定できるネットワーク">
+          <span>keiomobile2</span><span>eduroam</span><span>CNS</span>
+        </div>
+        <p className="row-note ssid-note">どのネットワークにつないでいても、キャンパスにいると判定できます。ふだんつなぐネットワークのアドレスを登録してください。</p>
         <MacGuide onOs={(o: Os) => setLabel(deviceLabel(o))} />
         <label className="field-label" htmlFor="obLabel">端末の名前</label>
         <input className="field" id="obLabel" maxLength={30} value={label} onChange={(e) => setLabel(e.target.value)} />
