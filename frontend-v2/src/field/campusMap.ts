@@ -12,8 +12,8 @@ import { BETA_SHAPES, BUILDING_SHAPES, GROUND_SHAPES, OTHER_SHAPES, PARKING_SHAP
 
 type Pt = readonly [number, number];
 
-/** 図に入れる範囲（メートル）。北の体育施設から南の外周道路、東のβヴィレッジまで。 */
-const BOUNDS = { west: -30, east: 428, south: -92, north: 380 };
+/** 図に入れる範囲（メートル）。北の体育施設から南のΖ館、東のβヴィレッジまで。 */
+const BOUNDS = { west: -30, east: 428, south: -122, north: 396 };
 
 export const MAP_W = BOUNDS.east - BOUNDS.west;
 export const MAP_H = BOUNDS.north - BOUNDS.south;
@@ -42,6 +42,8 @@ export interface MapBuilding {
   size: number;
   /** 建物ではなく、体育施設やラウンジのようなところ */
   soft?: boolean;
+  /** βヴィレッジのような、小屋が寄り集まった区画。点線で囲み、名前は上の端に出す */
+  area?: boolean;
 }
 
 /** 面積で重みをつけた重心。2棟が渡り廊下でつながった形でも、まんなかに来る。 */
@@ -56,14 +58,21 @@ function centroid(p: readonly Pt[]) {
   return a ? { x: cx / (3 * a), y: cy / (3 * a) } : { x: p[0][0], y: p[0][1] };
 }
 
-const GLYPH: Partial<Record<BuildingKey, string>> = { 'pe-buildings': '体育施設', lounge: 'ラウンジ' };
+/**
+ * 図の中に出す字。無ければ名前から「館」を外したもの（κ館 → κ）。
+ * 大文字・小文字は大学の公式のキャンパスマップに合わせてある（BUILDING_LABELS）。
+ */
+const GLYPH: Partial<Record<BuildingKey, string>> = { 'pe-buildings': '体育施設', mu: 'Μ', lounge: 'サブウェイ' };
 /** 建物というより区画。字を大きくしない */
 const SOFT: BuildingKey[] = ['pe-buildings'];
+/** 小屋が寄り集まった区画 */
+const AREAS: BuildingKey[] = ['beta', 'eta', 'nu'];
 
-/** 奥にあるものが先。あとのものが上に重なる。 */
+/** 奥にあるものが先。あとのものが上に重なる。区画はいちばん奥。 */
 const ORDER: BuildingKey[] = [
-  'pe-buildings', 'tau', 'lambda', 'theta', 'omicron', 'iota', 'delta', 'alpha',
-  'mu', 'epsilon', 'kappa', 'omega', 'sigma', 'lounge',
+  'beta', 'eta', 'nu',
+  'pe-buildings', 'gamma', 'tau', 'lambda', 'theta', 'omicron', 'iota', 'delta', 'alpha',
+  'mu', 'epsilon', 'kappa', 'omega', 'sigma', 'lounge', 'zeta',
 ];
 
 export const MAP_BUILDINGS: MapBuilding[] = ORDER.map((key) => {
@@ -75,6 +84,17 @@ export const MAP_BUILDINGS: MapBuilding[] = ORDER.map((key) => {
   const h = Math.max(...ys) - Math.min(...ys);
   const label = BUILDING_LABELS[key];
   const glyph = GLYPH[key] ?? label.replace('館', '');
+  if (AREAS.includes(key)) {
+    // 区画の名前は上の端の内がわに出す（まんなかには小屋がある）
+    return {
+      key, glyph, label, area: true,
+      points: pts(shape),
+      cx: X(c.x),
+      cy: Y(Math.max(...ys)) + 10,
+      top: Y(Math.max(...ys)),
+      size: Math.min(11, (w * 0.9) / glyph.length),
+    };
+  }
   return {
     key, glyph, label,
     points: pts(shape),
@@ -115,11 +135,9 @@ export const MAP_SCENE = `<g aria-hidden="true">
     ${GROUND_SHAPES.map((g) => `<polygon points="${pts(g.pts)}" fill="#D3E8C3"/>`).join('')}
     <!-- DTC にない建物 -->
     ${OTHER_SHAPES.map((p) => `<polygon points="${pts(p)}" fill="#E1DBD3"/>`).join('')}
-    <!-- βヴィレッジ（SBC）。小屋が寄り集まっているので、下じきを敷いてから建てる -->
-    <rect x="${X(292)}" y="${Y(340)}" width="${132}" height="${112}" rx="16" fill="#E9F0DF"/>
+    <!-- βヴィレッジ（SBC）の小屋。囲みと名前は MAP_BUILDINGS の区画（beta）で描く -->
     ${BETA_SHAPES.map((b) => `<polygon points="${pts(b.pts)}" fill="#D8CFC2"/>`).join('')}
   </g>
-  <text x="${X(358)}" y="${Y(346)}" text-anchor="middle" font-size="12" font-weight="700" fill="#7B8B63">βヴィレッジ</text>
   <text x="${X(pond.x)}" y="${Y(pond.y) + 4}" text-anchor="middle" font-size="11" font-weight="700" fill="#2E7FA6">鴨池</text>
   <text x="${MAP_W - 10}" y="${MAP_H - 8}" text-anchor="end" font-size="7" fill="#A29A91">© OpenStreetMap contributors</text>
 </g>`;

@@ -762,12 +762,6 @@ table.admin-users .rel { margin-right: 4px; }
   font-size: 14px; font-weight: 700; text-decoration: none; background: linear-gradient(120deg, #F2711C 0%, #E1306C 55%, #A333C8 100%);
   box-shadow: 0 6px 16px rgba(225,48,108,.28); transition: transform .12s ease; }
 .ig-btn:active { transform: scale(.975); }
-.ig-row { display: flex; align-items: center; gap: 10px; margin: 16px 0 4px; padding: 12px 14px; border-radius: 14px; background: var(--card);
-  color: var(--ink-2); font-size: 12.5px; text-decoration: none; }
-.ig-row-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; color: #fff;
-  background: linear-gradient(120deg, #F2711C 0%, #E1306C 55%, #A333C8 100%); }
-.ig-row-text { flex: 1; }
-.ig-row-arrow { color: var(--faint); font-size: 18px; }
 @media (prefers-reduced-motion: reduce) { .ig-slimes .ig-me { animation: none; } }
 
 /* 登録画面：判定できるネットワーク */

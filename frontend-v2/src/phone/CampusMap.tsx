@@ -4,6 +4,11 @@
 // 建物まで見えるのはベストフレンド同士のときだけなので、
 // キャンパスにはいるけれど場所が分からない人は、下のトレイにまとめる。
 // （出し分けはバックエンドがやっている。ここに来る時点で buildingKey が無い。）
+//
+// ベストフレンドや自分でも、建物が分からないことがある。大学のAPIが建物に結びつけていない
+// アクセスポイントのうち、名前からも場所を当てられないもの（backend/src/dtc.ts の AP_PLACES）に
+// つながっているとき。ほとんどは建物の外のアクセスポイントなので、
+// 「ベストフレンド同士だと見えます」とは出さず、「建物の外にいる可能性があります」と出す。
 
 import { useState } from 'react';
 import { useApp } from '../app/AppContext';
@@ -18,6 +23,8 @@ interface Pin {
   name: string;
   color: string;
   self: boolean;
+  /** ベストフレンド同士か（建物が分からない理由の出し分けに使う） */
+  best: boolean;
 }
 
 export function CampusMap() {
@@ -27,6 +34,7 @@ export function CampusMap() {
   if (!me || !friends) return null;
 
   const named = new Map(friends.friends.map((f) => [f.userId, f.displayName]));
+  const bests = new Set(friends.friends.filter((f) => f.best === 'best').map((f) => f.userId));
 
   // 建物ごとに、そこにいる人を集める
   const byBuilding = new Map<string, Pin[]>();
@@ -37,7 +45,7 @@ export function CampusMap() {
   };
 
   if (lc?.me.presence === 'present' && lc.me.buildingKey) {
-    put(lc.me.buildingKey, { id: SELF_ID, name: 'あなた', color: SELF_COLOR, self: true });
+    put(lc.me.buildingKey, { id: SELF_ID, name: 'あなた', color: SELF_COLOR, self: true, best: true });
   }
   const somewhere: Pin[] = [];
   for (const f of lc?.friends ?? []) {
@@ -47,13 +55,14 @@ export function CampusMap() {
       name: named.get(f.userId) ?? '',
       color: colorOf(f.userId),
       self: false,
+      best: bests.has(f.userId),
     };
     if (f.buildingKey) put(f.buildingKey, pin);
     else somewhere.push(pin);
   }
   // 自分が在校していて、建物までは分からないとき
   if (lc?.me.presence === 'present' && !lc.me.buildingKey) {
-    somewhere.unshift({ id: SELF_ID, name: 'あなた', color: SELF_COLOR, self: true });
+    somewhere.unshift({ id: SELF_ID, name: 'あなた', color: SELF_COLOR, self: true, best: true });
   }
 
   const here = picked ? (byBuilding.get(picked) ?? []) : [];
@@ -145,7 +154,7 @@ export function CampusMap() {
                   <SelfOrAvatar pin={p} />
                   <div className="fbody">
                     <div className="fname">{p.name}</div>
-                    <div className="fmeta">建物までは、ベストフレンド同士だと見えます</div>
+                    <div className="fmeta">{p.best ? '建物の外にいる可能性があります' : '建物までは、ベストフレンド同士だと見えます'}</div>
                   </div>
                 </div>
               ))}
@@ -178,6 +187,7 @@ function SelfOrAvatar({ pin }: { pin: Pin }) {
 
 function Building({ b, count, on, onPick }: { b: MapBuilding; count: number; on: boolean; onPick(): void }) {
   const live = count > 0;
+  if (b.area) return <Area b={b} live={live} count={count} on={on} onPick={onPick} />;
   const fill = b.soft ? (live ? '#7BC96F' : '#CFE3C4') : live ? 'var(--brand)' : '#D6CFC6';
   const ink = live ? '#FFFFFF' : '#A29A91';
   return (
@@ -193,6 +203,28 @@ function Building({ b, count, on, onPick }: { b: MapBuilding; count: number; on:
       <polygon points={b.points} fill={fill} strokeLinejoin="round"
         stroke={on ? 'var(--ink)' : fill} strokeWidth={on ? 2.5 : 1} />
       <text x={b.cx} y={b.cy} textAnchor="middle" dominantBaseline="central" fontSize={b.size} fontWeight="800" fill={ink}>
+        {b.glyph}
+      </text>
+    </g>
+  );
+}
+
+/** 小屋が寄り集まった区画（βヴィレッジなど）。点線で囲み、名前を上の端に出す。中の小屋は背景に描いてある */
+function Area({ b, live, count, on, onPick }: { b: MapBuilding; live: boolean; count: number; on: boolean; onPick(): void }) {
+  return (
+    <g
+      className={`map-bld map-area${live ? ' live' : ''}${on ? ' on' : ''}`}
+      onClick={onPick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(); } }}
+      aria-label={`${b.label}${live ? `・${count}人` : ''}`}
+    >
+      <polygon points={b.points} fill={live ? 'rgba(123,201,111,.30)' : 'rgba(233,240,223,.55)'}
+        stroke={on ? 'var(--ink)' : live ? '#5FAE52' : '#A9BE95'} strokeWidth={on ? 2.5 : 1.4}
+        strokeDasharray={on ? undefined : '5 4'} strokeLinejoin="round" />
+      <text x={b.cx} y={b.cy} textAnchor="middle" dominantBaseline="central" fontSize={b.size} fontWeight="800"
+        fill={live ? '#3F7F35' : '#7B8B63'}>
         {b.glyph}
       </text>
     </g>

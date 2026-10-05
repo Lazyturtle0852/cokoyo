@@ -233,26 +233,41 @@ export interface AdminStatsResponse {
 export const BUILDING_KEYS = [
   'kappa', 'epsilon', 'iota', 'omicron', 'delta', 'tau', 'mu',
   'omega', 'alpha', 'theta', 'lambda', 'pe-buildings', 'sigma', 'lounge',
+  // ここから下は、大学のAPIが建物に結びつけていないアクセスポイントの名前から、COKOYOが当てた場所
+  // （バックエンドの src/dtc.ts の AP_PLACES）
+  'zeta', 'gamma', 'beta', 'eta', 'nu',
 ] as const;
 
 export type BuildingKey = (typeof BUILDING_KEYS)[number];
 
-/** buildingKey を、画面にそのまま出す名前に直す。 */
+/**
+ * buildingKey を、画面にそのまま出す名前に直す。
+ * ギリシャ文字の大文字・小文字は、大学の公式のキャンパスマップに合わせる
+ * （κ ε ι ο τ λ β ν は小文字、Δ Μ Ω Α Θ Σ Ζ Γ Η は大文字）。
+ */
 export const BUILDING_LABELS: Record<BuildingKey, string> = {
   kappa: 'κ館',
   epsilon: 'ε館',
   iota: 'ι館',
   omicron: 'ο館',
-  delta: 'δ館',
+  delta: 'Δ館',
   tau: 'τ館',
-  mu: 'μ館',
-  omega: 'ω館',
-  alpha: 'α館',
-  theta: 'θ館',
+  // Μ館。学生は「メディアセンター」と呼ぶ
+  mu: 'メディアセンター',
+  omega: 'Ω館',
+  alpha: 'Α館',
+  theta: 'Θ館',
   lambda: 'λ館',
   'pe-buildings': '体育施設',
-  sigma: 'σ館',
-  lounge: '鴨池ラウンジ',
+  // 鴨池ラウンジは Σ館の中にあるので、そこにいる人は sigma になる
+  sigma: 'Σ館',
+  // 大学のAPIの lounge は、鴨池の東の「学生ラウンジ」。学生は「サブウェイ」と呼ぶ
+  lounge: '学生ラウンジ（サブウェイ）',
+  zeta: 'Ζ館',
+  gamma: 'Γ館',
+  beta: 'βヴィレッジ',
+  eta: 'Ηヴィレッジ',
+  nu: 'νエリア',
 };
 
 /**
