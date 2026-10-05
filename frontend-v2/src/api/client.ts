@@ -7,9 +7,10 @@
 import { config, useMockBackend } from '../config';
 import { pendingInvite } from '../app/invite';
 import { mockBackend } from './mockBackend';
+import { flushNetworkErrors, rememberNetworkError } from './networkReport';
 import type {
   AddFriendResponse, ApiErrorBody, InviteResponse, BestResponse, BlockResponse, CheckResponse,
-  AdminSessionResponse, AdminStatsResponse, DebugDbResponse, FeedbackResponse, SuggestionsResponse, FriendsResponse, MacAddressView, Me, PointsResponse, ReactionResponse, UserRef,
+  AdminLogsResponse, AdminSessionResponse, AdminStatsResponse, DebugDbResponse, FeedbackResponse, SuggestionsResponse, FriendsResponse, MacAddressView, Me, PointsResponse, ReactionResponse, UserRef,
 } from './types';
 
 // ---------------------------------------------------------------
@@ -66,18 +67,27 @@ async function request<T>(method: string, path: string, body?: Record<string, un
     // 開いた直後や裏から戻った直後でまだ繋がっていない、など）。たいていは一瞬なので、
     // 何度送っても結果が同じ GET だけ、少し待って送り直す。
     // 書き込み（POST など）は、届いていたのに返事だけ失われた場合に二重になるので送り直さない。
+    const base = config.apiBaseUrl.replace(/\/$/, '');
     const retryDelays = method === 'GET' ? NETWORK_RETRY_DELAYS : [];
     for (let attempt = 0; ; attempt++) {
+      const started = performance.now();
       try {
-        const res = await fetch(config.apiBaseUrl.replace(/\/$/, '') + path, {
+        const res = await fetch(base + path, {
           method, headers, credentials: 'same-origin', body: body ? JSON.stringify(body) : undefined,
         });
         status = res.status;
         json = status === 204 ? null : await res.json().catch(() => null);
+        flushNetworkErrors(base); // 繋がらなかった記録が溜まっていれば、繋がった今のうちに送る
         break;
       } catch (e) {
         if (attempt < retryDelays.length) { await wait(retryDelays[attempt]); continue; }
-        if (!silent) push({ method, path, body, status: 0, json: { error: { message: String((e as Error).message ?? e) } }, withToken: withSession });
+        // 送り直しても駄目だったものだけ残す。ms は最後の1回ぶん
+        const message = String((e as Error).message ?? e);
+        rememberNetworkError({
+          method, path, ms: Math.round(performance.now() - started),
+          message: attempt > 0 ? `${message}（${attempt + 1}回送って全部失敗）` : message,
+        });
+        if (!silent) push({ method, path, body, status: 0, json: { error: { message } }, withToken: withSession });
         throw new ApiError(
           navigator.onLine === false
             ? 'インターネットに繋がっていないようです。電波の良いところでもう一度お試しください'
@@ -157,4 +167,5 @@ export const api = {
   adminLogout: () => request<null>('POST', '/v1/admin/logout', undefined, true),
   adminStats: () => request<AdminStatsResponse>('GET', '/v1/admin/stats', undefined, true),
   adminDb: () => request<DebugDbResponse>('GET', '/v1/admin/db', undefined, true),
+  adminLogs: () => request<AdminLogsResponse>('GET', '/v1/admin/logs', undefined, true),
 };

@@ -1,11 +1,11 @@
 // 管理画面（/admin）。利用者数・アクセス数・DBの中身を、運営者だけが見る。
 //
-// 数字は GET /v1/admin/stats、表は GET /v1/admin/db。どちらも管理用パスワードで入っていないと 401。
+// 数字は GET /v1/admin/stats、ログは GET /v1/admin/logs、表は GET /v1/admin/db。どれも管理用パスワードで入っていないと 401。
 // アクセス数は「API を呼んだ回数」。ページを開いただけの回数（静的ファイル）は数えていない。
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client';
-import type { AdminStatsResponse, DbTable } from '../api/types';
+import type { AdminLogsResponse, AdminStatsResponse, DbTable, OpsEvent } from '../api/types';
 import { DbTables } from '../demo/DbPanel';
 
 type Daily = AdminStatsResponse['daily'][number];
@@ -18,15 +18,17 @@ const dateTime = (iso: string) =>
 export function Dashboard() {
   const [stats, setStats] = useState<AdminStatsResponse | null>(null);
   const [tables, setTables] = useState<DbTable[] | null>(null);
+  const [logs, setLogs] = useState<AdminLogsResponse | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [s, db] = await Promise.all([api.adminStats(), api.adminDb()]);
+      const [s, db, l] = await Promise.all([api.adminStats(), api.adminDb(), api.adminLogs()]);
       setStats(s);
       setTables(db.tables);
+      setLogs(l);
       setError('');
     } catch (e) {
       // 期限切れ（12時間）なら入口からやり直す
@@ -72,6 +74,8 @@ export function Dashboard() {
           <Users users={stats.users} />
         </>
       )}
+
+      {logs && <Logs logs={logs} />}
 
       {tables && (
         <section className="panel">
@@ -342,6 +346,96 @@ function Users({ users }: { users: AdminStatsResponse['users'] }) {
               </tr>
             ))}
             {shown.length === 0 && <tr><td colSpan={10} className="muted">該当する人はいません</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+// ── ログ ──────────────────────────────────────────────────────
+// 「通信できませんでした」は返事まで届かなかった失敗なので、サーバーには残らない。
+// ブラウザが溜めて後から送ってきたもの（繋がらなかった）を、5xx・遅い・起動と同じ時間軸に並べる。
+const KINDS: Array<[OpsEvent['kind'], string, string]> = [
+  ['network', '繋がらなかった', 'bad'],
+  ['error', '5xx', 'bad'],
+  ['slow', '遅い', 'warn'],
+  ['start', '起動', ''],
+];
+const KIND_LABEL = Object.fromEntries(KINDS.map(([k, label, tone]) => [k, { label, tone }])) as Record<OpsEvent['kind'], { label: string; tone: string }>;
+
+const timeSec = (iso: string) =>
+  new Date(iso).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const secs = (ms: number) =>
+  ms < 1000 ? `${ms}ms` : ms < 60_000 ? `${(ms / 1000).toFixed(1)}秒` : ms < 3600_000 ? `${Math.round(ms / 60_000)}分` : `${Math.round(ms / 3600_000)}時間`;
+
+function Logs({ logs }: { logs: AdminLogsResponse }) {
+  const [kind, setKind] = useState<OpsEvent['kind'] | ''>('');
+  const shown = useMemo(() => logs.events.filter((e) => !kind || e.kind === kind), [logs, kind]);
+  const counts = useMemo(() => {
+    const since = (h: number) => Date.now() - h * 3600_000;
+    return KINDS.map(([k, label]) => {
+      const of = logs.events.filter((e) => e.kind === k);
+      return { k, label, day: of.filter((e) => Date.parse(e.at) >= since(24)).length, week: of.filter((e) => Date.parse(e.at) >= since(24 * 7)).length };
+    });
+  }, [logs]);
+
+  return (
+    <section className="panel">
+      <h2>ログ（直近{logs.events.length}件）</h2>
+      <p className="desc">
+        「繋がらなかった」は、アプリが返事を受け取れなかった呼び出し（画面には「通信できませんでした」などと出る）。GET は自動で送り直すので、送り直しても駄目だったものだけが入ります。
+        端末に溜めて、次に繋がったときに届くので、起きた時刻と届いた時刻がずれます。
+        サーバー側は 5xx と、3秒以上かかった呼び出しと、起動（デプロイ・再起動）だけを残します。
+        DB に残すのは全部で {fmt(logs.kept)} 件まで。
+      </p>
+      <dl className="kpi-sub log-counts">
+        {counts.map((c) => (
+          <div key={c.k}><dt>{c.label}（24時間 / 7日）</dt><dd>{fmt(c.day)} / {fmt(c.week)}</dd></div>
+        ))}
+      </dl>
+      <div className="row admin-filter">
+        <label className="muted">種類
+          <select value={kind} onChange={(e) => setKind(e.target.value as OpsEvent['kind'] | '')}>
+            <option value="">すべて</option>
+            {KINDS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+          </select>
+        </label>
+      </div>
+      <div className="simwrap log-wrap">
+        <table className="sim dbt-table admin-logs">
+          <thead>
+            <tr><th>起きた時刻</th><th>種類</th><th>呼び出し</th><th>結果</th><th>端末の様子・詳細</th></tr>
+          </thead>
+          <tbody>
+            {shown.map((e) => {
+              const late = Date.parse(e.reportedAt) - Date.parse(e.at);
+              return (
+                <tr key={e.id}>
+                  <td title={late > 60_000 ? `届いたのは ${timeSec(e.reportedAt)}` : undefined}>
+                    {timeSec(e.at)}
+                    {late > 60_000 && <span className="muted">（後から届いた）</span>}
+                  </td>
+                  <td><span className={`rel ${KIND_LABEL[e.kind].tone}`}>{KIND_LABEL[e.kind].label}</span></td>
+                  <td className="mono">{e.method ? `${e.method} ${e.route ?? ''}` : <span className="muted">—</span>}</td>
+                  <td>
+                    {e.kind === 'network' && e.ms !== null && `${secs(e.ms)}で失敗`}
+                    {(e.kind === 'error' || e.kind === 'slow') && `${e.status} · ${secs(e.ms ?? 0)}`}
+                  </td>
+                  <td>
+                    {e.kind === 'network' && (
+                      <>
+                        {e.online === false && <span className="rel bad">オフライン</span>}
+                        {e.visible === false && <span className="rel">裏に回っていた</span>}
+                        {e.sinceLoad !== null && <span className="muted">開いて{secs(e.sinceLoad)}</span>}{' '}
+                      </>
+                    )}
+                    {e.message && <span className="mono">{e.message}</span>}
+                  </td>
+                </tr>
+              );
+            })}
+            {shown.length === 0 && <tr><td colSpan={5} className="muted">まだありません</td></tr>}
           </tbody>
         </table>
       </div>

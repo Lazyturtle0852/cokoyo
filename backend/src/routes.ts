@@ -1,8 +1,9 @@
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { routePath } from "hono/route";
 import type {
-  AddFriendResponse, AdminSessionResponse, AdminStatsResponse, BestResponse, BestState, BlockResponse, BuildingKey, CheckResponse,
+  AddFriendResponse, AdminLogsResponse, AdminSessionResponse, AdminStatsResponse, BestResponse, BestState, BlockResponse, BuildingKey, CheckResponse,
   DebugDbResponse, FeedbackResponse, InviteResponse, Suggestion, SuggestionsResponse, FriendsResponse, Me, PointItem, PointsResponse, Reaction, ReactionResponse,
   MacAddressView, UserRef,
 } from "../../shared/app-types.js";
@@ -15,7 +16,7 @@ import { fail } from "./lib/errors.js";
 import { maskMac, normalizeMac } from "./lib/mac.js";
 import { jstDate, sleep } from "./lib/time.js";
 import { awardPoints, isRainy, type VisibleFriend } from "./points.js";
-import type { FriendshipRow, MacAddress, Repo, User } from "./repo.js";
+import { OPS_KEEP, type FriendshipRow, type MacAddress, type OpsInput, type Repo, type User } from "./repo.js";
 
 /** 地図に置く場所。APが建物に紐づいていなければ null。 */
 const buildingKeyOf = (lookup: Lookup): BuildingKey | null =>
@@ -190,7 +191,37 @@ const clientIp = (c: Parameters<typeof getCookie>[0]) =>
   c.req.header("x-forwarded-for")?.split(",").at(-1)?.trim() || "local";
 
 /** 管理画面と、その集計に使う呼び出しはアクセス数に入れない。 */
-const UNCOUNTED = /^\/api\/(health$|v1\/admin\/|v1\/debug\/)/;
+const UNCOUNTED = /^\/api\/(health$|v1\/admin\/|v1\/debug\/|v1\/client-errors$)/;
+
+/** これより時間がかかった呼び出しは、運用ログに「遅い」として残す。DTC の待ちは1回4秒まで */
+const SLOW_MS = 3000;
+/** ブラウザが1回に送ってよい件数（端末に溜めるのも同じ数まで） */
+const CLIENT_ERRORS_MAX = 20;
+const DAY_MS = 86_400_000;
+
+/**
+ * ブラウザから届いた1件を、残してよい形に直す。形がおかしければ null。
+ * route は呼び出し元が決めた routeOf で、実在するルートの形に置き換える（値は残さない）。
+ */
+function toClientOps(input: unknown, routeOf: (method: string, path: string) => string | null): OpsInput | null {
+  if (!input || typeof input !== "object") return null;
+  const e = input as Record<string, unknown>;
+  const method = typeof e.method === "string" ? e.method.toUpperCase() : "";
+  if (!["GET", "POST", "PUT", "PATCH", "DELETE"].includes(method)) return null;
+  if (typeof e.path !== "string" || e.path.length > 300) return null;
+  const ms = (v: unknown) => (Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 7 * DAY_MS ? (v as number) : null);
+  const bool = (v: unknown) => (typeof v === "boolean" ? v : null);
+  // 端末の時計を信じすぎない。先すぎる・古すぎるものは受け取った時刻にする
+  const now = Date.now();
+  const t = typeof e.at === "string" ? Date.parse(e.at) : NaN;
+  const at = Number.isFinite(t) && t <= now + 5 * 60_000 && t >= now - 7 * DAY_MS ? new Date(t).toISOString() : undefined;
+  return {
+    source: "client", kind: "network", at, method,
+    route: routeOf(method, e.path.split("?")[0] ?? "") ?? "（不明なパス）",
+    status: 0, ms: ms(e.ms), online: bool(e.online), visible: bool(e.visible), sinceLoad: ms(e.sinceLoad),
+    message: typeof e.message === "string" ? e.message.slice(0, 120) : null,
+  };
+}
 
 /** /v1 の下に生やす。フロントは apiBaseUrl + "/v1/..." で叩く。 */
 export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider | null, admin: AdminAuth) {
@@ -200,6 +231,28 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
     if (!admin.enabled) fail(503, "admin_unavailable", "管理用パスワードが設定されていません");
     if (!admin.verify(getCookie(c, adminCookie))) fail(401, "admin_required", "管理用パスワードを入力してください");
   };
+
+  // ── 運用ログ ──────────────────────────────────────────────
+  // 5xx と遅い呼び出しだけを ops_events に残す。管理画面の「ログ」で見る。
+  // 例外の中身は MAC を含みうるので、名前（ApiFailure ならコード）だけにする。
+  app.use("*", async (c, next) => {
+    const started = performance.now();
+    await next();
+    const ms = Math.round(performance.now() - started);
+    const status = c.res.status;
+    if (status < 500 && ms < SLOW_MS) return;
+    const route = routePath(c, -1);
+    const err = c.error as (Error & { code?: string }) | undefined;
+    try {
+      repo.recordOps({
+        source: "server", kind: status >= 500 ? "error" : "slow", method: c.req.method,
+        route: route && !route.endsWith("*") ? route : "（該当なし）", status, ms,
+        message: err ? (err.code ?? err.name) : null,
+      });
+    } catch (error) {
+      console.error("ops log failed:", error instanceof Error ? error.name : "unknown");
+    }
+  });
 
   // ── アクセス数 ────────────────────────────────────────────
   // 1日・1人ごと、1日・ルートごとの回数だけを足す。URL の中の値（userId など）や IP は残さない。
@@ -722,6 +775,39 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
     return c.json(response, 201);
   });
 
+  // ── 繋がらなかった呼び出しの報告 ──────────────────────────
+  /**
+   * fetch が投げた（返事まで届かなかった）呼び出しを、ブラウザが溜めておいて次に繋がったときに送る。
+   * サーバーには何も届いていない失敗なので、こうしないと記録が残らない。
+   *
+   * ログイン前の失敗（開いた直後など）も知りたいので、ログインは求めない。
+   * 書けるのは件数の決まった ops_events だけで、連投されても古いログが押し出されるだけ。
+   */
+  const routeMatchers = () =>
+    app.routes
+      .filter((r) => r.path.startsWith("/v1/") && !r.path.includes("*"))
+      .map((r) => ({
+        method: r.method,
+        route: `/api${r.path}`,
+        // ルートは英字・数字・"-"・"/" と :名前 だけなので、:名前 を1区切りに置き換えれば足りる
+        re: new RegExp(`^${r.path.replace(/:[A-Za-z]+/g, "[^/]+")}$`),
+      }));
+  let matchers: ReturnType<typeof routeMatchers> | null = null;
+  const routeOf = (method: string, path: string) => {
+    matchers ??= routeMatchers();
+    return (matchers.find((m) => m.method === method && m.re.test(path)) ?? matchers.find((m) => m.re.test(path)))?.route ?? null;
+  };
+
+  app.post("/v1/client-errors", bodyLimit({ maxSize: 16 * 1024, onError: () => fail(413, "too_large", "大きすぎます") }), async (c) => {
+    const errors = (await c.req.json().catch(() => null))?.errors;
+    if (!Array.isArray(errors)) fail(400, "invalid_errors", "errors を配列で送ってください");
+    for (const e of (errors as unknown[]).slice(0, CLIENT_ERRORS_MAX)) {
+      const ops = toClientOps(e, routeOf);
+      if (ops) repo.recordOps(ops);
+    }
+    return c.body(null, 204);
+  });
+
   // ── 管理用パスワード（/admin と /explain） ───────────────
   app.post("/v1/admin/login", async (c) => {
     if (!admin.enabled) fail(503, "admin_unavailable", "管理用パスワードが設定されていません");
@@ -750,6 +836,13 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
   app.get("/v1/admin/stats", (c) => {
     requireAdmin(c);
     const response: AdminStatsResponse = repo.adminStats();
+    return c.json(response);
+  });
+
+  /** 管理画面のログ。5xx・遅い呼び出し・起動と、ブラウザから届いた「繋がらなかった」。 */
+  app.get("/v1/admin/logs", (c) => {
+    requireAdmin(c);
+    const response: AdminLogsResponse = { events: repo.recentOps(), kept: OPS_KEEP };
     return c.json(response);
   });
 

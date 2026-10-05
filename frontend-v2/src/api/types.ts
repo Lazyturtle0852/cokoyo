@@ -254,3 +254,61 @@ export const BUILDING_LABELS: Record<BuildingKey, string> = {
   sigma: 'σ館',
   lounge: '鴨池ラウンジ',
 };
+
+/**
+ * POST /v1/client-errors で送る1件。返事まで届かなかった（fetch が投げた）呼び出し。
+ * サーバーには何も届いていないので、ブラウザが溜めておいて、次に繋がったときに送る。
+ */
+export interface ClientNetworkError {
+  /** 失敗した時刻（端末の時計、ISO） */
+  at: string;
+  method: string;
+  /** /v1/... 。ID などの値はバックエンドで伏せる */
+  path: string;
+  /** navigator.onLine。false なら端末自身がオフラインだと分かっていた */
+  online: boolean;
+  /** 画面が表示中だったか。false なら裏に回っていた */
+  visible: boolean;
+  /** 送ってから失敗するまで（ミリ秒） */
+  ms: number;
+  /** ページを開いてから失敗するまで（ミリ秒） */
+  sinceLoad: number;
+  /** ブラウザのエラー文（"Load failed" など。ブラウザごとに違う） */
+  message: string;
+}
+
+export interface ClientErrorsRequest {
+  errors: ClientNetworkError[];
+}
+
+/**
+ * 管理画面の「ログ」の1行。
+ *   start   … バックエンドが起動した（デプロイ・再起動。前後は繋がらない時間がある）
+ *   error   … 5xx を返した
+ *   slow    … 返すまでに時間がかかった
+ *   network … ブラウザから、返事まで届かなかったと知らせてきた
+ */
+export interface OpsEvent {
+  id: number;
+  at: string;
+  /** バックエンドが記録した時刻。network は at より後になる */
+  reportedAt: string;
+  source: 'server' | 'client';
+  kind: 'start' | 'error' | 'slow' | 'network';
+  method: string | null;
+  /** /api/v1/friends/:userId/best のような形。値は入れない */
+  route: string | null;
+  status: number | null;
+  ms: number | null;
+  online: boolean | null;
+  visible: boolean | null;
+  sinceLoad: number | null;
+  message: string | null;
+}
+
+/** GET /v1/admin/logs。新しい順 */
+export interface AdminLogsResponse {
+  events: OpsEvent[];
+  /** DB に残しておく件数の上限。超えたら古いものから消える */
+  kept: number;
+}
