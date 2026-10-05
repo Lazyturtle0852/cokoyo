@@ -12,6 +12,7 @@ import { useApp } from '../app/AppContext';
 import { api } from '../api/client';
 import type { Suggestion } from '../api/types';
 import { Avatar } from './ui';
+import { Section } from './Section';
 
 /** 「出さない」を押した相手（この端末の中だけ） */
 const HIDDEN_KEY = 'cokoyo-suggest-hidden:v1';
@@ -57,8 +58,7 @@ export function Suggestions() {
   };
 
   return (
-    <>
-      <div className="sec"><h3>知り合いかも</h3><span>{shown.length}人</span></div>
+    <Section id="friends.suggestions" title="知り合いかも" aside={`${shown.length}人`}>
       <div className="card">
         {shown.map((s) => (
           <div className="req" key={s.userId}>
@@ -78,6 +78,6 @@ export function Suggestions() {
           自分を出したくないときは、設定タブの「知り合いかもに出す」をオフにしてください。
         </p>
       </div>
-    </>
+    </Section>
   );
 }

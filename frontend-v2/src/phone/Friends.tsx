@@ -5,6 +5,8 @@ import { useApp } from '../app/AppContext';
 import { api } from '../api/client';
 import type { Friend } from '../api/types';
 import { HideCard } from './HideCard';
+import { InstagramCard, useInstagramTapped } from './InstagramCard';
+import { Section } from './Section';
 import { Suggestions } from './Suggestions';
 import { Avatar, fullDate, Icon } from './ui';
 
@@ -12,6 +14,7 @@ export function Friends() {
   const { friends, run, reloadFriends, showToast, openAddSheet } = useApp();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [armedBlock, setArmedBlock] = useState<string | null>(null);
+  const [igTapped, markIg] = useInstagramTapped();
   if (!friends) return null;
 
   const { requests, blocked } = friends;
@@ -43,13 +46,14 @@ export function Friends() {
   return (
     <>
       <button className="btn btn-primary btn-add" onClick={() => openAddSheet()}><Icon.Plus />フレンドを追加</button>
+      <InstagramCard where="top" tapped={igTapped} onTap={markIg} />
 
-      <div className="sec"><h3>あなたの見え方</h3></div>
-      <HideCard />
+      <Section id="friends.visibility" title="あなたの見え方">
+        <HideCard />
+      </Section>
 
       {hasRequests && (
-        <>
-          <div className="sec"><h3>届いている申請</h3><span>{requests.incoming.length + incomingBest.length}件</span></div>
+        <Section id="friends.incoming" title="届いている申請" aside={`${requests.incoming.length + incomingBest.length}件`}>
           <div className="card">
             {requests.incoming.map((r) => (
               <div className="req" key={r.requestId}>
@@ -72,10 +76,10 @@ export function Friends() {
               </div>
             ))}
           </div>
-        </>
+        </Section>
       )}
 
-      <div className="sec"><h3>フレンド</h3><span>{friends.friends.length}人</span></div>
+      <Section id="friends.list" title="フレンド" aside={`${friends.friends.length}人`}>
       <div className="card">
         {friends.friends.length === 0 && <div className="pt-empty">まだフレンドがいません。「フレンドを追加」から始めましょう</div>}
         {friends.friends.map((f) => {
@@ -130,12 +134,12 @@ export function Friends() {
           );
         })}
       </div>
+      </Section>
 
       <Suggestions />
 
       {requests.outgoing.length > 0 && (
-        <>
-          <div className="sec"><h3>承認待ち</h3><span>{requests.outgoing.length}件</span></div>
+        <Section id="friends.outgoing" title="承認待ち" aside={`${requests.outgoing.length}件`}>
           <div className="card">
             {requests.outgoing.map((r) => (
               <div className="req" key={r.requestId}>
@@ -147,12 +151,11 @@ export function Friends() {
               </div>
             ))}
           </div>
-        </>
+        </Section>
       )}
 
       {blocked.length > 0 && (
-        <>
-          <div className="sec"><h3>ブロック中</h3><span>{blocked.length}人</span></div>
+        <Section id="friends.blocked" title="ブロック中" aside={`${blocked.length}人`}>
           <div className="card">
             {blocked.map((b) => (
               <div className="req" key={b.userId}>
@@ -162,10 +165,11 @@ export function Friends() {
               </div>
             ))}
           </div>
-        </>
+          <p className="footnote">ブロックしても、フレンドからは消えません。解除すると元のフレンドに戻ります。</p>
+        </Section>
       )}
 
-      <p className="footnote">ブロックしても、フレンドからは消えません。解除すると元のフレンドに戻ります。</p>
+      <InstagramCard where="bottom" tapped={igTapped} onTap={markIg} />
     </>
   );
 }

@@ -231,6 +231,10 @@ body.plain .sheet { border-radius: 28px 28px 0 0; padding-bottom: max(22px, env(
 .sec { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 14px 6px 8px; }
 .sec h3 { font-size: 13px; font-weight: 600; margin: 0; color: var(--ink-2); white-space: nowrap; }
 .sec span { font-size: 12px; color: var(--faint); text-align: right; }
+.sec-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 0; margin: -4px 0; border: none; background: none;
+  color: var(--ink-2); cursor: pointer; font: inherit; -webkit-tap-highlight-color: transparent; }
+.sec-tri { flex: none; color: var(--ink-3, #8B8580); transition: transform .15s ease; }
+.sec-toggle[aria-expanded="true"] .sec-tri { transform: rotate(90deg); }
 
 .pt-head { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid var(--line-soft); }
 .pt-label { font-size: 13px; color: var(--muted); }
@@ -738,3 +742,35 @@ table.admin-users .rel { margin-right: 4px; }
 .invite-card h4 { font-size: 18px; margin: 0 0 8px; }
 .invite-body { font-size: 12.5px; color: var(--ink-2); line-height: 1.65; margin: 0 0 14px; }
 .invite-card .btn { width: 100%; }
+
+/* 公式インスタへの誘導（フレンドタブ） */
+.ig-card { position: relative; margin-top: 12px; padding: 16px 16px 14px; border-radius: 20px; text-align: center; overflow: hidden;
+  background: linear-gradient(var(--card), var(--card)) padding-box,
+              linear-gradient(120deg, #F2711C 0%, #E1306C 55%, #A333C8 100%) border-box;
+  border: 2px solid transparent; }
+.ig-slimes { display: flex; justify-content: center; align-items: flex-end; gap: 6px; margin-bottom: 6px; }
+.ig-slimes span { display: block; width: 30px; line-height: 0; }
+.ig-slimes span svg { width: 100%; height: auto; }
+.ig-slimes .ig-me { width: 38px; animation: ig-hop 1.6s ease-in-out infinite; }
+.ig-slimes .eyes-closed { display: none; }
+@keyframes ig-hop { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-5px); } }
+.ig-kicker { font-size: 11px; font-weight: 700; letter-spacing: .02em; margin: 0;
+  background: linear-gradient(120deg, #F2711C, #E1306C 55%, #A333C8); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.ig-title { font-size: 17px; font-weight: 800; margin: 4px 0 6px; }
+.ig-body { font-size: 12.5px; line-height: 1.65; color: var(--ink-2); margin: 0 0 12px; }
+.ig-btn { display: flex; align-items: center; justify-content: center; gap: 7px; padding: 12px; border-radius: 14px; color: #fff;
+  font-size: 14px; font-weight: 700; text-decoration: none; background: linear-gradient(120deg, #F2711C 0%, #E1306C 55%, #A333C8 100%);
+  box-shadow: 0 6px 16px rgba(225,48,108,.28); transition: transform .12s ease; }
+.ig-btn:active { transform: scale(.975); }
+.ig-row { display: flex; align-items: center; gap: 10px; margin: 16px 0 4px; padding: 12px 14px; border-radius: 14px; background: var(--card);
+  color: var(--ink-2); font-size: 12.5px; text-decoration: none; }
+.ig-row-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; color: #fff;
+  background: linear-gradient(120deg, #F2711C 0%, #E1306C 55%, #A333C8 100%); }
+.ig-row-text { flex: 1; }
+.ig-row-arrow { color: var(--faint); font-size: 18px; }
+@media (prefers-reduced-motion: reduce) { .ig-slimes .ig-me { animation: none; } }
+
+/* 登録画面：判定できるネットワーク */
+.ssid-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 6px; }
+.ssid-chips span { font: 600 12px/1 "SF Mono", Menlo, monospace; padding: 7px 10px; border-radius: 999px; background: var(--brand-tint); color: var(--brand, #EA580C); }
+.ssid-note { margin: 0 0 12px; }

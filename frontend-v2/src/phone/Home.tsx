@@ -5,6 +5,7 @@ import { useApp } from '../app/AppContext';
 import { HideCard } from './HideCard';
 import { InstallCard } from './Install';
 import { Avatar, isToday, when } from './ui';
+import { Section } from './Section';
 
 export function Home() {
   const { me, friends, points, lastCheck: lc, checking, check, openAddSheet } = useApp();
@@ -45,7 +46,7 @@ export function Home() {
         <p className="btn-hint">{hint}</p>
       </div>
 
-      <div className="sec"><h3>フレンド</h3><span>{lc ? `${when(lc.checkedAt)} 時点・${liveCount}人がキャンパスに` : '未確認'}</span></div>
+      <Section id="home.friends" title="フレンド" aside={lc ? `${when(lc.checkedAt)} 時点・${liveCount}人がキャンパスに` : '未確認'}>
       <div className="card">
         {sorted.length === 0 && (
           <>
@@ -81,6 +82,7 @@ export function Home() {
       </div>
 
       {liveCount > 0 && <p className="footnote tap-hint">上のスライムを連打すると、そのフレンドに「つんつん」が届きます</p>}
+      </Section>
 
       <div className="sec"><h3>今日の獲得</h3></div>
       <div className="card">
