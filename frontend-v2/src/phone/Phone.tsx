@@ -101,7 +101,7 @@ export function Phone() {
             )}
             {view === 'error' && (
               <div className="content center-note">
-                <p className="err-title">バックエンドに接続できません</p>
+                <p className="err-title">読み込めませんでした</p>
                 <p className="err-body">{error}</p>
                 <button className="btn btn-quiet" onClick={() => void restart()}>もう一度試す</button>
               </div>

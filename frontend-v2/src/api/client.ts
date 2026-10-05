@@ -45,6 +45,9 @@ export class ApiError extends Error {
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** 返事まで届かなかった GET を送り直すまでの待ち時間。長さが送り直す回数 */
+const NETWORK_RETRY_DELAYS = [500, 1500];
+
 /**
  * silent: 「バックエンドとの通信」に記録しない。
  * 説明用ページが裏で叩くもの（DBの中身）に使う。直前の操作の記録を汚さないため。
@@ -59,15 +62,29 @@ async function request<T>(method: string, path: string, body?: Record<string, un
     await wait(160); // 通信している感じを出す
     ({ status, json } = await mockBackend.handle(method, path, headers, body));
   } else {
-    try {
-      const res = await fetch(config.apiBaseUrl.replace(/\/$/, '') + path, {
-        method, headers, credentials: 'same-origin', body: body ? JSON.stringify(body) : undefined,
-      });
-      status = res.status;
-      json = status === 204 ? null : await res.json().catch(() => null);
-    } catch (e) {
-      if (!silent) push({ method, path, body, status: 0, json: { error: { message: String((e as Error).message ?? e) } }, withToken: withSession });
-      throw new ApiError('バックエンドに接続できません。同じサイトのAPI設定を確認してください', 0);
+    // fetch が投げるのは、サーバーの返事まで届かなかったとき（電波の切れ目、
+    // 開いた直後や裏から戻った直後でまだ繋がっていない、など）。たいていは一瞬なので、
+    // 何度送っても結果が同じ GET だけ、少し待って送り直す。
+    // 書き込み（POST など）は、届いていたのに返事だけ失われた場合に二重になるので送り直さない。
+    const retryDelays = method === 'GET' ? NETWORK_RETRY_DELAYS : [];
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const res = await fetch(config.apiBaseUrl.replace(/\/$/, '') + path, {
+          method, headers, credentials: 'same-origin', body: body ? JSON.stringify(body) : undefined,
+        });
+        status = res.status;
+        json = status === 204 ? null : await res.json().catch(() => null);
+        break;
+      } catch (e) {
+        if (attempt < retryDelays.length) { await wait(retryDelays[attempt]); continue; }
+        if (!silent) push({ method, path, body, status: 0, json: { error: { message: String((e as Error).message ?? e) } }, withToken: withSession });
+        throw new ApiError(
+          navigator.onLine === false
+            ? 'インターネットに繋がっていないようです。電波の良いところでもう一度お試しください'
+            : '通信できませんでした。電波の良いところでもう一度お試しください',
+          0,
+        );
+      }
     }
   }
 
