@@ -1,4 +1,4 @@
-import type { BuildingKey } from "../../shared/app-types.js";
+import { BUILDING_KEYS, type BuildingKey } from "../../shared/app-types.js";
 import { config } from "./config.js";
 import { toColonMac } from "./lib/mac.js";
 import { sleep } from "./lib/time.js";
@@ -20,6 +20,37 @@ export interface DtcClient {
   latest(mac: string): Promise<Lookup>;
   /** 雨の日ボーナスの判定に使う。取れなければ null。 */
   weather(): Promise<string | null>;
+}
+
+/**
+ * 大学のAPIが建物に結びつけていないアクセスポイント（2026-10-05 時点で52台、在校者の約16%）。
+ * 名前の頭で、COKOYO 側で場所を当てる。対応は、大学の公式のキャンパスマップと
+ * OpenStreetMap の建物の位置を見て、ユーザーと確かめた（2026-10-05）。
+ *
+ * 名前は大学側が内部で付けているもので、予告なく変わりうる。変わったら当たらなくなり、
+ * その人は「建物の外にいる可能性があります」に戻るだけで、在校の判定には響かない。
+ * 大学のAPIが buildingKey を返したときは、常にそちらを優先する。
+ */
+const AP_PLACES: ReadonlyArray<readonly [RegExp, BuildingKey]> = [
+  [/^ap-nmc-/, "mu"],      // メディアセンター。ap-mu と同じ建物の別の系統
+  [/^ap-b-/, "beta"],      // βヴィレッジ（ap-b-dom1・dom4・dome・paper）
+  [/^ap-eta-/, "eta"],     // Ηヴィレッジ
+  [/^ap-nu-/, "nu"],       // νエリア（ap-nu-a・b・c・e）
+  [/^ap-zeta-/, "zeta"],   // Ζ館
+  [/^ap-gamma-/, "gamma"], // Γ館
+];
+
+const KNOWN = new Set<string>(BUILDING_KEYS);
+
+/**
+ * 観測から場所を決める。大学のAPIの buildingKey を先に使い、無ければアクセスポイントの名前で当てる。
+ * どちらでも分からなければ undefined（在校ではあるが、場所は分からない）。
+ * 知らない buildingKey（大学側で建物が増えたときなど）は、画面に出せないので場所なしにする。
+ */
+export function placeOf(obs: { buildingKey?: string; accessPointName?: string }): BuildingKey | undefined {
+  if (obs.buildingKey) return KNOWN.has(obs.buildingKey) ? (obs.buildingKey as BuildingKey) : undefined;
+  const name = obs.accessPointName ?? "";
+  return AP_PLACES.find(([pattern]) => pattern.test(name))?.[1];
 }
 
 /** 503 は取り込み中を意味する。落ちているわけではないので少しだけ粘る。 */
@@ -102,7 +133,7 @@ export class RealDtcClient implements DtcClient {
       if (!res.ok) return { status: "unavailable" };
 
       const body = (await res.json().catch(() => null)) as {
-        history?: Array<{ time: string; buildingKey?: BuildingKey }>;
+        history?: Array<{ time: string; buildingKey?: string; accessPointName?: string }>;
       } | null;
 
       const latest = body?.history?.[0];
@@ -113,7 +144,9 @@ export class RealDtcClient implements DtcClient {
       if (!isFresh(latest.time, reference)) return { status: "absent" };
 
       // APが建物に紐づいていない場合 buildingKey は入らない。在校自体は真。
-      return { status: "present", buildingKey: latest.buildingKey };
+      // そのときはアクセスポイントの名前から場所を当てる（AP_PLACES）
+      const buildingKey = placeOf(latest);
+      return buildingKey ? { status: "present", buildingKey } : { status: "present" };
     }
   }
 
@@ -129,7 +162,7 @@ export class RealDtcClient implements DtcClient {
   }
 }
 
-const MOCK_BUILDINGS: BuildingKey[] = ["iota", "tau", "omega", "epsilon", "delta", "lambda"];
+const MOCK_BUILDINGS: BuildingKey[] = ["iota", "tau", "omega", "epsilon", "delta", "lambda", "mu", "beta"];
 
 /**
  * モック。MACから決定的に組み立てるので、同じMACは同じ時間帯に常に同じ結果になる。

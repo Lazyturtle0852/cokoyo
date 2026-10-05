@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { RealDtcClient } from "../src/dtc.js";
+import { placeOf, RealDtcClient } from "../src/dtc.js";
 
 const MIN = 60 * 1000;
 const ago = (minutes: number) => new Date(Date.now() - minutes * MIN).toISOString();
@@ -8,14 +8,14 @@ const ago = (minutes: number) => new Date(Date.now() - minutes * MIN).toISOStrin
  * DTC の代わりに答える fetch。
  * processedAt は /health/snmp の latestProcessedAt。null ならヘルスチェックが落ちている。
  */
-function fakeDtc(observedAt: string, processedAt: string | null) {
+function fakeDtc(observedAt: string, processedAt: string | null, where: { buildingKey?: string; accessPointName?: string } = { buildingKey: "iota" }) {
   const fetch = vi.fn(async (input: string | URL | Request) => {
     const url = String(input);
     if (url.endsWith("/health/snmp")) {
       if (processedAt === null) throw new Error("down");
       return Response.json({ status: "ok", latestProcessedAt: processedAt });
     }
-    return Response.json({ history: [{ time: observedAt, buildingKey: "iota" }] });
+    return Response.json({ history: [{ time: observedAt, ...where }] });
   });
   vi.stubGlobal("fetch", fetch);
   return fetch;
@@ -64,5 +64,39 @@ describe("最後に見えた記録の古さ", () => {
     await Promise.all([client.latest("aa:bb:cc:dd:ee:01"), client.latest("aa:bb:cc:dd:ee:02"), client.latest("aa:bb:cc:dd:ee:03")]);
     const health = fetch.mock.calls.filter(([url]) => String(url).endsWith("/health/snmp"));
     expect(health).toHaveLength(1);
+  });
+});
+
+describe("建物に結びついていないアクセスポイントの場所", () => {
+  it("大学のAPIの buildingKey があれば、それを使う", () => {
+    expect(placeOf({ buildingKey: "kappa", accessPointName: "ap-b-dome-02" })).toBe("kappa");
+  });
+
+  it("無ければ、アクセスポイントの名前の頭で当てる", () => {
+    expect(placeOf({ accessPointName: "ap-nmc-2f-03" })).toBe("mu");
+    expect(placeOf({ accessPointName: "ap-b-dom1-01" })).toBe("beta");
+    expect(placeOf({ accessPointName: "ap-b-paper-02" })).toBe("beta");
+    expect(placeOf({ accessPointName: "ap-eta-04" })).toBe("eta");
+    expect(placeOf({ accessPointName: "ap-nu-a" })).toBe("nu");
+    expect(placeOf({ accessPointName: "ap-nu-e-02" })).toBe("nu");
+    expect(placeOf({ accessPointName: "ap-zeta-3f-01" })).toBe("zeta");
+    expect(placeOf({ accessPointName: "ap-gamma-bf-01" })).toBe("gamma");
+  });
+
+  it("どれにも当たらなければ場所なし。知らない buildingKey も場所なし", () => {
+    expect(placeOf({ accessPointName: "unknown-ap:conflict" })).toBeUndefined();
+    expect(placeOf({})).toBeUndefined();
+    expect(placeOf({ buildingKey: "new-building" })).toBeUndefined();
+  });
+
+  it("在校確認でも、βヴィレッジのアクセスポイントなら βヴィレッジになる", async () => {
+    fakeDtc(ago(2), ago(2), { accessPointName: "ap-b-dome-02" });
+    expect(await new RealDtcClient("https://dtc.test").latest("aa:bb:cc:dd:ee:ff"))
+      .toEqual({ status: "present", buildingKey: "beta" });
+  });
+
+  it("場所が分からなくても、在校は在校", async () => {
+    fakeDtc(ago(2), ago(2), { accessPointName: "unknown-ap:conflict" });
+    expect(await new RealDtcClient("https://dtc.test").latest("aa:bb:cc:dd:ee:ff")).toEqual({ status: "present" });
   });
 });
