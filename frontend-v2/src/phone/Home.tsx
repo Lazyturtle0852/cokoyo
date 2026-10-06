@@ -37,7 +37,7 @@ export function Home() {
   const minutes = lc ? Math.floor((now - new Date(lc.checkedAt).getTime()) / 60000) : 0;
   const stale = fresh && minutes * 60000 >= STALE_MS;
   const hint = stale
-    ? `前の確認から${minutes}分たちました。押すと、誰が来て誰が帰ったかがわかります`
+    ? `${minutes}分前の確認です。もう一度確認してください`
     : me.hidden
     ? 'かくれんぼ中は来校ポイントだけ入ります（マッチは入りません）'
     : 'キャンパス外でもフレンドの様子は見られます（ポイントはキャンパスでだけ）';
