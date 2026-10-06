@@ -93,8 +93,14 @@ export interface PresenceDiff { came: string[]; left: string[] }
 //
 // sessionStorage は、再読み込みや別のアプリから戻ってきたときは残り、タブやアプリを閉じると消える。
 // 閉じて開き直したら「まだ確認していません」から始まり、ボタンを押して今の様子を見る。
-// 開いたままでも、日付が変わった記録は出さない。
+// ただし iPhone のホーム画面アプリは、閉じずに裏へ回すだけのことが多い。そのまま何時間もたってから
+// 戻ってきても古い判定が残らないよう、RECORD_TTL_MS より前の記録は、開き直したとき・戻ってきたときに捨てる。
+// 開いて画面に出しているあいだは捨てない。日付が変わった記録も出さない。
 // ---------------------------------------------------------------
+/** これより前の確認結果は、開き直したとき・画面に戻ってきたときに捨てる */
+const RECORD_TTL_MS = 30 * 60 * 1000;
+const isLive = (c: CheckResponse) => isToday(c.checkedAt) && Date.now() - new Date(c.checkedAt).getTime() < RECORD_TTL_MS;
+
 interface SavedCheck { check: CheckResponse; diff: PresenceDiff | null }
 const LASTCHECK_KEY = (uid: string) => `cokoyo-lastcheck:v3:${uid}`;
 const readLastCheck = (uid: string): SavedCheck | null => {
@@ -102,11 +108,14 @@ const readLastCheck = (uid: string): SavedCheck | null => {
     localStorage.removeItem(`cokoyo-lastcheck:v2:${uid}`); // 前は閉じても残していたので、その分を片づける
     const s = sessionStorage.getItem(LASTCHECK_KEY(uid));
     const v = s ? (JSON.parse(s) as SavedCheck) : null;
-    return v?.check && isToday(v.check.checkedAt) ? v : null;
+    return v?.check && isLive(v.check) ? v : null;
   } catch { return null; }
 };
 const writeLastCheck = (uid: string, v: SavedCheck) => {
   try { sessionStorage.setItem(LASTCHECK_KEY(uid), JSON.stringify(v)); } catch { /* 保存できない環境 */ }
+};
+const removeLastCheck = () => {
+  try { Object.keys(sessionStorage).filter((k) => k.startsWith('cokoyo-lastcheck:')).forEach((k) => sessionStorage.removeItem(k)); } catch { /* 保存できない環境 */ }
 };
 
 /** 前回と今回の確認を比べる。前回がなければ（このタブで初めての確認なら）比べない */
@@ -327,7 +336,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const r = await api.check();
         box.result = r;
         const prev = lastCheckRef.current;
-        const diff = diffPresence(prev && isToday(prev.checkedAt) ? prev : null, r);
+        const diff = diffPresence(prev && isLive(prev) ? prev : null, r);
         writeLastCheck(me.userId, { check: r, diff });
         setLastCheck(r);
         setPresenceDiff(diff);
@@ -379,6 +388,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let last = Date.now();
     const catchUp = () => {
       if (document.visibilityState !== 'visible') return;
+      // 裏に回していたあいだに古くなった確認結果は捨てて、「まだ確認していません」に戻す
+      const lc = lastCheckRef.current;
+      if (lc && !isLive(lc) && !busy.current) {
+        removeLastCheck();
+        setLastCheck(null);
+        setPresenceDiff(null);
+        field.clear();
+        field.setRain(false);
+      }
       const now = Date.now();
       if (now - last < 5000) return; // 戻るたびに何度も叩かない
       last = now;
@@ -390,7 +408,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       document.removeEventListener('visibilitychange', catchUp);
       window.removeEventListener('focus', catchUp);
     };
-  }, [view, loadAll]);
+  }, [view, loadAll, field]);
 
   const restart = useCallback(async () => {
     timers.current.forEach(clearTimeout);
