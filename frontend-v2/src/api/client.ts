@@ -112,6 +112,12 @@ async function request<T>(method: string, path: string, body?: Record<string, un
 
 const id = encodeURIComponent;
 
+/** 送り直しても同じものだと分かるように、書き込み1回ごとに付ける使い捨ての ID */
+const newSendId = () =>
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+
 export const api = {
   // 認証・初回登録
   getSession: () => request<{ email: string; displayName: string; status: 'onboarding' | 'ready' }>('GET', '/v1/auth/session'),
@@ -158,7 +164,9 @@ export const api = {
   unblock: (userId: string) => request<BlockResponse>('DELETE', `/v1/friends/${id(userId)}/block`),
 
   // スライムの連打（相手の画面にあなたのスライムが出たときに届く）
-  react: (userId: string, count: number) => request<ReactionResponse>('POST', `/v1/friends/${id(userId)}/reactions`, { count }),
+  // sendId で送り直しを見分けてもらうので、二重に届いても足されない
+  react: (userId: string, count: number) =>
+    request<ReactionResponse>('POST', `/v1/friends/${id(userId)}/reactions`, { count, sendId: newSendId() }, false, true),
 
   // 説明用ページ（/explain）だけが使う。アプリ本体は使わない。
   // 問い合わせ・ご意見（アプリの中から送る）

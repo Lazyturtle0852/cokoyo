@@ -44,7 +44,7 @@ MAC は 12 桁の 16 進数または `:` / `-` 区切り。アカウント間で
 | `POST /friend-requests/:requestId/accept` / `decline` | 申請の承認・拒否 |
 | `POST` / `DELETE /friends/:userId/best` | ベストフレンド申請・解除 |
 | `POST` / `DELETE /friends/:userId/block` | ブロック・解除 |
-| `POST /friends/:userId/reactions` | `{count}`。スライムへのリアクション |
+| `POST /friends/:userId/reactions` | `{count, sendId?}`。スライムへのリアクション。同じ `sendId` の送り直しは足さない |
 | `GET /debug/db` | `/explain/` 用の公開全行表示。秘密列は除外またはマスク |
 
 `checks.me.presence` は `present` / `absent` / `unknown`。1 台でも在校なら `present`。建物が食い違う、または別の MAC が判定不能なら建物は返さない。在校が確定しない `unknown` では本人にポイントを付けない。フレンドの不明、かくれんぼ、ブロックは理由を示さず `present:false`。建物は相互ベストフレンドにだけ返す。

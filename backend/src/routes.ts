@@ -126,6 +126,12 @@ const FEEDBACK_PER_DAY = 5;
 /** 1組（送り手→受け手）にためておけるリアクションの数と、届かないまま捨てるまでの時間。 */
 export const REACTION = { MAX: 99, TTL_MS: 3 * 24 * 60 * 60 * 1000 } as const;
 
+/**
+ * 送り直されたリアクションを見分けるために、届いた sendId を覚えておく時間。
+ * 送り直しは数十秒のうちに終わるので、メモリに置くだけで足りる（再起動で忘れてよい）。
+ */
+const REACTION_SEND_ID_TTL_MS = 10 * 60 * 1000;
+
 function limiter(max: number) {
   let active = 0;
   const pending: Array<() => void> = [];
@@ -736,15 +742,28 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
    *
    * 相手にブロックされていても、ふつうと同じ 202 を返して黙って捨てる。
    */
+  // 送り手ごとの sendId → 覚えておく期限
+  const reactionSendIds = new Map<string, number>();
   app.post("/v1/friends/:userId/reactions", async (c) => {
     const me = requireUser(c, repo);
     const other = friendTarget(repo, me, c.req.param("userId"));
-    const count = (await c.req.json().catch(() => null))?.count;
+    const body = await c.req.json().catch(() => null);
+    const count = body?.count;
     if (!Number.isInteger(count) || count < 1 || count > REACTION.MAX) {
       fail(400, "invalid_count", `回数は1〜${REACTION.MAX}で送ってください`);
     }
+    // 返事が届かなかったブラウザは、同じ sendId で送り直してくる。二重に足さない
+    const sendId = body?.sendId;
+    if (sendId !== undefined && (typeof sendId !== "string" || !/^[A-Za-z0-9-]{1,64}$/.test(sendId))) {
+      fail(400, "invalid_send_id", "sendId が正しくありません");
+    }
+    const now = Date.now();
+    for (const [key, until] of reactionSendIds) if (until <= now) reactionSendIds.delete(key);
+    const sendKey = sendId ? `${me.id}:${sendId}` : null;
+    const repeated = sendKey !== null && reactionSendIds.has(sendKey);
+    if (sendKey) reactionSendIds.set(sendKey, now + REACTION_SEND_ID_TTL_MS);
 
-    if (!repo.isBlocking(other.id, me.id)) repo.addReaction(me.id, other.id, count as number, REACTION.MAX);
+    if (!repeated && !repo.isBlocking(other.id, me.id)) repo.addReaction(me.id, other.id, count as number, REACTION.MAX);
     const response: ReactionResponse = { userId: other.user_id, count: count as number };
     return c.json(response, 202);
   });

@@ -31,6 +31,15 @@ describe("スライムへのリアクション", () => {
     expect(second.reactions).toEqual([]);
   });
 
+  it("同じ sendId で送り直されたぶんは足さない", async () => {
+    const { h, alice, bob } = await pair();
+    await alice.post(`/v1/friends/${bob.userId}/reactions`, { count: 5, sendId: "a1" });
+    expect((await alice.post(`/v1/friends/${bob.userId}/reactions`, { count: 5, sendId: "a1" })).status).toBe(202);
+    await alice.post(`/v1/friends/${bob.userId}/reactions`, { count: 2, sendId: "a2" });
+    expect((await check(h, bob)).reactions).toEqual([{ userId: alice.userId, count: 7 }]);
+    expect((await alice.post(`/v1/friends/${bob.userId}/reactions`, { count: 1, sendId: "x".repeat(65) })).status).toBe(400);
+  });
+
   it("送った人がキャンパスにいない（スライムが出ない）あいだは届かず、出たときに届く", async () => {
     const { h, alice, bob } = await pair();
     await alice.post(`/v1/friends/${bob.userId}/reactions`, { count: 4 });
