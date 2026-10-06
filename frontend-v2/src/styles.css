@@ -270,6 +270,9 @@ body.plain .sheet { border-radius: 28px 28px 0 0; padding-bottom: max(22px, env(
 .chip.reunion { background: var(--brand-tint); color: var(--brand-dark); }
 .chip.first { background: var(--best-tint); color: var(--best); }
 .chip.done { background: var(--line-soft); color: var(--muted); }
+.chip.came { background: var(--live-tint); color: var(--live-dark); }
+.chip.left { background: transparent; color: var(--muted); border: 1px dashed var(--line); }
+.check-card .btn-hint.stale { color: var(--brand-dark); font-weight: 500; }
 
 /* ---------- フレンド画面 ---------- */
 .req-actions { display: flex; gap: 6px; flex-shrink: 0; }

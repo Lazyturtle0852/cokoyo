@@ -30,6 +30,8 @@ interface AppState {
   friends: FriendsResponse | null;
   points: PointsResponse | null;
   lastCheck: CheckResponse | null;
+  /** 前回の確認からの変化（このタブで2回目以降の確認のときだけ入る） */
+  presenceDiff: PresenceDiff | null;
   checking: boolean;
   sheet: { open: boolean; mode: AddMode };
   /** キャンパスの地図をひらいているか */
@@ -56,8 +58,7 @@ interface AppActions {
 
   /** バックエンドを呼ぶ操作を包む。失敗したらメッセージを出す。成功したら true */
   run(name: string, fn: () => Promise<void>): Promise<boolean>;
-  /** auto: 裏で取り直すとき。押したときと同じ結果を受け取るが、失敗や「獲得済み」は黙っておく */
-  check(auto?: boolean): Promise<void>;
+  check(): Promise<void>;
   toggleHide(): Promise<void>;
   reloadFriends(silent?: boolean): Promise<void>;
   setMe(me: Me): void;
@@ -84,21 +85,49 @@ export function useApp() {
   return ctx;
 }
 
-const LASTCHECK_KEY = (uid: string) => `cokoyo-lastcheck:v2:${uid}`;
-const readLastCheck = (uid: string): CheckResponse | null => {
-  try { const s = localStorage.getItem(LASTCHECK_KEY(uid)); return s ? (JSON.parse(s) as CheckResponse) : null; } catch { return null; }
+/** 前回の確認から、キャンパスに来たフレンド・いなくなったフレンド */
+export interface PresenceDiff { came: string[]; left: string[] }
+
+// ---------------------------------------------------------------
+// 在校確認の結果は、アプリ（タブ）を開いているあいだだけ覚えておく
+//
+// sessionStorage は、再読み込みや別のアプリから戻ってきたときは残り、タブやアプリを閉じると消える。
+// 閉じて開き直したら「まだ確認していません」から始まり、ボタンを押して今の様子を見る。
+// ただし iPhone のホーム画面アプリは、閉じずに裏へ回すだけのことが多い。そのまま何時間もたってから
+// 戻ってきても古い判定が残らないよう、RECORD_TTL_MS より前の記録は、開き直したとき・戻ってきたときに捨てる。
+// 開いて画面に出しているあいだは捨てない。日付が変わった記録も出さない。
+// ---------------------------------------------------------------
+/** これより前の確認結果は、開き直したとき・画面に戻ってきたときに捨てる */
+const RECORD_TTL_MS = 30 * 60 * 1000;
+const isLive = (c: CheckResponse) => isToday(c.checkedAt) && Date.now() - new Date(c.checkedAt).getTime() < RECORD_TTL_MS;
+
+interface SavedCheck { check: CheckResponse; diff: PresenceDiff | null }
+const LASTCHECK_KEY = (uid: string) => `cokoyo-lastcheck:v3:${uid}`;
+const readLastCheck = (uid: string): SavedCheck | null => {
+  try {
+    localStorage.removeItem(`cokoyo-lastcheck:v2:${uid}`); // 前は閉じても残していたので、その分を片づける
+    const s = sessionStorage.getItem(LASTCHECK_KEY(uid));
+    const v = s ? (JSON.parse(s) as SavedCheck) : null;
+    return v?.check && isLive(v.check) ? v : null;
+  } catch { return null; }
 };
-const writeLastCheck = (uid: string, v: CheckResponse) => {
-  try { localStorage.setItem(LASTCHECK_KEY(uid), JSON.stringify(v)); } catch { /* 保存できない環境 */ }
+const writeLastCheck = (uid: string, v: SavedCheck) => {
+  try { sessionStorage.setItem(LASTCHECK_KEY(uid), JSON.stringify(v)); } catch { /* 保存できない環境 */ }
+};
+const removeLastCheck = () => {
+  try { Object.keys(sessionStorage).filter((k) => k.startsWith('cokoyo-lastcheck:')).forEach((k) => sessionStorage.removeItem(k)); } catch { /* 保存できない環境 */ }
+};
+
+/** 前回と今回の確認を比べる。前回がなければ（このタブで初めての確認なら）比べない */
+const diffPresence = (prev: CheckResponse | null, next: CheckResponse): PresenceDiff | null => {
+  if (!prev) return null;
+  const was = new Set(prev.friends.filter((f) => f.present).map((f) => f.userId));
+  const now = new Set(next.friends.filter((f) => f.present).map((f) => f.userId));
+  return { came: [...now].filter((id) => !was.has(id)), left: [...was].filter((id) => !now.has(id)) };
 };
 
 /** 「佐藤さん・田中さんから」のように、名前を並べる */
 const names = (list: string[]) => (list.length > 2 ? `${list.slice(0, 2).join('さん・')}さんほか${list.length - 2}人` : `${list.join('さん・')}さん`);
-
-/** 今日確認ずみなら、開いているあいだこの間隔で取り直す */
-const AUTO_CHECK_INTERVAL_MS = 5 * 60 * 1000;
-/** 前の確認からこれより短ければ、開き直しても取り直さない（戻るたびに叩かない） */
-const AUTO_CHECK_MIN_GAP_MS = 60 * 1000;
 
 // 招待リンクで開かれたなら、URLからキーを預かる（表示の前に一度だけ）
 takeInviteFromUrl();
@@ -112,6 +141,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [friends, setFriends] = useState<FriendsResponse | null>(null);
   const [points, setPoints] = useState<PointsResponse | null>(null);
   const [lastCheck, setLastCheck] = useState<CheckResponse | null>(null);
+  const [presenceDiff, setPresenceDiff] = useState<PresenceDiff | null>(null);
   const [checking, setChecking] = useState(false);
   const [sheet, setSheet] = useState<{ open: boolean; mode: AddMode }>({ open: false, mode: 'show' });
   const [mapOpen, setMapOpen] = useState(false);
@@ -134,9 +164,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [m, f, p] = await Promise.all([api.getMe(silent), api.getFriends(silent), api.getPoints(silent)]);
     setMe(m); setFriends(f); setPoints(p);
     const saved = readLastCheck(m.userId);
-    setLastCheck(saved);
+    setLastCheck(saved?.check ?? null);
+    setPresenceDiff(saved?.diff ?? null);
     // 前に確認したときが雨なら、開いた時点から降らせておく
-    if (saved && isToday(saved.checkedAt)) field.setRain(saved.weather.rainy);
+    if (saved) field.setRain(saved.check.weather.rainy);
   }, [field]);
 
   const goOnboarding = useCallback(() => {
@@ -148,7 +179,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [field]);
 
   const goLogin = useCallback(() => {
-    setMe(null); setFriends(null); setPoints(null); setLastCheck(null);
+    setMe(null); setFriends(null); setPoints(null); setLastCheck(null); setPresenceDiff(null);
     field.clear();
     setInitialDisplayName('');
     setView('login');
@@ -254,7 +285,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ---------------------------------------------------------------
   // 在校確認のあとの演出：スライムが現れ、ポイントが1つずつ累計に足される
   // ---------------------------------------------------------------
-  const celebrate = useCallback((r: CheckResponse, before: number, quiet = false) => {
+  const celebrate = useCallback((r: CheckResponse, before: number) => {
     timers.current.forEach(clearTimeout);
     timers.current = [];
     const later = (ms: number, fn: () => void) => { timers.current.push(window.setTimeout(fn, ms)); };
@@ -276,7 +307,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     if (!items.length) {
       setDisplayTotal(null);
-      if (!quiet) later(reactions.length ? landed : Math.min(landed, 400), () => showToast(r.points.notice ?? '今の分は獲得済みです'));
+      later(reactions.length ? landed : Math.min(landed, 400), () => showToast(r.points.notice ?? '今の分は獲得済みです'));
       return;
     }
     if (r.points.notice) later(landed + items.length * 460 + 300, () => showToast(r.points.notice as string));
@@ -293,32 +324,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
   }, [field, showToast]);
 
-  const check = useCallback(async (auto = false) => {
+  const lastCheckRef = useRef(lastCheck);
+  lastCheckRef.current = lastCheck;
+  const check = useCallback(async () => {
     if (busy.current || !points || !me) return;
     const before = points.total;
     const box: { result?: CheckResponse } = {};
-    const work = async () => {
+    await run('ポイント獲得（在校確認）', async () => {
       setChecking(true);
       try {
-        const r = await api.check(auto);
+        const r = await api.check();
         box.result = r;
-        writeLastCheck(me.userId, r);
+        const prev = lastCheckRef.current;
+        const diff = diffPresence(prev && isLive(prev) ? prev : null, r);
+        writeLastCheck(me.userId, { check: r, diff });
         setLastCheck(r);
+        setPresenceDiff(diff);
         setPoints({ date: r.points.date, today: r.points.today, total: r.points.total });
         setMe((m) => (m ? { ...m, hidden: r.me.hidden } : m));
         if (r.points.awarded.length) setDisplayTotal(before); // 演出で少しずつ足すので、いったん前の値のまま出す
       } finally {
         setChecking(false);
       }
-    };
-    if (auto) {
-      // 裏の取り直しは、ほかの操作の邪魔をせず、失敗しても黙って次の機会を待つ
-      busy.current = true;
-      try { await work(); } catch { /* 次の機会に取り直す */ } finally { busy.current = false; }
-    } else {
-      await run('ポイント獲得（在校確認）', work);
-    }
-    if (box.result) celebrate(box.result, before, auto);
+    });
+    if (box.result) celebrate(box.result, before);
   }, [celebrate, me, points, run]);
 
   // フレンドのスライムを連打し終えたら送る。すぐには届かず、相手の画面にこちらのスライムが出たときに届く
@@ -349,33 +378,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [loadAll, view]);
 
   // ---------------------------------------------------------------
-  // 今日すでに在校確認していたら、地図とフレンドの在校を自動で取り直す
-  //
-  // 一度押したあとは、フレンドが来た・帰ったが押し直すまで反映されない。
-  // その日に押していれば「見たい」意思はあるとみなし、
-  // アプリを開いたとき・画面に戻ってきたとき・開いているあいだは数分おきに、押したのと同じ確認をする。
-  // 新しく来たフレンドのマッチもここで入る（押したときと同じ演出で見せる）。
-  // ---------------------------------------------------------------
-  const checkRef = useRef(check);
-  checkRef.current = check;
-  const lastCheckRef = useRef(lastCheck);
-  lastCheckRef.current = lastCheck;
-  const autoCheck = useCallback(() => {
-    const lc = lastCheckRef.current;
-    if (document.visibilityState !== 'visible' || !lc || !isToday(lc.checkedAt)) return;
-    if (Date.now() - new Date(lc.checkedAt).getTime() < AUTO_CHECK_MIN_GAP_MS) return;
-    void checkRef.current(true);
-  }, []);
-
-  const loaded = points !== null; // 中身が変わるたびには張り直さない
-  useEffect(() => {
-    if (view !== 'app' || !loaded) return;
-    autoCheck(); // 開いた直後（前に確認したのが今日なら）
-    const timer = window.setInterval(autoCheck, AUTO_CHECK_INTERVAL_MS);
-    return () => clearInterval(timer);
-  }, [view, loaded, autoCheck]);
-
-  // ---------------------------------------------------------------
   // 画面に戻ってきたら、裏で取り直す
   //
   // フレンドは相手の操作でも変わる（QRを読み取ってもらった・申請を承認された）。
@@ -386,7 +388,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let last = Date.now();
     const catchUp = () => {
       if (document.visibilityState !== 'visible') return;
-      autoCheck();
+      // 裏に回していたあいだに古くなった確認結果は捨てて、「まだ確認していません」に戻す
+      const lc = lastCheckRef.current;
+      if (lc && !isLive(lc) && !busy.current) {
+        removeLastCheck();
+        setLastCheck(null);
+        setPresenceDiff(null);
+        field.clear();
+        field.setRain(false);
+      }
       const now = Date.now();
       if (now - last < 5000) return; // 戻るたびに何度も叩かない
       last = now;
@@ -398,7 +408,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       document.removeEventListener('visibilitychange', catchUp);
       window.removeEventListener('focus', catchUp);
     };
-  }, [view, loadAll, autoCheck]);
+  }, [view, loadAll, field]);
 
   const restart = useCallback(async () => {
     timers.current.forEach(clearTimeout);
@@ -431,7 +441,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [view, restart]);
 
   const value = useMemo<Ctx>(() => ({
-    view, initialDisplayName, error, tab, me, friends, points, lastCheck, checking, sheet, mapOpen, displayTotal, toast, invite,
+    view, initialDisplayName, error, tab, me, friends, points, lastCheck, presenceDiff, checking, sheet, mapOpen, displayTotal, toast, invite,
     field, counter, screenRef,
     // タブを移ると地図は閉じる
     setTab: (t) => { setMapOpen(false); setTabState(t); },
@@ -458,7 +468,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refresh,
     restart,
     restartFromOnboarding: () => { void api.logout().finally(() => { setTabState('home'); goLogin(); }); },
-  }), [view, initialDisplayName, error, tab, me, friends, points, lastCheck, checking, sheet, mapOpen, displayTotal, toast, invite,
+  }), [view, initialDisplayName, error, tab, me, friends, points, lastCheck, presenceDiff, checking, sheet, mapOpen, displayTotal, toast, invite,
     field, showToast, run, check, toggleHide, reloadFriends, acceptInvite, dismissInvite, loadAll, refresh, restart, goLogin]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
