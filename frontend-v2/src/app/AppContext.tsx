@@ -56,7 +56,8 @@ interface AppActions {
 
   /** バックエンドを呼ぶ操作を包む。失敗したらメッセージを出す。成功したら true */
   run(name: string, fn: () => Promise<void>): Promise<boolean>;
-  check(): Promise<void>;
+  /** auto: 裏で取り直すとき。押したときと同じ結果を受け取るが、失敗や「獲得済み」は黙っておく */
+  check(auto?: boolean): Promise<void>;
   toggleHide(): Promise<void>;
   reloadFriends(silent?: boolean): Promise<void>;
   setMe(me: Me): void;
@@ -93,6 +94,11 @@ const writeLastCheck = (uid: string, v: CheckResponse) => {
 
 /** 「佐藤さん・田中さんから」のように、名前を並べる */
 const names = (list: string[]) => (list.length > 2 ? `${list.slice(0, 2).join('さん・')}さんほか${list.length - 2}人` : `${list.join('さん・')}さん`);
+
+/** 今日確認ずみなら、開いているあいだこの間隔で取り直す */
+const AUTO_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+/** 前の確認からこれより短ければ、開き直しても取り直さない（戻るたびに叩かない） */
+const AUTO_CHECK_MIN_GAP_MS = 60 * 1000;
 
 // 招待リンクで開かれたなら、URLからキーを預かる（表示の前に一度だけ）
 takeInviteFromUrl();
@@ -248,7 +254,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ---------------------------------------------------------------
   // 在校確認のあとの演出：スライムが現れ、ポイントが1つずつ累計に足される
   // ---------------------------------------------------------------
-  const celebrate = useCallback((r: CheckResponse, before: number) => {
+  const celebrate = useCallback((r: CheckResponse, before: number, quiet = false) => {
     timers.current.forEach(clearTimeout);
     timers.current = [];
     const later = (ms: number, fn: () => void) => { timers.current.push(window.setTimeout(fn, ms)); };
@@ -270,7 +276,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     if (!items.length) {
       setDisplayTotal(null);
-      later(reactions.length ? landed : Math.min(landed, 400), () => showToast(r.points.notice ?? '今の分は獲得済みです'));
+      if (!quiet) later(reactions.length ? landed : Math.min(landed, 400), () => showToast(r.points.notice ?? '今の分は獲得済みです'));
       return;
     }
     if (r.points.notice) later(landed + items.length * 460 + 300, () => showToast(r.points.notice as string));
@@ -287,14 +293,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
   }, [field, showToast]);
 
-  const check = useCallback(async () => {
+  const check = useCallback(async (auto = false) => {
     if (busy.current || !points || !me) return;
     const before = points.total;
     const box: { result?: CheckResponse } = {};
-    setChecking(true);
-    await run('ポイント獲得（在校確認）', async () => {
+    const work = async () => {
+      setChecking(true);
       try {
-        const r = await api.check();
+        const r = await api.check(auto);
         box.result = r;
         writeLastCheck(me.userId, r);
         setLastCheck(r);
@@ -304,8 +310,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } finally {
         setChecking(false);
       }
-    });
-    if (box.result) celebrate(box.result, before);
+    };
+    if (auto) {
+      // 裏の取り直しは、ほかの操作の邪魔をせず、失敗しても黙って次の機会を待つ
+      busy.current = true;
+      try { await work(); } catch { /* 次の機会に取り直す */ } finally { busy.current = false; }
+    } else {
+      await run('ポイント獲得（在校確認）', work);
+    }
+    if (box.result) celebrate(box.result, before, auto);
   }, [celebrate, me, points, run]);
 
   // フレンドのスライムを連打し終えたら送る。すぐには届かず、相手の画面にこちらのスライムが出たときに届く
@@ -336,6 +349,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [loadAll, view]);
 
   // ---------------------------------------------------------------
+  // 今日すでに在校確認していたら、地図とフレンドの在校を自動で取り直す
+  //
+  // 一度押したあとは、フレンドが来た・帰ったが押し直すまで反映されない。
+  // その日に押していれば「見たい」意思はあるとみなし、
+  // アプリを開いたとき・画面に戻ってきたとき・開いているあいだは数分おきに、押したのと同じ確認をする。
+  // 新しく来たフレンドのマッチもここで入る（押したときと同じ演出で見せる）。
+  // ---------------------------------------------------------------
+  const checkRef = useRef(check);
+  checkRef.current = check;
+  const lastCheckRef = useRef(lastCheck);
+  lastCheckRef.current = lastCheck;
+  const autoCheck = useCallback(() => {
+    const lc = lastCheckRef.current;
+    if (document.visibilityState !== 'visible' || !lc || !isToday(lc.checkedAt)) return;
+    if (Date.now() - new Date(lc.checkedAt).getTime() < AUTO_CHECK_MIN_GAP_MS) return;
+    void checkRef.current(true);
+  }, []);
+
+  const loaded = points !== null; // 中身が変わるたびには張り直さない
+  useEffect(() => {
+    if (view !== 'app' || !loaded) return;
+    autoCheck(); // 開いた直後（前に確認したのが今日なら）
+    const timer = window.setInterval(autoCheck, AUTO_CHECK_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [view, loaded, autoCheck]);
+
+  // ---------------------------------------------------------------
   // 画面に戻ってきたら、裏で取り直す
   //
   // フレンドは相手の操作でも変わる（QRを読み取ってもらった・申請を承認された）。
@@ -346,6 +386,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let last = Date.now();
     const catchUp = () => {
       if (document.visibilityState !== 'visible') return;
+      autoCheck();
       const now = Date.now();
       if (now - last < 5000) return; // 戻るたびに何度も叩かない
       last = now;
@@ -357,7 +398,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       document.removeEventListener('visibilitychange', catchUp);
       window.removeEventListener('focus', catchUp);
     };
-  }, [view, loadAll]);
+  }, [view, loadAll, autoCheck]);
 
   const restart = useCallback(async () => {
     timers.current.forEach(clearTimeout);
