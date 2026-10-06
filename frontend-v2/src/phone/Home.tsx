@@ -1,14 +1,29 @@
 // ホーム：在校確認 → フレンドの在校 → 今日の獲得 → かくれんぼ
 // （上のフィールドはスクロールさせないので、src/phone/Phone.tsx で置いている）
 
+import { useEffect, useState } from 'react';
 import { useApp } from '../app/AppContext';
 import { HideCard } from './HideCard';
 import { InstallCard } from './Install';
 import { Avatar, isToday, when } from './ui';
 import { Section } from './Section';
 
+/** 前の確認からこれだけたったら、押し直しをすすめる */
+const STALE_MS = 5 * 60 * 1000;
+
+/** 開いているあいだ、時間の経過で表示を変えるための「今」 */
+function useNow(ms: number) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), ms);
+    return () => clearInterval(t);
+  }, [ms]);
+  return now;
+}
+
 export function Home() {
-  const { me, friends, points, lastCheck: lc, checking, check, openAddSheet } = useApp();
+  const { me, friends, points, lastCheck: lc, presenceDiff: diff, checking, check, openAddSheet } = useApp();
+  const now = useNow(30 * 1000);
   if (!me || !friends || !points) return null;
 
   const fresh = !!lc && isToday(lc.checkedAt);
@@ -19,15 +34,23 @@ export function Home() {
   const kick = lc ? `${when(lc.checkedAt)} に確認` : 'まだ確認していません';
   const title = !lc ? 'キャンパスにいる？' : unknown ? '在校を判定できません' : present ? 'キャンパスにいます' : 'キャンパス外です';
   const sub = !lc ? 'ボタンで、あなたとフレンドの様子を確認' : unknown ? '大学側の通信を確認できませんでした。もう一度お試しください' : present ? lc.me.building : 'キャンパスのWiFiにつながっていません';
-  const hint = me.hidden
+  const minutes = lc ? Math.floor((now - new Date(lc.checkedAt).getTime()) / 60000) : 0;
+  const stale = fresh && minutes * 60000 >= STALE_MS;
+  const hint = stale
+    ? `前の確認から${minutes}分たちました。押すと、誰が来て誰が帰ったかがわかります`
+    : me.hidden
     ? 'かくれんぼ中は来校ポイントだけ入ります（マッチは入りません）'
     : 'キャンパス外でもフレンドの様子は見られます（ポイントはキャンパスでだけ）';
 
   const results = new Map((lc?.friends ?? []).map((f) => [f.userId, f]));
   const awardedNow = new Map(fresh ? lc!.points.awarded.filter((a) => a.userId).map((a) => [a.userId as string, a]) : []);
   const matchedToday = new Set(today.items.map((i) => i.userId).filter(Boolean));
+  const came = new Set(fresh ? diff?.came ?? [] : []);
+  const left = new Set(fresh ? diff?.left ?? [] : []);
   const liveCount = friends.friends.filter((f) => results.get(f.userId)?.present).length;
-  const rank = (id: string) => { const r = results.get(id); return !r ? 2 : r.present ? 0 : 1; };
+  const changes = [came.size && `${came.size}人来た`, left.size && `${left.size}人帰った`].filter(Boolean).join('・');
+  // キャンパスにいる → さっき帰った → いない → 未確認 の順
+  const rank = (id: string) => { const r = results.get(id); return !r ? 3 : r.present ? 0 : left.has(id) ? 1 : 2; };
   const sorted = [...friends.friends].sort((a, b) => rank(a.userId) - rank(b.userId));
 
   return (
@@ -43,10 +66,10 @@ export function Home() {
         <button className="btn btn-primary btn-check" onClick={() => void check()} disabled={checking}>
           {checking ? '確認しています…' : <>ポイント獲得<span className="btn-sub">（在校確認）</span></>}
         </button>
-        <p className="btn-hint">{hint}</p>
+        <p className={`btn-hint${stale ? ' stale' : ''}`}>{hint}</p>
       </div>
 
-      <Section id="home.friends" title="フレンド" aside={lc ? `${when(lc.checkedAt)} 時点・${liveCount}人がキャンパスに` : '未確認'}>
+      <Section id="home.friends" title="フレンド" aside={lc ? `${when(lc.checkedAt)} 時点・${liveCount}人がキャンパスに${changes ? `（${changes}）` : ''}` : '未確認'}>
       <div className="card">
         {sorted.length === 0 && (
           <>
@@ -63,9 +86,13 @@ export function Home() {
               chip = a.kind === 'first' ? <span className="chip first">+{a.pts} はじめて</span>
                 : a.kind === 'reunion' ? <span className="chip reunion">+{a.pts} {a.days}日ぶり</span>
                 : <span className="chip normal">+{a.pts}</span>;
+            } else if (came.has(f.userId)) {
+              chip = <span className="chip came">来た</span>;
             } else if (fresh && matchedToday.has(f.userId)) {
               chip = <span className="chip done">獲得済み</span>;
             }
+          } else if (left.has(f.userId)) {
+            chip = <span className="chip left">帰った</span>;
           }
           const meta = !r ? '未確認' : r.present ? (r.building ? `${r.building}にいます` : 'キャンパスにいます') : 'いません';
           return (
