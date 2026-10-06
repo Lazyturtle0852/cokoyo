@@ -133,7 +133,7 @@ export const api = {
   deleteMac: (id: number) => request<null>('DELETE', `/v1/me/macs/${id}`),
 
   // 在校確認とポイント
-  check: () => request<CheckResponse>('POST', '/v1/checks'),
+  check: (silent = false) => request<CheckResponse>('POST', '/v1/checks', undefined, silent),
   getPoints: (silent = false) => request<PointsResponse>('GET', '/v1/points', undefined, silent),
 
   // フレンド
