@@ -41,7 +41,7 @@ export function Settings() {
   const logout = async (all: boolean) => {
     await run(all ? '全端末からログアウト' : 'ログアウト', async () => {
       if (all) await api.logoutAll(); else await api.logout();
-      try { Object.keys(localStorage).filter((key) => key.startsWith('cokoyo-lastcheck:')).forEach((key) => localStorage.removeItem(key)); } catch { /* 保存できない環境 */ }
+      try { [localStorage, sessionStorage].forEach((st) => Object.keys(st).filter((key) => key.startsWith('cokoyo-lastcheck:')).forEach((key) => st.removeItem(key))); } catch { /* 保存できない環境 */ }
       await restart();
     });
   };

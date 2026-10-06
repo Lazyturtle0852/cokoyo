@@ -31,7 +31,7 @@ export function DemoPanel() {
 
   const reset = async () => {
     sim.reset();
-    try { Object.keys(localStorage).filter((k) => k.startsWith('cokoyo-lastcheck:')).forEach((k) => localStorage.removeItem(k)); } catch { /* 保存できない環境 */ }
+    try { [localStorage, sessionStorage].forEach((st) => Object.keys(st).filter((k) => k.startsWith('cokoyo-lastcheck:')).forEach((k) => st.removeItem(k))); } catch { /* 保存できない環境 */ }
     await app.restart();
     app.showToast('最初の状態に戻しました');
   };
