@@ -52,8 +52,9 @@ const NETWORK_RETRY_DELAYS = [500, 1500];
 /**
  * silent: 「バックエンドとの通信」に記録しない。
  * 説明用ページが裏で叩くもの（DBの中身）に使う。直前の操作の記録を汚さないため。
+ * retry: 返事まで届かなかったら送り直す。二重に届いても結果が同じものだけに付ける（GET は常に送り直す）。
  */
-async function request<T>(method: string, path: string, body?: Record<string, unknown>, silent = false): Promise<T> {
+async function request<T>(method: string, path: string, body?: Record<string, unknown>, silent = false, retry = method === 'GET'): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const withSession = useMockBackend ? mockBackend.sim.signedIn() : true;
 
@@ -65,10 +66,12 @@ async function request<T>(method: string, path: string, body?: Record<string, un
   } else {
     // fetch が投げるのは、サーバーの返事まで届かなかったとき（電波の切れ目、
     // 開いた直後や裏から戻った直後でまだ繋がっていない、など）。たいていは一瞬なので、
-    // 何度送っても結果が同じ GET だけ、少し待って送り直す。
-    // 書き込み（POST など）は、届いていたのに返事だけ失われた場合に二重になるので送り直さない。
+    // 何度送っても結果が同じもの（GET と、retry を付けた書き込み）だけ、少し待って送り直す。
+    // ほかの書き込みは、届いていたのに返事だけ失われた場合に二重になるので送り直さない。
+    // iPhone では、裏に回っているあいだに切れた接続へ送って十数秒後に失敗することがあり、
+    // 送り直せば新しい接続で届く。
     const base = config.apiBaseUrl.replace(/\/$/, '');
-    const retryDelays = method === 'GET' ? NETWORK_RETRY_DELAYS : [];
+    const retryDelays = retry ? NETWORK_RETRY_DELAYS : [];
     for (let attempt = 0; ; attempt++) {
       const started = performance.now();
       try {
@@ -123,7 +126,8 @@ export const api = {
   completeOnboarding: (displayName: string, mac: string, label: string) =>
     request<Me>('POST', '/v1/onboarding', { displayName, mac, label }),
   getMe: (silent = false) => request<Me>('GET', '/v1/me', undefined, silent),
-  updateMe: (patch: { displayName?: string; hidden?: boolean; discoverable?: boolean }) => request<Me>('PATCH', '/v1/me', patch),
+  // 同じ値で上書きするだけなので、二重に届いても同じ
+  updateMe: (patch: { displayName?: string; hidden?: boolean; discoverable?: boolean }) => request<Me>('PATCH', '/v1/me', patch, false, true),
   updateAvatar: (image: string) => request<Me>('PUT', '/v1/me/avatar', { image }),
   removeAvatar: () => request<Me>('DELETE', '/v1/me/avatar'),
   getMacs: () => request<{ macs: MacAddressView[]; limit: number }>('GET', '/v1/me/macs'),
@@ -133,7 +137,8 @@ export const api = {
   deleteMac: (id: number) => request<null>('DELETE', `/v1/me/macs/${id}`),
 
   // 在校確認とポイント
-  check: (silent = false) => request<CheckResponse>('POST', '/v1/checks', undefined, silent),
+  // ポイントは1日1回（マッチは相手ごとに1日1回）しか入らないので、二重に届いても増えない
+  check: (silent = false) => request<CheckResponse>('POST', '/v1/checks', undefined, silent, true),
   getPoints: (silent = false) => request<PointsResponse>('GET', '/v1/points', undefined, silent),
 
   // フレンド
