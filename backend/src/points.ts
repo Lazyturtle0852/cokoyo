@@ -7,7 +7,9 @@ import type { Repo, User } from "./repo.js";
  *   来校ベース 20 ＋ 連続 5〜20 ＋ マッチ 6×5人 ＝ 55〜70pt。
  * 月16日通うと 880〜1,120pt。
  */
-const P = { BASE: 20, RAIN: 10, MATCH: 6, REUNION: 50, FIRST: 70, CAP: 10 } as const;
+// マッチの1日の上限（以前は10人）は 2026-10-09 になくした。ポイントは換金できず（利用規約 第7条）、
+// 在校の確認は上限に関係なくフレンド全員ぶん行うので、上限で守っていたものが無いため。
+const P = { BASE: 20, RAIN: 10, MATCH: 6, REUNION: 50, FIRST: 70 } as const;
 
 /** [連続日数, 加算pt]。高いほうから見て、当てはまった1つだけ入る。 */
 const STREAK: ReadonlyArray<readonly [number, number]> = [
@@ -73,7 +75,6 @@ export function awardPoints(
 ): AwardResult {
   const { present, rainy, friends, today } = input;
   const awarded: PointItem[] = [];
-  let notice: string | null = null;
 
   if (!present) {
     return { awarded, notice: "キャンパス外なので、ポイントは入りません" };
@@ -109,14 +110,9 @@ export function awardPoints(
       .filter((p) => p.other_user_id !== null)
       .map((p) => p.other_user_id as number),
   );
-  let count = matchedToday.size;
 
   for (const friend of friends) {
     if (!friend.present || matchedToday.has(friend.user.id)) continue;
-    if (count >= P.CAP) {
-      notice = "フレンドとのマッチポイントは1日10人までです";
-      break;
-    }
 
     const name = friend.user.display_name;
     const last = repo.lastMatchDate(me.id, friend.user.id);
@@ -132,8 +128,7 @@ export function awardPoints(
     record({ ...item, userId: friend.user.user_id }, friend.user.id);
     repo.recordMatch(me.id, friend.user.id, today);
     matchedToday.add(friend.user.id);
-    count += 1;
   }
 
-  return { awarded, notice };
+  return { awarded, notice: null };
 }

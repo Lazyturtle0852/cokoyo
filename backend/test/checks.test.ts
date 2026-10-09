@@ -140,7 +140,7 @@ describe("ポイント", () => {
     expect(body.points.notice).toBe("かくれんぼ中は、フレンドとのマッチポイントは入りません");
   });
 
-  it("マッチは1日10人まで", async () => {
+  it("マッチに1日の上限は無い（12人いれば12人ぶん）", async () => {
     const h = createHarness();
     const alice = await h.signUp("ゆうき", MAC.alice);
     h.dtc.set(MAC.alice, present("kappa"));
@@ -153,8 +153,8 @@ describe("ポイント", () => {
     }
 
     const body = await check(h, alice);
-    expect(body.points.awarded.filter((a) => a.kind === "first")).toHaveLength(10);
-    expect(body.points.notice).toBe("フレンドとのマッチポイントは1日10人までです");
+    expect(body.points.awarded.filter((a) => a.kind === "first")).toHaveLength(12);
+    expect(body.points.notice).toBeNull();
   });
 
   it("GET /v1/points は awarded と notice を含まない", async () => {
