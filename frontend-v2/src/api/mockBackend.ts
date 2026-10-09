@@ -19,7 +19,8 @@ const STORE_KEY = 'cokoyo-mock-backend:v6'; // 「知り合いかも」用のつ
 // 普通の日（フレンド5人・雨でもはじめてでもない日）で 55〜70pt、
 // 月16日通って 880〜1,120pt になる値。backend/src/points.ts と同じ値にすること。
 // ---------------------------------------------------------------
-const P = { BASE: 20, RAIN: 10, MATCH: 6, REUNION: 50, FIRST: 70, CAP: 10 };
+// マッチの1日の上限は無い（バックエンドの src/points.ts と同じ）
+const P = { BASE: 20, RAIN: 10, MATCH: 6, REUNION: 50, FIRST: 70 };
 // リアクションをためておける数。backend/src/routes.ts と同じ値にすること。
 const REACTION = { MAX: 99, TTL_MS: 3 * 24 * 60 * 60 * 1000 };
 const STREAK: [number, number][] = [[14, 20], [7, 10], [3, 5]]; // [連続日数, 加算pt]
@@ -488,10 +489,8 @@ function check(uid: string) {
     if (me.hidden) {
       notice = 'かくれんぼ中は、フレンドとのマッチポイントは入りません';
     } else {
-      let count = Object.keys(day.matched).length;
       for (const f of friends) {
         if (!f.present || day.matched[f.userId]) continue;
-        if (count >= P.CAP) { notice = 'フレンドとのマッチポイントは1日10人までです'; break; }
         const name = db.users[f.userId].name;
         const last = pts.lastMatch[f.userId];
         const gap = last ? daysBetween(last, t) : 0;
@@ -501,7 +500,6 @@ function check(uid: string) {
         awarded.push({ ...item, userId: f.userId });
         day.matched[f.userId] = item.kind;
         pts.lastMatch[f.userId] = t;
-        count++;
       }
     }
     day.items.push(...awarded);
