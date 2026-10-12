@@ -781,6 +781,7 @@ table.admin-users .rel { margin-right: 4px; }
 .slime-color svg { width: 36px; height: auto; }
 .slime-color svg .eyes-closed { display: none; }
 .slime-color.on { border-color: var(--brand); background: var(--brand-tint); }
+.slime-colors .row-note { margin-top: 8px; }
 .push-note { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: var(--brand-tint); color: var(--brand-dark); }
 /* フレンドの在校をシェア（ホーム） */
 .share-btn { display: inline-flex; align-items: center; gap: 3px; margin-top: 4px; flex-shrink: 0; border: 1px solid var(--line);
