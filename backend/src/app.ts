@@ -5,6 +5,7 @@ import { config } from "./config.js";
 import type { DtcClient } from "./dtc.js";
 import { ApiFailure, errorResponse } from "./lib/errors.js";
 import type { Repo } from "./repo.js";
+import { createPushSender, type PushSender } from "./push.js";
 import { createRoutes } from "./routes.js";
 
 /**
@@ -14,11 +15,12 @@ import { createRoutes } from "./routes.js";
 export function createApp(
   repo: Repo, dtc: DtcClient, google: GoogleProvider | null = null,
   admin: AdminAuth = createAdminAuth(config.adminPassword),
+  push: PushSender = createPushSender(repo),
 ) {
   const app = new Hono();
 
   // フロントは apiBaseUrl("/api") + "/v1/..." で叩く。
-  app.route("/api", createRoutes(repo, dtc, google, admin));
+  app.route("/api", createRoutes(repo, dtc, google, admin, push));
 
   app.notFound((c) => errorResponse(c, 404, "not_found", "見つかりません"));
 

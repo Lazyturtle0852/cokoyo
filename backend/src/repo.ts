@@ -34,6 +34,16 @@ export interface User {
   hidden: number;
   discoverable: number;
   onboarding_completed_at: string | null;
+  /** SLIME_COLORS の鍵。選んでいなければ null */
+  slime_color: string | null;
+}
+
+export interface PushSubscriptionRow {
+  id: number;
+  user_id: number;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
 }
 
 export interface MacAddress {
@@ -66,7 +76,7 @@ export interface PointRow {
 }
 
 const USER_COLS =
-  "id, user_id, google_sub, email, display_name, avatar, avatar_source, share_key, hidden, onboarding_completed_at, discoverable";
+  "id, user_id, google_sub, email, display_name, avatar, avatar_source, share_key, hidden, onboarding_completed_at, discoverable, slime_color";
 
 /** 常に (小さい方, 大きい方) の順に揃える。 */
 const pair = (a: number, b: number): [number, number] => (a < b ? [a, b] : [b, a]);
@@ -86,6 +96,31 @@ export function createRepo(db: Db) {
     completeUser: db.prepare("UPDATE users SET display_name = ?, share_key = ?, onboarding_completed_at = ? WHERE id = ?"),
     updateProfile: db.prepare("UPDATE users SET display_name = ?, hidden = ?, discoverable = ? WHERE id = ?"),
     updateAvatar: db.prepare("UPDATE users SET avatar = ?, avatar_source = ? WHERE id = ?"),
+    updateColor: db.prepare("UPDATE users SET slime_color = ? WHERE id = ?"),
+
+    pushOf: db.prepare("SELECT id, user_id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ? ORDER BY id"),
+    upsertPush: db.prepare(
+      `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, created_at) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh,
+         auth = excluded.auth, created_at = excluded.created_at`,
+    ),
+    deletePush: db.prepare("DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?"),
+    deletePushByEndpoint: db.prepare("DELETE FROM push_subscriptions WHERE endpoint = ?"),
+    deletePushOf: db.prepare("DELETE FROM push_subscriptions WHERE user_id = ?"),
+    trimPush: db.prepare(
+      `DELETE FROM push_subscriptions WHERE user_id = ? AND id NOT IN
+         (SELECT id FROM push_subscriptions WHERE user_id = ? ORDER BY id DESC LIMIT ?)`,
+    ),
+    greeting: db.prepare("SELECT created_at FROM greetings WHERE from_id = ? AND to_id = ?"),
+    upsertGreeting: db.prepare(
+      `INSERT INTO greetings (from_id, to_id, created_at) VALUES (?, ?, ?)
+       ON CONFLICT(from_id, to_id) DO UPDATE SET created_at = excluded.created_at, seen_at = NULL`,
+    ),
+    greetingsTo: db.prepare("SELECT from_id, created_at FROM greetings WHERE to_id = ? AND created_at > ? AND seen_at IS NULL ORDER BY created_at DESC"),
+    pruneGreetingsTo: db.prepare("DELETE FROM greetings WHERE to_id = ? AND created_at <= ?"),
+    clearGreetingsTo: db.prepare("UPDATE greetings SET seen_at = ? WHERE to_id = ? AND seen_at IS NULL"),
+    secret: db.prepare("SELECT value FROM app_secrets WHERE name = ?"),
+    insertSecret: db.prepare("INSERT OR IGNORE INTO app_secrets (name, value) VALUES (?, ?)"),
     setGoogleName: db.prepare("UPDATE users SET display_name = ? WHERE id = ? AND display_name IS NULL AND onboarding_completed_at IS NULL"),
     setGoogleAvatar: db.prepare("UPDATE users SET avatar = ?, avatar_source = 'google' WHERE id = ? AND avatar_source = 'unset'"),
     macsOf: db.prepare("SELECT id, user_id, mac, label, registered_at FROM mac_addresses WHERE user_id = ? ORDER BY id"),
@@ -98,6 +133,7 @@ export function createRepo(db: Db) {
     userByToken: db.prepare(`SELECT ${USER_COLS} FROM users WHERE id = (SELECT user_id FROM sessions WHERE token_hash = ? AND expires_at > ?)`),
     deleteSession: db.prepare("DELETE FROM sessions WHERE token_hash = ?"),
     deleteSessionsOf: db.prepare("DELETE FROM sessions WHERE user_id = ?"),
+    liveSession: db.prepare("SELECT 1 FROM sessions WHERE user_id = ? AND expires_at > ? LIMIT 1"),
     pruneSessions: db.prepare("DELETE FROM sessions WHERE expires_at <= ?"),
     insertFlow: db.prepare("INSERT INTO auth_flows (state_hash, code_verifier, nonce, return_to, expires_at) VALUES (?, ?, ?, ?, ?)"),
     flow: db.prepare("SELECT code_verifier, nonce, return_to, expires_at FROM auth_flows WHERE state_hash = ?"),
@@ -291,6 +327,8 @@ export function createRepo(db: Db) {
     visits: db.prepare("SELECT * FROM visits ORDER BY date DESC, user_id"),
     matches: db.prepare("SELECT * FROM matches ORDER BY user_id, other_user_id"),
     reactions: db.prepare("SELECT * FROM reactions ORDER BY updated_at"),
+    push: db.prepare("SELECT * FROM push_subscriptions ORDER BY id"),
+    greetings: db.prepare("SELECT * FROM greetings ORDER BY created_at"),
     feedback: db.prepare("SELECT * FROM feedback ORDER BY id DESC"),
     accessDaily: db.prepare("SELECT * FROM access_daily ORDER BY date DESC, hits DESC"),
     accessRoutes: db.prepare("SELECT * FROM access_routes ORDER BY date DESC, hits DESC"),
@@ -368,6 +406,8 @@ export function createRepo(db: Db) {
     },
     deleteSession: (token: string) => void q.deleteSession.run(hashToken(token)),
     deleteSessionsOf: (userId: number) => void q.deleteSessionsOf.run(userId),
+    /** どこかの端末でログインしたままか（期限の切れていないセッションがあるか） */
+    hasLiveSession: (userId: number) => Boolean(q.liveSession.get(userId, new Date().toISOString())),
     createFlow(state: string, verifier: string, nonce: string, returnTo: string): void {
       q.pruneFlows.run(new Date().toISOString());
       q.insertFlow.run(hashToken(state), verifier, nonce, returnTo, new Date(Date.now() + 10 * 60000).toISOString());
@@ -384,6 +424,39 @@ export function createRepo(db: Db) {
     },
     updateAvatar: (id: number, avatar: string | null) =>
       void q.updateAvatar.run(avatar, avatar ? "custom" : "disabled", id),
+    updateColor: (id: number, color: string | null) => void q.updateColor.run(color, id),
+
+    // ── プッシュ通知の宛先（ブラウザ・端末ごとに1行） ──────────────
+    listPush: (userId: number) => many<PushSubscriptionRow>(q.pushOf.all(userId)),
+    /** 同じ宛先を別の人が登録し直したら（同じ端末で別アカウント）、その人に付け替える。1人 max 件まで */
+    savePush(userId: number, endpoint: string, p256dh: string, auth: string, max: number): void {
+      q.upsertPush.run(userId, endpoint, p256dh, auth, new Date().toISOString());
+      q.trimPush.run(userId, userId, max);
+    },
+    deletePush: (userId: number, endpoint: string) => void q.deletePush.run(endpoint, userId),
+    /** 通知サーバーに「もう無い」と言われた宛先を消す */
+    forgetPush: (endpoint: string) => void q.deletePushByEndpoint.run(endpoint),
+    deletePushOf: (userId: number) => void q.deletePushOf.run(userId),
+
+    // ── YO！（送り手→受け手で1行。送り直すと時刻だけ新しくなる） ──────
+    lastGreeting: (from: number, to: number) =>
+      one<{ created_at: string }>(q.greeting.get(from, to))?.created_at ?? null,
+    saveGreeting: (from: number, to: number) => void q.upsertGreeting.run(from, to, new Date().toISOString()),
+    /** since より新しいものを返し、古いものは消す */
+    greetingsTo(to: number, since: string): Array<{ from_id: number; created_at: string }> {
+      q.pruneGreetingsTo.run(to, since);
+      return many<{ from_id: number; created_at: string }>(q.greetingsTo.all(to, since));
+    },
+    /** 見た印をつける（行は消さない。30分以内の送り直しを知らせないため） */
+    clearGreetingsTo: (to: number) => void q.clearGreetingsTo.run(new Date().toISOString(), to),
+
+    /** 一度作ったら変えない値（通知の鍵）。無ければ make で作って保存する */
+    secret(name: string, make: () => string): string {
+      const row = one<{ value: string }>(q.secret.get(name));
+      if (row) return row.value;
+      q.insertSecret.run(name, make());
+      return (one<{ value: string }>(q.secret.get(name)) as { value: string }).value;
+    },
     setGoogleNameIfUnset: (id: number, name: string) => void q.setGoogleName.run(name, id),
     setGoogleAvatarIfUnset: (id: number, avatar: string) => void q.setGoogleAvatar.run(avatar, id),
 
@@ -600,7 +673,7 @@ export function createRepo(db: Db) {
     dump(full = false): DbTable[] {
       const uCols = [
         "id", "user_id", "display_name", ...(full ? ["email"] : []), "avatar", "avatar_source", "hidden",
-        "discoverable", "onboarding_completed_at", "created_at",
+        "discoverable", "slime_color", "onboarding_completed_at", "created_at",
       ];
       const mCols = ["id", "user_id", "mac", "label", "registered_at"];
       const fCols = ["id", "user_low", "user_high", "status", "requested_by", "request_id",
@@ -647,6 +720,20 @@ export function createRepo(db: Db) {
           note: "スライムを連打したリアクションの、まだ届いていない分。受け手の画面に送り手のスライムが出たら消える。",
           columns: ["from_id", "to_id", "count", "updated_at"],
           rows: rows(dumpQ.reactions, ["from_id", "to_id", "count", "updated_at"]),
+        },
+        {
+          name: "push_subscriptions",
+          note: "プッシュ通知の宛先（端末ごと）。宛先は通知サーバーの名前だけ出し、暗号化の鍵は出さない。",
+          columns: ["id", "user_id", "endpoint", "created_at"],
+          rows: (dumpQ.push.all() as Record<string, unknown>[]).map((r) => cells({
+            ...r, endpoint: (() => { try { return `${new URL(String(r.endpoint)).host}/…`; } catch { return "…"; } })(),
+          }, ["id", "user_id", "endpoint", "created_at"])),
+        },
+        {
+          name: "greetings",
+          note: "「YO！」。送り手→受け手で1行。受け手が見たら seen_at が入って出なくなる。3時間たったものは出さず、次に受け手が開いたときに消える。",
+          columns: ["from_id", "to_id", "created_at", "seen_at"],
+          rows: rows(dumpQ.greetings, ["from_id", "to_id", "created_at", "seen_at"]),
         },
         {
           name: "visits",

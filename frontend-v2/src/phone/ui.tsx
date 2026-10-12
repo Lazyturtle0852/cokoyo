@@ -39,6 +39,7 @@ export const Icon = {
   Chevron: () => <Svg size={16} strokeWidth={2}><path d="M9 6l6 6-6 6" /></Svg>,
   Back: () => <Svg size={18} strokeWidth={2.2}><path d="M15 6l-6 6 6 6" /></Svg>,
   Plus: () => <Svg size={18} strokeWidth={2.2}><path d="M12 5v14M5 12h14" /></Svg>,
+  Greet: () => <Svg size={15} strokeWidth={2.1}><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.1A8 8 0 1 1 20 12z" /><path d="M9 11h.01M12 11h.01M15 11h.01" /></Svg>,
   Wifi: () => (
     <Svg size={18}><path d="M2 8.8a15 15 0 0 1 20 0" /><path d="M5.5 12.4a10 10 0 0 1 13 0" /><path d="M9 16a5 5 0 0 1 6 0" /><circle cx="12" cy="19.2" r=".9" fill="currentColor" /></Svg>
   ),

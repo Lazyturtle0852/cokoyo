@@ -25,7 +25,8 @@ CREATE TABLE users (
   hidden INTEGER NOT NULL DEFAULT 0,
   discoverable INTEGER NOT NULL DEFAULT 1,   -- 「知り合いかも」に自分を出してよいか
   onboarding_completed_at TEXT,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  slime_color TEXT                           -- 本人が選んだスライムの色（SLIME_COLORS の鍵）。NULL は未選択
 );
 CREATE TABLE mac_addresses (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -140,7 +141,27 @@ CREATE TABLE ops_events (
   message TEXT
 );
 CREATE INDEX idx_ops_events_at ON ops_events(at);
-PRAGMA user_version = 6;
+CREATE TABLE push_subscriptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL UNIQUE,     -- ブラウザの通知の宛先（Apple・Google などの通知サーバーのURL）
+  p256dh TEXT NOT NULL,              -- 通知の中身を暗号化する鍵（ブラウザが作る）
+  auth TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX idx_push_user ON push_subscriptions(user_id);
+CREATE TABLE app_secrets (
+  name TEXT PRIMARY KEY,             -- vapid_public / vapid_private（通知を送るための鍵。初回に作る）
+  value TEXT NOT NULL
+);
+CREATE TABLE greetings (
+  from_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  to_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,          -- 「YO！」を押した時刻。30分以内の送り直しの判定にも使う
+  seen_at TEXT,                      -- 受け手が見た時刻。見たものは出さない（行は残して送り直しの判定に使う）
+  PRIMARY KEY (from_id, to_id)
+);
+PRAGMA user_version = 7;
 `;
 
 /**
@@ -198,9 +219,33 @@ const MIGRATIONS: Record<number, string> = {
     CREATE INDEX idx_ops_events_at ON ops_events(at);
     PRAGMA user_version = 6;
   `,
+  6: `
+    ALTER TABLE users ADD COLUMN slime_color TEXT;
+    CREATE TABLE push_subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      endpoint TEXT NOT NULL UNIQUE,     -- ブラウザの通知の宛先（Apple・Google などの通知サーバーのURL）
+      p256dh TEXT NOT NULL,              -- 通知の中身を暗号化する鍵（ブラウザが作る）
+      auth TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX idx_push_user ON push_subscriptions(user_id);
+    CREATE TABLE app_secrets (
+      name TEXT PRIMARY KEY,             -- vapid_public / vapid_private（通知を送るための鍵。初回に作る）
+      value TEXT NOT NULL
+    );
+    CREATE TABLE greetings (
+      from_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      to_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL,          -- 「YO！」を押した時刻。30分以内の送り直しの判定にも使う
+      seen_at TEXT,                      -- 受け手が見た時刻。見たものは出さない（行は残して送り直しの判定に使う）
+      PRIMARY KEY (from_id, to_id)
+    );
+    PRAGMA user_version = 7;
+  `,
 };
 
-const LATEST = 6;
+const LATEST = 7;
 
 export function openDb(path: string): Db {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });

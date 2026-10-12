@@ -12,7 +12,7 @@
 
 import { useState } from 'react';
 import { useApp } from '../app/AppContext';
-import { colorOf, SELF_COLOR, shade, slimeSvg } from '../field/campusField';
+import { colorOf, selfColor, shade, slimeSvg } from '../field/campusField';
 import { MAP_BUILDINGS, MAP_H, MAP_SCENE, MAP_W, type MapBuilding } from '../field/campusMap';
 import { Avatar, Icon, when } from './ui';
 
@@ -45,7 +45,7 @@ export function CampusMap() {
   };
 
   if (lc?.me.presence === 'present' && lc.me.buildingKey) {
-    put(lc.me.buildingKey, { id: SELF_ID, name: 'あなた', color: SELF_COLOR, self: true, best: true });
+    put(lc.me.buildingKey, { id: SELF_ID, name: 'あなた', color: selfColor(), self: true, best: true });
   }
   const somewhere: Pin[] = [];
   for (const f of lc?.friends ?? []) {
@@ -62,7 +62,7 @@ export function CampusMap() {
   }
   // 自分が在校していて、建物までは分からないとき
   if (lc?.me.presence === 'present' && !lc.me.buildingKey) {
-    somewhere.unshift({ id: SELF_ID, name: 'あなた', color: SELF_COLOR, self: true, best: true });
+    somewhere.unshift({ id: SELF_ID, name: 'あなた', color: selfColor(), self: true, best: true });
   }
 
   const here = picked ? (byBuilding.get(picked) ?? []) : [];
@@ -179,7 +179,7 @@ export function CampusMap() {
 function SelfOrAvatar({ pin }: { pin: Pin }) {
   if (!pin.self) return <Avatar userId={pin.id} name={pin.name} on />;
   return (
-    <div className="av on" style={{ background: shade(SELF_COLOR, 0.72), color: shade(SELF_COLOR, -0.5) }}>
+    <div className="av on" style={{ background: shade(selfColor(), 0.72), color: shade(selfColor(), -0.5) }}>
       <span className="ring" />あ
     </div>
   );

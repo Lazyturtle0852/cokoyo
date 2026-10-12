@@ -11,7 +11,27 @@ export interface UserRef {
    * 128px四方の JPEG に縮めてから送る決まりで、だいたい 10〜30KB。
    */
   avatar?: string;
+  /** 本人が選んだスライムの色。選んでいない人は入らない（画面が名前から色を決める） */
+  color?: SlimeColor;
 }
+
+/**
+ * 選べるスライムの色。鍵を保存し、画面は値（16進）で塗る。
+ * orange は、色を選んでいない人が自分の画面で見る自分の色と同じ。
+ */
+export const SLIME_COLORS = {
+  orange: '#FF8A3D',
+  sky: '#5CD2E6',
+  green: '#6CD47A',
+  red: '#F26B5E',
+  purple: '#C6A0F2',
+  yellow: '#FFD15A',
+  pink: '#FF9CC6',
+  mint: '#4FC3A1',
+  blue: '#7FA6FF',
+} as const;
+
+export type SlimeColor = keyof typeof SLIME_COLORS;
 
 export interface Me extends UserRef {
   email: string;
@@ -141,6 +161,41 @@ export interface BlockResponse {
 export interface FeedbackResponse {
   /** その日あと何回送れるか */
   remaining: number;
+}
+
+/**
+ * 「YO！」：キャンパスにいるフレンドに「わたしもキャンパスにいるよ」と知らせる。
+ * POST /v1/friends/:userId/greet の返事。already は、少し前に同じ相手に送ったので今回は知らせていない。
+ */
+export interface GreetResponse {
+  userId: string;
+  status: 'sent' | 'already';
+}
+
+/** 届いている YO！。新しい順 */
+export interface Greeting {
+  /** YO！してきたフレンド */
+  userId: string;
+  at: string;
+}
+
+/** GET /v1/greetings */
+export interface GreetingsResponse {
+  greetings: Greeting[];
+}
+
+/**
+ * GET /v1/push/key。プッシュ通知の購読に使う公開鍵（VAPID、base64url）。
+ * null ならこのサーバーでは通知を使えない。
+ */
+export interface PushKeyResponse {
+  publicKey: string | null;
+}
+
+/** POST /v1/push/subscriptions で送る、ブラウザの PushSubscription.toJSON() の形 */
+export interface PushSubscriptionBody {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
 }
 
 export interface ApiErrorBody {

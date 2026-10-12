@@ -6,7 +6,7 @@
 //
 // 文言の「フレンド」は、アプリのフレンド機能と同じ言い方にそろえている（「友達」とは書かない）。
 
-import { COLORS, SELF_COLOR, slimeSvg } from '../field/campusField';
+import { COLORS, selfColor, slimeSvg } from '../field/campusField';
 
 export const INSTAGRAM_URL = 'https://www.instagram.com/cokoyo.sfc/';
 
@@ -23,7 +23,7 @@ export function InstagramCard() {
     <div className="ig-card">
       <div className="ig-slimes" aria-hidden="true">
         <span dangerouslySetInnerHTML={{ __html: slimeSvg(COLORS[5]) }} />
-        <span className="ig-me" dangerouslySetInnerHTML={{ __html: slimeSvg(SELF_COLOR) }} />
+        <span className="ig-me" dangerouslySetInnerHTML={{ __html: slimeSvg(selfColor()) }} />
         <span dangerouslySetInnerHTML={{ __html: slimeSvg(COLORS[0]) }} />
       </div>
       <p className="ig-kicker">公式インスタ @cokoyo.sfc</p>

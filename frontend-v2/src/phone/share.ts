@@ -15,7 +15,7 @@
 //   ・申請は本人が承認するまでフレンドにならない
 // 本人は、インスタの「リンク」スタンプに招待リンクを貼ることもできる（画像を渡すときにコピーしておく）。
 
-import { COLORS, SELF_COLOR, shade, SLIME } from '../field/campusField';
+import { COLORS, selfColor, shade, SLIME } from '../field/campusField';
 
 /** ストーリーズの大きさ。インスタグラムは 9:16 */
 const W = 1080;
@@ -174,7 +174,7 @@ export function drawStory(qr: HTMLCanvasElement, displayName: string, host: stri
   ctx.ellipse(W / 2, fieldY, 376, 86, 0, 0, Math.PI * 2);
   ctx.fill();
   drawSlime(ctx, W / 2 - 210, fieldY + 22, 7, COLORS[0]);
-  drawSlime(ctx, W / 2, fieldY + 52, 9, SELF_COLOR);
+  drawSlime(ctx, W / 2, fieldY + 52, 9, selfColor());
   drawSlime(ctx, W / 2 + 205, fieldY + 18, 7, COLORS[3]);
 
   // フレンド申請用のQRコード（白い下じきの上に置く）。見出しが2行のときは少し小さくして、下の文と重ならないようにする
@@ -236,3 +236,4 @@ export async function shareStory(canvas: HTMLCanvasElement, link: string): Promi
   setTimeout(() => URL.revokeObjectURL(url), 5000);
   return '画像を保存しました。ストーリーズに貼ってください（招待リンクもコピーしました）';
 }
+

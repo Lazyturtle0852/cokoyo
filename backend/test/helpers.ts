@@ -2,6 +2,7 @@ import { createAdminAuth } from "../src/admin.js";
 import { createApp } from "../src/app.js";
 import { openDb } from "../src/db.js";
 import type { DtcClient, Lookup } from "../src/dtc.js";
+import type { PushMessage, PushSender } from "../src/push.js";
 import { createRepo } from "../src/repo.js";
 import { newSecret } from "../src/auth.js";
 
@@ -26,10 +27,18 @@ export class StubDtc implements DtcClient {
   }
 }
 
+/** 通知を送ったことにして、送った中身を覚えておく。 */
+export class StubPush implements PushSender {
+  readonly sent: Array<{ userId: number; message: PushMessage }> = [];
+  publicKey() { return "test-public-key"; }
+  async send(userId: number, message: PushMessage) { this.sent.push({ userId, message }); }
+}
+
 export function createHarness() {
   const dtc = new StubDtc();
+  const push = new StubPush();
   const repo = createRepo(openDb(":memory:"));
-  const app = createApp(repo, dtc, null, createAdminAuth(ADMIN_PASSWORD));
+  const app = createApp(repo, dtc, null, createAdminAuth(ADMIN_PASSWORD), push);
 
   const call = async (
     path: string,
@@ -69,11 +78,12 @@ export function createHarness() {
         call(p, { method: "POST", token: me.sessionToken, body: body ? JSON.stringify(body) : undefined }),
       patch: (p: string, body: unknown) =>
         call(p, { method: "PATCH", token: me.sessionToken, body: JSON.stringify(body) }),
-      del: (p: string) => call(p, { method: "DELETE", token: me.sessionToken }),
+      del: (p: string, body?: unknown) =>
+        call(p, { method: "DELETE", token: me.sessionToken, body: body ? JSON.stringify(body) : undefined }),
     };
   };
 
-  return { app, repo, dtc, call, json, signUp, adminLogin };
+  return { app, repo, dtc, push, call, json, signUp, adminLogin };
 }
 
 export const ADMIN_PASSWORD = "test-admin-password";
