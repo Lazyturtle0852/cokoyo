@@ -51,9 +51,14 @@ self.addEventListener('fetch', (e) => {
   if (url.origin !== self.location.origin) return;       // フォントなどは触らない
   if (url.pathname.startsWith('/api/')) return;          // 在校やポイントは必ず本物を取りに行く
 
+  // 名前に中身の印（ハッシュ）が付いた assets/ 以外は、ブラウザの控え（HTTPキャッシュ）を使わず、
+  // 毎回サーバーに新しいか確かめる。index.html を控えから出すと、更新したあとも古い画面のまま
+  // 何時間も開いてしまう（2026-10-12、YO！とスライムの色が出なかった）。
+  const hashed = url.pathname.includes('/assets/');
+
   e.respondWith((async () => {
     try {
-      const res = await fetch(req);
+      const res = await fetch(req, hashed ? undefined : { cache: 'no-cache' });
       if (res.ok) {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(req, copy));
