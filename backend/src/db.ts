@@ -161,7 +161,12 @@ CREATE TABLE greetings (
   seen_at TEXT,                      -- 受け手が見た時刻。見たものは出さない（行は残して送り直しの判定に使う）
   PRIMARY KEY (from_id, to_id)
 );
-PRAGMA user_version = 7;
+CREATE TABLE arrival_notices (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,                -- JST の YYYY-MM-DD。「キャンパスに着いた」の通知は1日1回まで
+  PRIMARY KEY (user_id, date)
+);
+PRAGMA user_version = 8;
 `;
 
 /**
@@ -243,9 +248,17 @@ const MIGRATIONS: Record<number, string> = {
     );
     PRAGMA user_version = 7;
   `,
+  7: `
+    CREATE TABLE arrival_notices (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      date TEXT NOT NULL,                -- JST の YYYY-MM-DD。「キャンパスに着いた」の通知は1日1回まで
+      PRIMARY KEY (user_id, date)
+    );
+    PRAGMA user_version = 8;
+  `,
 };
 
-const LATEST = 7;
+const LATEST = 8;
 
 export function openDb(path: string): Db {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });

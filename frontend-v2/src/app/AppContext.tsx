@@ -7,6 +7,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { api, ApiError, callLog } from '../api/client';
 import type { CheckResponse, FriendsResponse, Greeting, InviteResponse, Me, PointsResponse } from '../api/types';
 import { createCampusField, setSlimeColors, type CampusField } from '../field/campusField';
+import { isArrivalUrl, takeArrivalFromUrl } from './arrival';
 import { clearPendingInvite, pendingInvite, takeInviteFromUrl } from './invite';
 import { resyncPush } from './push';
 import { isToday } from '../phone/ui';
@@ -44,6 +45,8 @@ interface AppState {
   invite: { shareKey: string; user: InviteResponse['user']; incoming: boolean } | null;
   /** フレンドから届いている「YO！」（新しい順）。空でなければ在校確認をすすめる */
   greetings: Greeting[];
+  /** 「キャンパスに着きましたね」の通知から開かれた（在校確認をすすめる） */
+  arrival: boolean;
 }
 
 interface AppActions {
@@ -71,6 +74,11 @@ interface AppActions {
   /** YO！してきたフレンドにこたえて、在校確認する（届いた YO！は見た扱いになる） */
   answerGreeting(): Promise<void>;
   dismissGreeting(): void;
+  /** 着いたという通知にこたえて、在校確認する */
+  answerArrival(): Promise<void>;
+  dismissArrival(): void;
+  /** デモ操作から、通知を押して開いたことにする */
+  openArrival(): void;
 
   // 登録
   completeRegistration(): Promise<void>;
@@ -137,6 +145,8 @@ const names = (list: string[]) => (list.length > 2 ? `${list.slice(0, 2).join('�
 
 // 招待リンクで開かれたなら、URLからキーを預かる（表示の前に一度だけ）
 takeInviteFromUrl();
+// 「キャンパスに着きましたね」の通知から開かれたなら、在校確認をすすめる
+const arrivedAtStart = takeArrivalFromUrl();
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [view, setView] = useState<View>('loading');
@@ -154,6 +164,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [displayTotal, setDisplayTotal] = useState<number | null>(null);
   const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
   const [greetings, setGreetings] = useState<Greeting[]>([]);
+  const [arrival, setArrival] = useState(arrivedAtStart);
 
   const busy = useRef(false);
   const fieldRef = useRef<CampusField | null>(null);
@@ -386,6 +397,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await check();
   }, [check, dismissGreeting]);
 
+  const dismissArrival = useCallback(() => setArrival(false), []);
+  const openArrival = useCallback(() => setArrival(true), []);
+  const answerArrival = useCallback(async () => {
+    setArrival(false);
+    setMapOpen(false);
+    setTabState('home');
+    await check();
+  }, [check]);
+
+  // 開いているときに通知が押されると、サービスワーカーが行き先を渡してくる（public/sw.js）
+  useEffect(() => {
+    const sw = navigator.serviceWorker;
+    if (!sw) return;
+    const onMessage = (e: MessageEvent) => {
+      const data = e.data as { type?: string; url?: string } | null;
+      if (data?.type === 'notification-click' && typeof data.url === 'string' && isArrivalUrl(data.url)) setArrival(true);
+    };
+    sw.addEventListener('message', onMessage);
+    return () => sw.removeEventListener('message', onMessage);
+  }, []);
+
   const toggleHide = useCallback(async () => {
     if (!me) return;
     await run('かくれんぼを切り替え', async () => {
@@ -465,7 +497,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [view, restart]);
 
   const value = useMemo<Ctx>(() => ({
-    view, initialDisplayName, error, tab, me, friends, points, lastCheck, presenceDiff, checking, sheet, mapOpen, displayTotal, toast, invite, greetings,
+    view, initialDisplayName, error, tab, me, friends, points, lastCheck, presenceDiff, checking, sheet, mapOpen, displayTotal, toast, invite, greetings, arrival,
     field, counter, screenRef,
     // タブを移ると地図は閉じる
     setTab: (t) => { setMapOpen(false); setTabState(t); },
@@ -484,6 +516,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dismissInvite,
     answerGreeting,
     dismissGreeting,
+    answerArrival,
+    dismissArrival,
+    openArrival,
     completeRegistration: async () => { await loadAll(); },
     finishOnboarding: (t) => {
       setView('app');
@@ -494,8 +529,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refresh,
     restart,
     restartFromOnboarding: () => { void api.logout().finally(() => { setTabState('home'); goLogin(); }); },
-  }), [view, initialDisplayName, error, tab, me, friends, points, lastCheck, presenceDiff, checking, sheet, mapOpen, displayTotal, toast, invite, greetings,
-    field, showToast, run, check, toggleHide, reloadFriends, acceptInvite, dismissInvite, answerGreeting, dismissGreeting, loadAll, refresh, restart, goLogin]);
+  }), [view, initialDisplayName, error, tab, me, friends, points, lastCheck, presenceDiff, checking, sheet, mapOpen, displayTotal, toast, invite, greetings, arrival,
+    field, showToast, run, check, toggleHide, reloadFriends, acceptInvite, dismissInvite, answerGreeting, dismissGreeting, answerArrival, dismissArrival, openArrival, loadAll, refresh, restart, goLogin]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

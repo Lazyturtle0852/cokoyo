@@ -113,6 +113,15 @@ export function DemoPanel() {
         ))}
       </div>
 
+      <p className="plabel">通知（本物では、サーバーが端末に送る）</p>
+      <div className="row">
+        <button className="ghost" onClick={() => {
+          if (uid) sim.setCampus(uid, { connected: true });
+          rerender();
+          app.openArrival();
+        }}>キャンパスに着いた通知を押して開く</button>
+      </div>
+
       <p className="plabel">天気（雨の日ボーナス用）</p>
       <div className="row">
         <div className="pill-seg">
