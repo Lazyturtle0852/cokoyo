@@ -386,6 +386,14 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
     return c.body(null, 204);
   });
 
+  /** 退会。初回登録の途中でも消せる。消したあとは同じ Google アカウントでも新規登録になる */
+  app.delete("/v1/me", (c) => {
+    const user = requireUser(c, repo, false);
+    repo.deleteUser(user.id);
+    deleteCookie(c, sessionCookie, cookieOptions);
+    return c.body(null, 204);
+  });
+
   app.post("/v1/onboarding", async (c) => {
     const user = requireUser(c, repo, false);
     if (user.onboarding_completed_at) fail(409, "already_onboarded", "初回登録は完了しています");

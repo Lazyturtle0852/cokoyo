@@ -248,6 +248,21 @@ function updateAvatar(uid: string, body: Body): MockResult {
   return ok(meView(uid));
 }
 
+/** 退会。本人と、本人が出てくる関係をすべて消す（本物は ON DELETE CASCADE で同じことをする） */
+function deleteAccount(uid: string): MockResult {
+  const other = (x: { a: string; b: string }) => x.a !== uid && x.b !== uid;
+  db.friendships = db.friendships.filter(other);
+  db.best = db.best.filter(other);
+  db.friendRequests = db.friendRequests.filter((x) => x.from !== uid && x.to !== uid);
+  db.bestRequests = db.bestRequests.filter((x) => x.from !== uid && x.to !== uid);
+  db.blocks = db.blocks.filter((x) => x.by !== uid && x.target !== uid);
+  db.reactions = db.reactions.filter((x) => x.from !== uid && x.to !== uid);
+  db.greetings = db.greetings?.filter((x) => x.from !== uid && x.to !== uid);
+  delete db.users[uid]; delete db.campus[uid]; delete db.points[uid];
+  setSession(null);
+  return { status: 204, json: null };
+}
+
 function completeOnboarding(uid: string, body: Body): MockResult {
   const name = String(body.displayName ?? '').trim();
   const label = String(body.label ?? '').trim();
@@ -592,6 +607,7 @@ function route(method: string, path: string, _headers: Record<string, string>, b
   if (!uid || !db.users[uid]) return E(401, 'unauthorized', 'Googleでログインしてください');
   if (method === 'GET' && path === '/v1/auth/session') return ok({ displayName: db.users[uid].name, email: db.users[uid].email ?? 'demo@keio.jp', status: db.users[uid].onboarded === false ? 'onboarding' : 'ready' });
   if (method === 'POST' && path === '/v1/auth/logout-all') { setSession(null); return { status: 204, json: null }; }
+  if (method === 'DELETE' && path === '/v1/me') return deleteAccount(uid);
   if (method === 'POST' && path === '/v1/onboarding') return completeOnboarding(uid, body);
   if (db.users[uid].onboarded === false) return E(403, 'onboarding_required', '初回登録を完了してください');
 
@@ -666,7 +682,18 @@ export interface SimPerson extends Campus {
 const sim = {
   signedIn() { return !!sessionUid; },
   currentUserId() { return sessionUid; },
-  login() { setSession('u_me'); },
+  login() {
+    // 退会したあとにログインし直したら、Google ログイン直後と同じく初回登録から始める
+    if (!db.users.u_me) {
+      const now = new Date().toISOString();
+      db.users.u_me = { name: 'ゆうき', mac: '', shareKey: '', hidden: false, avatar: DEMO_GOOGLE_AVATAR, avatarSource: 'google',
+        macRegisteredAt: now, createdAt: now, email: 'demo@keio.jp', macs: [], onboarded: false };
+      db.campus.u_me = { connected: false, buildingKey: 'kappa' };
+      db.points.u_me = { total: 0, visitDays: [], lastMatch: {}, days: {} };
+      save();
+    }
+    setSession('u_me');
+  },
   macStates(uid: string) { return macsOf(uid).map((entry) => ({ ...entry, ...macCampus(uid, entry.id) })); },
   setMacCampus(uid: string, id: number, patch: Partial<Campus>) {
     db.macCampus ??= {};
