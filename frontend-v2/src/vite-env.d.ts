@@ -12,3 +12,6 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+/** ビルドごとの印（vite.config.ts の define） */
+declare const __BUILD_ID__: string;
