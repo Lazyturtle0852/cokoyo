@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import { useApp } from '../app/AppContext';
 
-const KEY = 'cokoyo-news:2026-10-greet:v2';
+const KEY = 'cokoyo-news:2026-10-arrival:v1';
 const readSeen = () => { try { return localStorage.getItem(KEY) === '1'; } catch { return false; } };
 
 export function NewsCard() {
@@ -22,6 +22,7 @@ export function NewsCard() {
       <ul className="news-list">
         <li>あなたもフレンドもキャンパスにいるときは、フレンドの横の「YO！」で、あなたもキャンパスにいることをそのフレンドに知らせられます。</li>
         <li>設定で、スライムの色を選べます。YO！の通知もオンにできます。</li>
+        <li>通知をオンにしていると、キャンパスに着いてまだポイントを獲得していない日に、1日1回お知らせします。そのため、オンのあいだは登録した端末がキャンパスのWiFiに見えるかを数分おきに確かめます（8〜19時）。</li>
       </ul>
       <div className="inline-actions">
         <button className="mini-btn primary" onClick={close}>OK</button>

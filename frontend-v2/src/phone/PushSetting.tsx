@@ -1,4 +1,4 @@
-// 設定の「通知」：YO！が届いたら、この端末に知らせる
+// 設定の「通知」：YO！が届いたとき・キャンパスに着いたときに、この端末に知らせる
 
 import { useEffect, useState } from 'react';
 import { useApp } from '../app/AppContext';
@@ -47,10 +47,12 @@ export function PushSetting() {
     <div className="card">
       <div className="kv">
         <div>
-          <div className="k">YO！されたら知らせる</div>
+          <div className="k">この端末に通知する</div>
           <div className="row-note">
-            フレンドがあなたにYO！したら、この端末に通知します。
-            同じ人からは30分に1回までです。通知にはフレンドの表示名が出るので、ロック画面で周りの人にも見えることがあります。
+            フレンドがあなたにYO！したとき（同じ人からは30分に1回まで）と、
+            キャンパスに着いてまだポイントを獲得していないとき（1日1回、8〜19時）に通知します。
+            着いたかどうかは、オンにしているあいだだけ、登録した端末がキャンパスのWiFiに見えるかを数分おきに確かめます。
+            通知にはフレンドの表示名が出るので、ロック画面で周りの人にも見えることがあります。
           </div>
         </div>
         {support === 'ok' && (

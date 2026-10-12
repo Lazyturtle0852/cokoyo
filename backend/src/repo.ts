@@ -119,6 +119,18 @@ export function createRepo(db: Db) {
     greetingsTo: db.prepare("SELECT from_id, created_at FROM greetings WHERE to_id = ? AND created_at > ? AND seen_at IS NULL ORDER BY created_at DESC"),
     pruneGreetingsTo: db.prepare("DELETE FROM greetings WHERE to_id = ? AND created_at <= ?"),
     clearGreetingsTo: db.prepare("UPDATE greetings SET seen_at = ? WHERE to_id = ? AND seen_at IS NULL"),
+    arrivalCandidates: db.prepare(
+      `SELECT u.id FROM users u
+       WHERE u.onboarding_completed_at IS NOT NULL
+         AND EXISTS (SELECT 1 FROM push_subscriptions p WHERE p.user_id = u.id)
+         AND EXISTS (SELECT 1 FROM mac_addresses m WHERE m.user_id = u.id)
+         AND EXISTS (SELECT 1 FROM sessions s WHERE s.user_id = u.id AND s.expires_at > ?)
+         AND NOT EXISTS (SELECT 1 FROM visits v WHERE v.user_id = u.id AND v.date = ?)
+         AND NOT EXISTS (SELECT 1 FROM arrival_notices a WHERE a.user_id = u.id AND a.date = ?)
+       ORDER BY u.id`,
+    ),
+    insertArrival: db.prepare("INSERT OR IGNORE INTO arrival_notices (user_id, date) VALUES (?, ?)"),
+    pruneArrivals: db.prepare("DELETE FROM arrival_notices WHERE date < ?"),
     secret: db.prepare("SELECT value FROM app_secrets WHERE name = ?"),
     insertSecret: db.prepare("INSERT OR IGNORE INTO app_secrets (name, value) VALUES (?, ?)"),
     setGoogleName: db.prepare("UPDATE users SET display_name = ? WHERE id = ? AND display_name IS NULL AND onboarding_completed_at IS NULL"),
@@ -447,6 +459,17 @@ export function createRepo(db: Db) {
       q.pruneGreetingsTo.run(to, since);
       return many<{ from_id: number; created_at: string }>(q.greetingsTo.all(to, since));
     },
+    // ── キャンパスに着いた通知（1人1日1回） ───────────────────────
+    /**
+     * 着いたかを見に行く人。通知をオンにしていて、端末を登録していて、どこかでログインしていて、
+     * 今日まだ在校確認でポイントを得ておらず、今日まだ知らせていない人だけ
+     */
+    arrivalCandidates: (date: string) =>
+      many<{ id: number }>(q.arrivalCandidates.all(new Date().toISOString(), date, date)).map((r) => r.id),
+    /** 今日知らせた印をつける。すでに付いていれば false（二重に送らない） */
+    markArrival: (userId: number, date: string) => Number(q.insertArrival.run(userId, date).changes) > 0,
+    pruneArrivals: (before: string) => void q.pruneArrivals.run(before),
+
     /** 見た印をつける（行は消さない。30分以内の送り直しを知らせないため） */
     clearGreetingsTo: (to: number) => void q.clearGreetingsTo.run(new Date().toISOString(), to),
 

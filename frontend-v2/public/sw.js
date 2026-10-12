@@ -3,7 +3,7 @@
 // ねらいは3つだけ。
 //   1. Android の Chrome に「アプリとして追加できる」と認めてもらう（fetch を見ている必要がある）
 //   2. 電波が切れているときに、前に開けた画面だけでも出す
-//   3. プッシュ通知（YO！された）を出す
+//   3. プッシュ通知（YO！された・キャンパスに着いた）を出す
 //
 // 中身は必ずネットワークを先に見る（network first）。更新をすぐ反映したいので、
 // 表示に使うのは通信できなかったときの控えだけ。APIの返事は控えない。
@@ -19,7 +19,7 @@ self.addEventListener('activate', (e) => {
   })());
 });
 
-// プッシュ通知（YO！された）。中身はバックエンドの src/push.ts の PushMessage
+// プッシュ通知（YO！された・キャンパスに着いた）。中身はバックエンドの src/push.ts の PushMessage
 self.addEventListener('push', (e) => {
   let msg = {};
   try { msg = e.data ? e.data.json() : {}; } catch { /* 読めない中身は既定の文で出す */ }
@@ -31,14 +31,18 @@ self.addEventListener('push', (e) => {
   }));
 });
 
-// 通知を押したら、開いているCOKOYOを前に出す。無ければ開く
+// 通知を押したら、開いているCOKOYOを前に出す。無ければ開く。
+// 開いていたときは読み込み直さず、行き先だけ渡す（src/app/arrival.ts が「着いた」を受け取る）
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
   const url = (e.notification.data && e.notification.data.url) || self.registration.scope;
   e.waitUntil((async () => {
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const open = wins.find((w) => w.url.startsWith(self.registration.scope));
-    if (open) return open.focus();
+    if (open) {
+      open.postMessage({ type: 'notification-click', url });
+      return open.focus();
+    }
     return self.clients.openWindow(url);
   })());
 });

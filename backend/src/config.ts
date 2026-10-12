@@ -20,4 +20,6 @@ export const config = {
   timingFloorMs: num("TIMING_FLOOR_MS", 250),
   /** /admin と /explain に入るパスワード。空なら管理用の入口は閉じる。 */
   adminPassword: process.env.ADMIN_PASSWORD ?? "",
+  /** キャンパスに着いた人へ通知するために、数分おきに大学のAPIを引くか（src/arrival.ts）。0 で止める */
+  arrivalWatch: (process.env.ARRIVAL_WATCH ?? "1") !== "0",
 } as const;

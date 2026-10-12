@@ -14,6 +14,7 @@ import { newSecret, type GoogleProvider } from "./auth.js";
 import type { DtcClient, Lookup } from "./dtc.js";
 import { fail } from "./lib/errors.js";
 import { maskMac, normalizeMac } from "./lib/mac.js";
+import { limiter, lookupUser } from "./lookup.js";
 import { jstDate, sleep } from "./lib/time.js";
 import { awardPoints, isRainy, type VisibleFriend } from "./points.js";
 import type { PushSender } from "./push.js";
@@ -170,30 +171,6 @@ export const REACTION = { MAX: 99, TTL_MS: 3 * 24 * 60 * 60 * 1000 } as const;
  * 送り直しは数十秒のうちに終わるので、メモリに置くだけで足りる（再起動で忘れてよい）。
  */
 const REACTION_SEND_ID_TTL_MS = 10 * 60 * 1000;
-
-function limiter(max: number) {
-  let active = 0;
-  const pending: Array<() => void> = [];
-  return async <T>(work: () => Promise<T>): Promise<T> => {
-    if (active >= max) await new Promise<void>((resolve) => pending.push(resolve));
-    active++;
-    try { return await work(); }
-    finally { active--; pending.shift()?.(); }
-  };
-}
-
-async function lookupUser(repo: Repo, dtc: DtcClient, user: User, limited: ReturnType<typeof limiter>): Promise<Lookup> {
-  const observations = await Promise.all(repo.listMacs(user.id).map((m) => limited(() => dtc.latest(m.mac))));
-  const present = observations.filter((x): x is Extract<Lookup, { status: "present" }> => x.status === "present");
-  if (present.length) {
-    const keys = new Set(present.map((x) => x.buildingKey));
-    const buildingKey = observations.some((x) => x.status === "unavailable") || keys.size !== 1
-      ? undefined : present[0]?.buildingKey;
-    return { status: "present", ...(buildingKey ? { buildingKey } : {}) };
-  }
-  return observations.some((x) => x.status === "unavailable")
-    ? { status: "unavailable" } : { status: "absent" };
-}
 
 const pointsView = (repo: Repo, me: User): PointsResponse => {
   const date = jstDate();

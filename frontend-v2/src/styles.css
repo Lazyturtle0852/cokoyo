@@ -745,6 +745,10 @@ table.admin-users .rel { margin-right: 4px; }
 .invite-card h4 { font-size: 18px; margin: 0 0 8px; }
 .invite-body { font-size: 12.5px; color: var(--ink-2); line-height: 1.65; margin: 0 0 14px; }
 .invite-card .btn { width: 100%; }
+/* キャンパスに着いた通知から開いたとき */
+.arrival-ico { width: 56px; height: 56px; border-radius: 18px; display: flex; align-items: center; justify-content: center;
+  background: var(--brand-tint); color: var(--brand, #EA580C); margin-bottom: 12px; }
+.arrival-ico svg { width: 28px; height: 28px; }
 
 /* 公式インスタへの誘導（フレンドタブ） */
 .ig-card { position: relative; margin-top: 12px; padding: 16px 16px 14px; border-radius: 20px; text-align: center; overflow: hidden;
