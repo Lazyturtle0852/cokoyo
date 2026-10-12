@@ -20,6 +20,7 @@ export function Settings() {
   const [mac, setMac] = useState('');
   const [label, setLabel] = useState('');
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [armedLeave, setArmedLeave] = useState(false);
   if (!me) return null;
 
   const refreshMe = async () => setMe(await api.getMe());
@@ -41,15 +42,17 @@ export function Settings() {
     const ok = await run('端末を削除', async () => { await api.deleteMac(deleteId); await refreshMe(); showToast('端末を削除しました'); });
     if (ok) setDeleteId(null);
   };
-  const logout = async (all: boolean) => {
-    await run(all ? '全端末からログアウト' : 'ログアウト', async () => {
-      // ログアウトした端末には、もう通知を送らない（全端末のときは、ほかの端末の分をサーバーが消す）
+  /** この端末の通知を止めてからサーバーに伝え、端末に残した在校確認の記録も消す */
+  const signOut = async (label: string, call: () => Promise<unknown>) => {
+    await run(label, async () => {
+      // ログアウトした端末には、もう通知を送らない（全端末・退会のときは、ほかの端末の分をサーバーが消す）
       await disablePush();
-      if (all) await api.logoutAll(); else await api.logout();
+      await call();
       try { [localStorage, sessionStorage].forEach((st) => Object.keys(st).filter((key) => key.startsWith('cokoyo-lastcheck:')).forEach((key) => st.removeItem(key))); } catch { /* 保存できない環境 */ }
       await restart();
     });
   };
+  const logout = (all: boolean) => signOut(all ? '全端末からログアウト' : 'ログアウト', all ? api.logoutAll : api.logout);
 
   return <>
     <div className="sec"><h3>プロフィール</h3></div>
@@ -100,6 +103,13 @@ export function Settings() {
       <p className="row-note">ログイン状態は14日間有効です。</p>
       <button className="btn btn-quiet" onClick={() => void logout(false)}>ログアウト</button>
       <button className="btn btn-quiet" onClick={() => void logout(true)}>すべての端末からログアウト</button>
+      {armedLeave ? <div className="confirm" role="alertdialog" aria-label="退会の確認">
+        <p>退会すると、表示名・プロフィール画像・登録した端末の MAC アドレス・フレンド・ポイントがすべて消え、元に戻せません。フレンドの画面からもあなたが消えます。</p>
+        <div className="confirm-actions">
+          <button className="mini-btn danger" onClick={() => void signOut('退会', api.deleteAccount)}>退会する</button>
+          <button className="mini-btn" onClick={() => setArmedLeave(false)}>やめる</button>
+        </div>
+      </div> : <button className="row-btn danger" onClick={() => setArmedLeave(true)}>退会する</button>}
     </div>
 
     <div className="sec"><h3>知り合いかも</h3></div>
