@@ -5,6 +5,8 @@
 // タブを切り替えてもアニメーションが途切れないよう、Reactの外で一度だけ作って使い回す
 // （置き場所は src/phone/FieldView.tsx）。
 
+import { SLIME_COLORS, type SlimeColor } from '../api/types';
+
 export interface FieldFriend {
   userId: string;
   name: string;
@@ -34,6 +36,8 @@ export interface CampusField {
   react(userId: string, count: number): boolean;
   /** 雨を降らせる／止める（スライムも雨を弾く） */
   setRain(raining: boolean): void;
+  /** 選んだ色が変わったら、出ているスライムを塗り直す（setSlimeColors のあとに呼ぶ） */
+  recolor(): void;
   clear(): void;
 }
 
@@ -222,8 +226,26 @@ export function shade(hex: string, amt: number) {
   return `rgb(${mix(n >> 16)},${mix((n >> 8) & 255)},${mix(n & 255)})`;
 }
 
+// 本人が選んだ色（設定の「スライムの色」）。選んでいない人は、自分はオレンジ・フレンドは名前から決める
+const chosen = new Map<string, string>();
+let mine: string | null = null;
+
+/** 自分とフレンドが選んだ色を覚える。変わったら true（そのときは field.recolor() を呼ぶ） */
+export function setSlimeColors(me: { color?: SlimeColor } | null, friends: { userId: string; color?: SlimeColor }[]) {
+  const before = `${mine}|${[...chosen].join(',')}`;
+  mine = me?.color ? SLIME_COLORS[me.color] : null;
+  chosen.clear();
+  for (const f of friends) if (f.color) chosen.set(f.userId, SLIME_COLORS[f.color]);
+  return before !== `${mine}|${[...chosen].join(',')}`;
+}
+
+/** 自分のスライムの色 */
+export const selfColor = () => mine ?? SELF_COLOR;
+
 /** フレンドごとのスライムの色（フレンド一覧のアイコンも同じ色にする） */
 export function colorOf(id: string) {
+  const picked = chosen.get(id);
+  if (picked) return picked;
   let h = 7;
   for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return COLORS[h % COLORS.length];
@@ -537,7 +559,7 @@ export function createCampusField(): CampusField {
         if (mine) leave(mine);
       } else if (!mine || mine.mode === 'leave') {
         if (mine) { mine.node.remove(); slimes.delete(SELF_ID); }
-        spawn(SELF_ID, 'あなた', SELF_COLOR, true, self.ghost);
+        spawn(SELF_ID, 'あなた', selfColor(), true, self.ghost);
         order = 1;
       } else {
         setGhost(self.ghost);
@@ -578,6 +600,15 @@ export function createCampusField(): CampusField {
     onReact(fn) { reactHandler = fn; },
 
     setRain(raining) { el.classList.toggle('raining', raining && !reduceMotion()); },
+
+    recolor() {
+      for (const s of slimes.values()) {
+        const color = s.self ? selfColor() : colorOf(s.id);
+        if (s.mode === 'leave' || color === s.color) continue;
+        s.color = color;
+        drawBody(s);
+      }
+    },
 
     react(userId, count) {
       const s = slimes.get(userId);

@@ -5,9 +5,9 @@ import { routePath } from "hono/route";
 import type {
   AddFriendResponse, AdminLogsResponse, AdminSessionResponse, AdminStatsResponse, BestResponse, BestState, BlockResponse, BuildingKey, CheckResponse,
   DebugDbResponse, FeedbackResponse, InviteResponse, Suggestion, SuggestionsResponse, FriendsResponse, Me, PointItem, PointsResponse, Reaction, ReactionResponse,
-  MacAddressView, UserRef,
+  GreetResponse, GreetingsResponse, MacAddressView, PushKeyResponse, SlimeColor, UserRef,
 } from "../../shared/app-types.js";
-import { BUILDING_LABELS } from "../../shared/app-types.js";
+import { BUILDING_LABELS, SLIME_COLORS } from "../../shared/app-types.js";
 import { config } from "./config.js";
 import type { AdminAuth } from "./admin.js";
 import { newSecret, type GoogleProvider } from "./auth.js";
@@ -16,6 +16,7 @@ import { fail } from "./lib/errors.js";
 import { maskMac, normalizeMac } from "./lib/mac.js";
 import { jstDate, sleep } from "./lib/time.js";
 import { awardPoints, isRainy, type VisibleFriend } from "./points.js";
+import type { PushSender } from "./push.js";
 import { OPS_KEEP, type FriendshipRow, type MacAddress, type OpsInput, type Repo, type User } from "./repo.js";
 
 /** 地図に置く場所。APが建物に紐づいていなければ null。 */
@@ -27,10 +28,48 @@ const buildingLabel = (lookup: Lookup): string | null => {
   return key ? (BUILDING_LABELS[key] ?? null) : null;
 };
 
+const isSlimeColor = (v: unknown): v is SlimeColor => typeof v === "string" && Object.hasOwn(SLIME_COLORS, v);
+
 const toRef = (u: User): UserRef => ({
   userId: u.user_id, displayName: u.display_name ?? "",
   ...(u.avatar ? { avatar: u.avatar } : {}),
+  ...(isSlimeColor(u.slime_color) ? { color: u.slime_color } : {}),
 });
+
+/**
+ * プッシュ通知の宛先として受け付ける通知サーバー。
+ * ブラウザから届いた URL にサーバーから送るので、知らない宛先（学内のサーバーなど）には送らない。
+ */
+const PUSH_HOSTS = [
+  /^fcm\.googleapis\.com$/,                  // Chrome・Android
+  /^(?:[a-z0-9-]+\.)*push\.apple\.com$/,      // iPhone・Mac の Safari
+  /^(?:[a-z0-9-]+\.)*push\.services\.mozilla\.com$/, // Firefox
+  /^(?:[a-z0-9-]+\.)*notify\.windows\.com$/,  // Edge
+];
+const PUSH = {
+  /** 1人が登録できる端末の数。超えたら古いものから消す */
+  MAX_DEVICES: 10,
+} as const;
+
+const GREET = {
+  /** 同じ相手には、この間に1回だけ YO！できる */
+  QUIET_MS: 30 * 60 * 1000,
+  /** 届いた YO！を見せる長さ。これより古いものは、もうキャンパスにいないかもしれないので出さない */
+  SHOW_MS: 3 * 60 * 60 * 1000,
+} as const;
+
+function validPush(body: unknown): { endpoint: string; p256dh: string; auth: string } {
+  const b = body as { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown } } | null;
+  const endpoint = b?.endpoint;
+  let url: URL | null = null;
+  try { url = typeof endpoint === "string" && endpoint.length <= 1024 ? new URL(endpoint) : null; } catch { url = null; }
+  if (!url || url.protocol !== "https:" || !PUSH_HOSTS.some((re) => re.test(url.hostname))) {
+    fail(400, "invalid_push", "通知の宛先が正しくありません");
+  }
+  const key = (v: unknown, max: number) => typeof v === "string" && /^[A-Za-z0-9_-]+=*$/.test(v) && v.length <= max;
+  if (!key(b?.keys?.p256dh, 128) || !key(b?.keys?.auth, 64)) fail(400, "invalid_push", "通知の鍵が正しくありません");
+  return { endpoint: endpoint as string, p256dh: b!.keys!.p256dh as string, auth: b!.keys!.auth as string };
+}
 
 const AVATAR = { MAX_BYTES: 120 * 1024, TYPES: ["image/jpeg", "image/png", "image/webp"] } as const;
 function validAvatar(input: unknown): string {
@@ -230,7 +269,7 @@ function toClientOps(input: unknown, routeOf: (method: string, path: string) => 
 }
 
 /** /v1 の下に生やす。フロントは apiBaseUrl + "/v1/..." で叩く。 */
-export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider | null, admin: AdminAuth) {
+export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider | null, admin: AdminAuth, push: PushSender) {
   const app = new Hono();
 
   const requireAdmin = (c: Parameters<typeof getCookie>[0]) => {
@@ -341,6 +380,8 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
   app.post("/v1/auth/logout-all", (c) => {
     const user = requireUser(c, repo, false);
     repo.deleteSessionsOf(user.id);
+    // ほかの端末にも、もう通知を送らない
+    repo.deletePushOf(user.id);
     deleteCookie(c, sessionCookie, cookieOptions);
     return c.body(null, 204);
   });
@@ -370,7 +411,12 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
       fail(400, "invalid_discoverable", "おすすめの設定が正しくありません");
     }
     const discoverable = body?.discoverable === undefined ? me.discoverable !== 0 : body.discoverable;
+    if (body?.color !== undefined && body.color !== null && !isSlimeColor(body.color)) {
+      fail(400, "invalid_color", "その色は選べません");
+    }
     repo.updateProfile(me.id, displayName, hidden, discoverable);
+    // null は「選ばない」に戻す
+    if (body?.color !== undefined) repo.updateColor(me.id, body.color);
     return c.json(toMe(repo.findById(me.id) as User, repo));
   });
 
@@ -384,6 +430,27 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
     const me = requireUser(c, repo);
     repo.updateAvatar(me.id, null);
     return c.json(toMe(repo.findById(me.id) as User, repo));
+  });
+
+  // ── プッシュ通知 ──────────────────────────────────────────
+  app.get("/v1/push/key", (c) => {
+    requireUser(c, repo);
+    const response: PushKeyResponse = { publicKey: push.publicKey() };
+    return c.json(response);
+  });
+  /** この端末に通知を送ってよい。同じ宛先を何度送っても1行のまま */
+  app.post("/v1/push/subscriptions", async (c) => {
+    const me = requireUser(c, repo);
+    const sub = validPush(await c.req.json().catch(() => null));
+    repo.savePush(me.id, sub.endpoint, sub.p256dh, sub.auth, PUSH.MAX_DEVICES);
+    return c.body(null, 204);
+  });
+  app.delete("/v1/push/subscriptions", async (c) => {
+    const me = requireUser(c, repo);
+    const endpoint = (await c.req.json().catch(() => null))?.endpoint;
+    if (typeof endpoint !== "string") fail(400, "invalid_push", "通知の宛先が正しくありません");
+    repo.deletePush(me.id, endpoint);
+    return c.body(null, 204);
   });
 
   app.get("/v1/me/macs", (c) => {
@@ -766,6 +833,56 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
     if (!repeated && !repo.isBlocking(other.id, me.id)) repo.addReaction(me.id, other.id, count as number, REACTION.MAX);
     const response: ReactionResponse = { userId: other.user_id, count: count as number };
     return c.json(response, 202);
+  });
+
+  // ── YO！ ─────────────────────────────────────────────────
+  /**
+   * キャンパスにいるフレンドに「YO！」（わたしもキャンパスにいるよ）と知らせる。
+   * 名前は、大学で会ったら「よっ」と挨拶するくらいの仲（よっ友）から。
+   * 送れるのは、今日キャンパスで在校確認した人だけ（来校の記録があること）。
+   * 受け手が通知をオンにしていれば通知し、していなくても次に開いたときアプリの中に出る（GET /v1/greetings）。
+   * かくれんぼ中でも送れる（送るのは本人なので）。受け手にブロックされていたら、ふつうに返して黙って捨てる。
+   */
+  app.post("/v1/friends/:userId/greet", (c) => {
+    const me = requireUser(c, repo);
+    const other = friendTarget(repo, me, c.req.param("userId"));
+    if (!repo.hasVisited(me.id, jstDate())) {
+      fail(409, "not_on_campus", "キャンパスで「ポイント獲得」を押してから、YO！してください");
+    }
+    const last = repo.lastGreeting(me.id, other.id);
+    const recent = last !== null && Date.now() - new Date(last).getTime() < GREET.QUIET_MS;
+    if (!recent && !repo.isBlocking(other.id, me.id)) {
+      repo.saveGreeting(me.id, other.id);
+      void push.send(other.id, {
+        title: "YO！されました",
+        body: `${me.display_name ? `${me.display_name}さん` : "フレンド"}もキャンパスにいるようです。`,
+        url: "/",
+        tag: `greet-${me.user_id}`,
+      }).catch(() => { /* 通知が届かなくても、アプリの中には出る */ });
+    }
+    const response: GreetResponse = { userId: other.user_id, status: recent ? "already" : "sent" };
+    return c.json(response, 202);
+  });
+
+  /** 届いている YO！。フレンドでなくなった・こちらがブロックした相手のものは出さない */
+  app.get("/v1/greetings", (c) => {
+    const me = requireUser(c, repo);
+    const since = new Date(Date.now() - GREET.SHOW_MS).toISOString();
+    const greetings = repo.greetingsTo(me.id, since).flatMap((g) => {
+      const from = repo.findById(g.from_id);
+      const row = from ? repo.getFriendship(me.id, from.id) : undefined;
+      if (!from || row?.status !== "friends" || repo.isBlocking(me.id, from.id)) return [];
+      return [{ userId: from.user_id, at: g.created_at }];
+    });
+    const response: GreetingsResponse = { greetings };
+    return c.json(response);
+  });
+
+  /** 見たので消す */
+  app.delete("/v1/greetings", (c) => {
+    const me = requireUser(c, repo);
+    repo.clearGreetingsTo(me.id);
+    return c.body(null, 204);
   });
 
   // ── 問い合わせ・ご意見 ────────────────────────────────────

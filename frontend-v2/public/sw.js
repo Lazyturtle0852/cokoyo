@@ -1,8 +1,9 @@
 // ホーム画面に追加したときのための、いちばん小さいサービスワーカー。
 //
-// ねらいは2つだけ。
+// ねらいは3つだけ。
 //   1. Android の Chrome に「アプリとして追加できる」と認めてもらう（fetch を見ている必要がある）
 //   2. 電波が切れているときに、前に開けた画面だけでも出す
+//   3. プッシュ通知（YO！された）を出す
 //
 // 中身は必ずネットワークを先に見る（network first）。更新をすぐ反映したいので、
 // 表示に使うのは通信できなかったときの控えだけ。APIの返事は控えない。
@@ -15,6 +16,30 @@ self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {
     for (const key of await caches.keys()) if (key !== CACHE) await caches.delete(key);
     await self.clients.claim();
+  })());
+});
+
+// プッシュ通知（YO！された）。中身はバックエンドの src/push.ts の PushMessage
+self.addEventListener('push', (e) => {
+  let msg = {};
+  try { msg = e.data ? e.data.json() : {}; } catch { /* 読めない中身は既定の文で出す */ }
+  e.waitUntil(self.registration.showNotification(msg.title || 'COKOYO', {
+    body: msg.body || '',
+    tag: msg.tag || 'cokoyo',
+    icon: new URL('icon-192.png', self.registration.scope).href,
+    data: { url: new URL(msg.url || './', self.registration.scope).href },
+  }));
+});
+
+// 通知を押したら、開いているCOKOYOを前に出す。無ければ開く
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || self.registration.scope;
+  e.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const open = wins.find((w) => w.url.startsWith(self.registration.scope));
+    if (open) return open.focus();
+    return self.clients.openWindow(url);
   })());
 });
 

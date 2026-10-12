@@ -10,7 +10,7 @@ import { mockBackend } from './mockBackend';
 import { flushNetworkErrors, rememberNetworkError } from './networkReport';
 import type {
   AddFriendResponse, ApiErrorBody, InviteResponse, BestResponse, BlockResponse, CheckResponse,
-  AdminLogsResponse, AdminSessionResponse, AdminStatsResponse, DebugDbResponse, FeedbackResponse, SuggestionsResponse, FriendsResponse, MacAddressView, Me, PointsResponse, ReactionResponse, UserRef,
+  AdminLogsResponse, AdminSessionResponse, AdminStatsResponse, DebugDbResponse, FeedbackResponse, SuggestionsResponse, FriendsResponse, MacAddressView, Me, PointsResponse, GreetResponse, GreetingsResponse, PushKeyResponse, PushSubscriptionBody, ReactionResponse, SlimeColor, UserRef,
 } from './types';
 
 // ---------------------------------------------------------------
@@ -133,9 +133,13 @@ export const api = {
     request<Me>('POST', '/v1/onboarding', { displayName, mac, label }),
   getMe: (silent = false) => request<Me>('GET', '/v1/me', undefined, silent),
   // 同じ値で上書きするだけなので、二重に届いても同じ
-  updateMe: (patch: { displayName?: string; hidden?: boolean; discoverable?: boolean }) => request<Me>('PATCH', '/v1/me', patch, false, true),
+  updateMe: (patch: { displayName?: string; hidden?: boolean; discoverable?: boolean; color?: SlimeColor | null }) => request<Me>('PATCH', '/v1/me', patch, false, true),
   updateAvatar: (image: string) => request<Me>('PUT', '/v1/me/avatar', { image }),
   removeAvatar: () => request<Me>('DELETE', '/v1/me/avatar'),
+  // プッシュ通知（この端末に送ってよいか）。登録・取り消しは同じ宛先なら何度届いても同じ
+  getPushKey: () => request<PushKeyResponse>('GET', '/v1/push/key', undefined, true),
+  subscribePush: (sub: PushSubscriptionBody) => request<null>('POST', '/v1/push/subscriptions', { ...sub }, false, true),
+  unsubscribePush: (endpoint: string) => request<null>('DELETE', '/v1/push/subscriptions', { endpoint }, false, true),
   getMacs: () => request<{ macs: MacAddressView[]; limit: number }>('GET', '/v1/me/macs'),
   addMac: (mac: string, label: string) => request<MacAddressView>('POST', '/v1/me/macs', { mac, label }),
   editMac: (id: number, patch: { mac?: string; label?: string }) =>
@@ -167,6 +171,11 @@ export const api = {
   // sendId で送り直しを見分けてもらうので、二重に届いても足されない
   react: (userId: string, count: number) =>
     request<ReactionResponse>('POST', `/v1/friends/${id(userId)}/reactions`, { count, sendId: newSendId() }, false, true),
+
+  // YO！（キャンパスにいるフレンドに「わたしもいるよ」と知らせる）。30分以内の送り直しはサーバーが知らせない
+  greet: (userId: string) => request<GreetResponse>('POST', `/v1/friends/${id(userId)}/greet`, undefined, false, true),
+  getGreetings: (silent = false) => request<GreetingsResponse>('GET', '/v1/greetings', undefined, silent),
+  clearGreetings: () => request<null>('DELETE', '/v1/greetings', undefined, true, true),
 
   // 説明用ページ（/explain）だけが使う。アプリ本体は使わない。
   // 問い合わせ・ご意見（アプリの中から送る）

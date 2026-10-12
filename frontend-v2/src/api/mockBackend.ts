@@ -7,8 +7,8 @@
 // 中身は「バックエンドのデータ」と「大学側APIの模擬（キャンパスの様子）」の2つ。
 // 状態はブラウザに保存するので、ページを開き直しても続きから使える。
 
-import type { BestState, BuildingKey, PointItem, PointKind, Reaction } from './types';
-import { BUILDING_KEYS, BUILDING_LABELS } from './types';
+import type { BestState, BuildingKey, PointItem, PointKind, Reaction, SlimeColor } from './types';
+import { BUILDING_KEYS, BUILDING_LABELS, SLIME_COLORS } from './types';
 
 // Google アカウントと複数MACの形に変わったため、旧デモの保存は使わない。
 const STORE_KEY = 'cokoyo-mock-backend:v6'; // 「知り合いかも」用のつながりを足したので作り直す
@@ -35,7 +35,7 @@ export const buildingLabel = (key: BuildingKey) => BUILDING_LABELS[key];
 // ---------------------------------------------------------------
 interface DbUser {
   /** 「知り合いかも」に出してよいか（無ければ出す） */
-  discoverable?: boolean; name: string; mac: string; shareKey: string; hidden: boolean; macRegisteredAt: string; createdAt: string; email?: string; avatar?: string; avatarSource?: 'google' | 'custom' | 'disabled'; macs?: { id: number; mac: string; label: string; registeredAt: string }[]; onboarded?: boolean }
+  discoverable?: boolean; name: string; mac: string; shareKey: string; hidden: boolean; macRegisteredAt: string; createdAt: string; email?: string; avatar?: string; avatarSource?: 'google' | 'custom' | 'disabled'; color?: SlimeColor; macs?: { id: number; mac: string; label: string; registeredAt: string }[]; onboarded?: boolean }
 interface Campus { connected: boolean; buildingKey: BuildingKey; unavailable?: boolean }
 interface Ledger {
   total: number;
@@ -56,6 +56,7 @@ interface Db {
   points: Record<string, Ledger>;
   /** まだ届いていないリアクション。送り手→受け手ごとに1つ */
   reactions: { from: string; to: string; count: number; at: string }[];
+  greetings?: { from: string; to: string; at: string; seen?: boolean }[];
 }
 
 export interface MockResult { status: number; json: unknown }
@@ -114,7 +115,7 @@ function seed(): Db {
   return {
     users: {
       u_me:        user('ゆうき', 'a2:3f:9c:1b:7e:44', 'sk_m8qe4tz2', { macRegisteredAt: ago(12), avatar: DEMO_GOOGLE_AVATAR, avatarSource: 'google' }),
-      u_sato:      user('佐藤',   '5c:e1:08:77:3a:b2', 'sk_s3nv7kpa'),
+      u_sato:      user('佐藤',   '5c:e1:08:77:3a:b2', 'sk_s3nv7kpa', { color: 'yellow' }),
       u_tanaka:    user('田中',   'd6:4b:92:0f:c8:13', 'sk_t9wd2hxe'),
       u_suzuki:    user('鈴木',   '7e:a0:5d:e6:21:9f', 'sk_z4rc8mfu', { hidden: true }),
       u_yamada:    user('山田',   '3a:f7:c4:58:0b:6e', 'sk_y6hp3bnq'),
@@ -204,7 +205,8 @@ function visiblePresence(viewer: string, target: string): { present: boolean; bu
 }
 
 const publicUser = (uid: string) => ({ userId: uid, displayName: db.users[uid].name,
-  ...(db.users[uid].avatar ? { avatar: db.users[uid].avatar } : {}) });
+  ...(db.users[uid].avatar ? { avatar: db.users[uid].avatar } : {}),
+  ...(db.users[uid].color ? { color: db.users[uid].color } : {}) });
 const maskMac = (mac: string) => { const p = mac.split(':'); return `${p[0]}:${p[1]}:••:••:••:${p[5]}`; };
 const normalizeMac = (s: unknown) => String(s ?? '').trim().toLowerCase().replace(/-/g, ':');
 const validMac = (s: string) => /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(s) && s !== '02:00:00:00:00:00';
@@ -311,6 +313,11 @@ function updateMe(uid: string, body: Body) {
   if ('discoverable' in body) {
     if (typeof body.discoverable !== 'boolean') return E(400, 'invalid_discoverable', 'discoverable は true か false で指定してください');
     u.discoverable = body.discoverable;
+  }
+  if ('color' in body) {
+    if (body.color === null) delete u.color;
+    else if (typeof body.color === 'string' && Object.hasOwn(SLIME_COLORS, body.color)) u.color = body.color as SlimeColor;
+    else return E(400, 'invalid_color', 'その色は選べません');
   }
   return ok(meView(uid));
 }
@@ -536,6 +543,30 @@ function check(uid: string) {
 const friendTarget = (uid: string, other: string) =>
   (!db.users[other] || !isFriend(uid, other) || blockedBy(uid, other) ? E(404, 'friend_not_found', 'フレンドが見つかりません') : null);
 
+// POST /v1/friends/:id/greet — 「YO！」。本物はその日の来校の記録を見るが、模擬は今の在校で代える
+const GREET_QUIET_MS = 30 * 60 * 1000;
+const GREET_SHOW_MS = 3 * 60 * 60 * 1000;
+function greet(uid: string, other: string) {
+  const err = friendTarget(uid, other); if (err) return err;
+  if (aggregatePresence(uid).presence !== 'present') return E(409, 'not_on_campus', 'キャンパスで「ポイント獲得」を押してから、YO！してください');
+  db.greetings ??= [];
+  const last = db.greetings.find((g) => g.from === uid && g.to === other);
+  const recent = !!last && Date.now() - new Date(last.at).getTime() < GREET_QUIET_MS;
+  if (!recent && !blockedBy(other, uid)) {
+    db.greetings = db.greetings.filter((g) => g !== last);
+    db.greetings.push({ from: uid, to: other, at: new Date().toISOString() });
+  }
+  return ok({ userId: other, status: recent ? 'already' : 'sent' }, 202);
+}
+function listGreetings(uid: string) {
+  const since = Date.now() - GREET_SHOW_MS;
+  const greetings = (db.greetings ?? [])
+    .filter((g) => g.to === uid && !g.seen && new Date(g.at).getTime() > since && isFriend(uid, g.from) && !blockedBy(uid, g.from))
+    .sort((a, b) => b.at.localeCompare(a.at))
+    .map((g) => ({ userId: g.from, at: g.at }));
+  return ok({ greetings });
+}
+
 // POST /v1/friends/:id/reactions — スライムを連打した回数を送る（相手の画面にこちらのスライムが出たときに届く）
 function sendReaction(uid: string, other: string, body: Body) {
   const err = friendTarget(uid, other); if (err) return err;
@@ -567,6 +598,8 @@ function route(method: string, path: string, _headers: Record<string, string>, b
   if (method === 'GET' && path === '/v1/me') return ok(meView(uid));
   if (method === 'PATCH' && path === '/v1/me') return updateMe(uid, body);
   if (method === 'PUT' && path === '/v1/me/avatar') return updateAvatar(uid, body);
+  // 模擬ではプッシュ通知は使えない（本物の通知サーバーに届かないため）
+  if (method === 'GET' && path === '/v1/push/key') return ok({ publicKey: null });
   if (method === 'DELETE' && path === '/v1/me/avatar') { delete db.users[uid].avatar; db.users[uid].avatarSource = 'disabled'; return ok(meView(uid)); }
   if (method === 'GET' && path === '/v1/me/macs') return ok({ macs: macsOf(uid).map(macView), limit: 5 });
   if (method === 'POST' && path === '/v1/me/macs') return addMac(uid, body);
@@ -594,12 +627,15 @@ function route(method: string, path: string, _headers: Record<string, string>, b
   if (method === 'GET' && path === '/v1/friends') return listFriends(uid);
   if (method === 'GET' && path === '/v1/friends/suggestions') return suggestions(uid);
   if (method === 'POST' && path === '/v1/friends') return addFriend(uid, body);
+  if (method === 'GET' && path === '/v1/greetings') return listGreetings(uid);
+  if (method === 'DELETE' && path === '/v1/greetings') { (db.greetings ?? []).forEach((g) => { if (g.to === uid) g.seen = true; }); return { status: 204, json: null }; }
 
   let m = /^\/v1\/friend-requests\/([\w-]+)\/(accept|decline)$/.exec(path);
   if (m && method === 'POST') return answerRequest(uid, m[1], m[2] === 'accept');
 
-  m = /^\/v1\/friends\/([\w-]+)\/(best|block|reactions)$/.exec(path);
+  m = /^\/v1\/friends\/([\w-]+)\/(best|block|reactions|greet)$/.exec(path);
   if (m) {
+    if (m[2] === 'greet' && method === 'POST') return greet(uid, m[1]);
     if (m[2] === 'reactions' && method === 'POST') return sendReaction(uid, m[1], body);
     if (m[2] === 'best' && method === 'POST') return requestBest(uid, m[1]);
     if (m[2] === 'best' && method === 'DELETE') return endBest(uid, m[1]);
@@ -673,6 +709,11 @@ const sim = {
   requestBestFrom(from: string, currentUid: string) { requestBest(from, currentUid); save(); },
   // 相手がこちらのスライムを連打した（相手のスライムがこちらの画面に出たときに届く）
   reactFrom(from: string, currentUid: string, count: number) { sendReaction(from, currentUid, { count }); save(); },
+  /** フレンドがあなたにYO！した（在校かどうかに関係なく届ける） */
+  greetFrom(from: string, currentUid: string) {
+    db.greetings = [...(db.greetings ?? []).filter((g) => !(g.from === from && g.to === currentUid)), { from, to: currentUid, at: new Date().toISOString() }];
+    save();
+  },
   reset() { db = seed(); setSession('u_me'); save(); },
 };
 

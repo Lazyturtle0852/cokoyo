@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { useApp } from '../app/AppContext';
 import { api } from '../api/client';
+import { disablePush } from '../app/push';
 import { config, useMockBackend } from '../config';
 import { AvatarPicker } from './AvatarPicker';
 import { Feedback } from './Feedback';
 import { MacGuide } from './MacGuide';
+import { PushSetting } from './PushSetting';
+import { SlimeColorPicker } from './SlimeColorPicker';
 import { fullDate } from './ui';
 
 const normalizeMac = (value: string) => value.trim().toLowerCase().replace(/-/g, ':');
@@ -40,6 +43,8 @@ export function Settings() {
   };
   const logout = async (all: boolean) => {
     await run(all ? '全端末からログアウト' : 'ログアウト', async () => {
+      // ログアウトした端末には、もう通知を送らない（全端末のときは、ほかの端末の分をサーバーが消す）
+      await disablePush();
       if (all) await api.logoutAll(); else await api.logout();
       try { [localStorage, sessionStorage].forEach((st) => Object.keys(st).filter((key) => key.startsWith('cokoyo-lastcheck:')).forEach((key) => st.removeItem(key))); } catch { /* 保存できない環境 */ }
       await restart();
@@ -56,7 +61,10 @@ export function Settings() {
       </> : <div className="kv"><div><div className="k">表示名</div><div className="v">{me.displayName}</div></div><button className="mini-btn" onClick={() => { setName(me.displayName); setEditingName(true); }}>変更</button></div>}
       <p className="row-note">フレンドの画面に表示されます</p>
       <AvatarPicker />
+      <SlimeColorPicker />
     </div>
+
+    <PushSetting />
 
     <div className="sec"><h3>キャンパスの検知</h3><span>{me.macs.length} / 5台</span></div>
     <div className="card">

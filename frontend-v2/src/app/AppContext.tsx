@@ -5,9 +5,10 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, ApiError, callLog } from '../api/client';
-import type { CheckResponse, FriendsResponse, InviteResponse, Me, PointsResponse } from '../api/types';
-import { createCampusField, type CampusField } from '../field/campusField';
+import type { CheckResponse, FriendsResponse, Greeting, InviteResponse, Me, PointsResponse } from '../api/types';
+import { createCampusField, setSlimeColors, type CampusField } from '../field/campusField';
 import { clearPendingInvite, pendingInvite, takeInviteFromUrl } from './invite';
+import { resyncPush } from './push';
 import { isToday } from '../phone/ui';
 
 export type View = 'loading' | 'login' | 'onboarding' | 'app' | 'error';
@@ -41,6 +42,8 @@ interface AppState {
   toast: { id: number; message: string } | null;
   /** 招待リンク・QRで開かれたときの相手。申請するかを確かめているあいだだけ入る */
   invite: { shareKey: string; user: InviteResponse['user']; incoming: boolean } | null;
+  /** フレンドから届いている「YO！」（新しい順）。空でなければ在校確認をすすめる */
+  greetings: Greeting[];
 }
 
 interface AppActions {
@@ -65,6 +68,9 @@ interface AppActions {
   /** 招待の相手に申請する（相手から申請が来ていれば、その場でフレンドになる） */
   acceptInvite(): Promise<void>;
   dismissInvite(): void;
+  /** YO！してきたフレンドにこたえて、在校確認する（届いた YO！は見た扱いになる） */
+  answerGreeting(): Promise<void>;
+  dismissGreeting(): void;
 
   // 登録
   completeRegistration(): Promise<void>;
@@ -147,6 +153,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [mapOpen, setMapOpen] = useState(false);
   const [displayTotal, setDisplayTotal] = useState<number | null>(null);
   const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
+  const [greetings, setGreetings] = useState<Greeting[]>([]);
 
   const busy = useRef(false);
   const fieldRef = useRef<CampusField | null>(null);
@@ -156,6 +163,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const screenRef = useRef<HTMLDivElement | null>(null);
   const friendsRef = useRef(friends);
   friendsRef.current = friends;
+  // 選んだスライムの色。描く前に覚えさせ、変わったら出ているスライムも塗り直す
+  if (setSlimeColors(me, friends?.friends ?? [])) queueMicrotask(() => field.recolor());
   const timers = useRef<number[]>([]);
 
   const showToast = useCallback((message: string) => setToast({ id: Date.now() + Math.random(), message }), []);
@@ -163,11 +172,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const loadAll = useCallback(async (silent = false) => {
     const [m, f, p] = await Promise.all([api.getMe(silent), api.getFriends(silent), api.getPoints(silent)]);
     setMe(m); setFriends(f); setPoints(p);
+    // YO！は届いていなくても困らないので、取れなければ空のまま
+    api.getGreetings(true).then((g) => setGreetings(g.greetings)).catch(() => { /* 次に開いたときにまた取る */ });
     const saved = readLastCheck(m.userId);
     setLastCheck(saved?.check ?? null);
     setPresenceDiff(saved?.diff ?? null);
     // 前に確認したときが雨なら、開いた時点から降らせておく
     if (saved) field.setRain(saved.check.weather.rainy);
+    return m.userId;
   }, [field]);
 
   const goOnboarding = useCallback(() => {
@@ -190,8 +202,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const session = await api.getSession();
       if (session.status === 'onboarding') { setInitialDisplayName(session.displayName ?? ''); goOnboarding(); return; }
-      await loadAll();
+      const userId = await loadAll();
       setView('app');
+      void resyncPush(userId);
     } catch (e) {
       const err = e as ApiError;
       if (err.status === 401) goLogin();
@@ -362,6 +375,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => field.onReact(null);
   }, [field, showToast]);
 
+  const dismissGreeting = useCallback(() => {
+    setGreetings([]);
+    api.clearGreetings().catch(() => { /* 3時間たてば出なくなる */ });
+  }, []);
+  const answerGreeting = useCallback(async () => {
+    dismissGreeting();
+    setMapOpen(false);
+    setTabState('home');
+    await check();
+  }, [check, dismissGreeting]);
+
   const toggleHide = useCallback(async () => {
     if (!me) return;
     await run('かくれんぼを切り替え', async () => {
@@ -441,7 +465,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [view, restart]);
 
   const value = useMemo<Ctx>(() => ({
-    view, initialDisplayName, error, tab, me, friends, points, lastCheck, presenceDiff, checking, sheet, mapOpen, displayTotal, toast, invite,
+    view, initialDisplayName, error, tab, me, friends, points, lastCheck, presenceDiff, checking, sheet, mapOpen, displayTotal, toast, invite, greetings,
     field, counter, screenRef,
     // タブを移ると地図は閉じる
     setTab: (t) => { setMapOpen(false); setTabState(t); },
@@ -458,7 +482,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setMe: (m) => setMe(m),
     acceptInvite,
     dismissInvite,
-    completeRegistration: loadAll,
+    answerGreeting,
+    dismissGreeting,
+    completeRegistration: async () => { await loadAll(); },
     finishOnboarding: (t) => {
       setView('app');
       setTabState(t);
@@ -468,8 +494,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refresh,
     restart,
     restartFromOnboarding: () => { void api.logout().finally(() => { setTabState('home'); goLogin(); }); },
-  }), [view, initialDisplayName, error, tab, me, friends, points, lastCheck, presenceDiff, checking, sheet, mapOpen, displayTotal, toast, invite,
-    field, showToast, run, check, toggleHide, reloadFriends, acceptInvite, dismissInvite, loadAll, refresh, restart, goLogin]);
+  }), [view, initialDisplayName, error, tab, me, friends, points, lastCheck, presenceDiff, checking, sheet, mapOpen, displayTotal, toast, invite, greetings,
+    field, showToast, run, check, toggleHide, reloadFriends, acceptInvite, dismissInvite, answerGreeting, dismissGreeting, loadAll, refresh, restart, goLogin]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

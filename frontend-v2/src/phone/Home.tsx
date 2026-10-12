@@ -3,9 +3,11 @@
 
 import { useEffect, useState } from 'react';
 import { useApp } from '../app/AppContext';
+import { api } from '../api/client';
 import { HideCard } from './HideCard';
 import { InstallCard } from './Install';
-import { Avatar, isToday, when } from './ui';
+import { NewsCard } from './NewsCard';
+import { Avatar, Icon, isToday, when } from './ui';
 import { Section } from './Section';
 
 /** 前の確認からこれだけたったら、押し直しをすすめる */
@@ -22,9 +24,9 @@ function useNow(ms: number) {
 }
 
 export function Home() {
-  const { me, friends, points, lastCheck: lc, presenceDiff: diff, checking, check, openAddSheet } = useApp();
+  const { me, friends, points, lastCheck: lc, presenceDiff: diff, checking, check, openAddSheet, showToast, run } = useApp();
   const now = useNow(30 * 1000);
-  if (!me || !friends || !points) return null;
+    if (!me || !friends || !points) return null;
 
   const fresh = !!lc && isToday(lc.checkedAt);
   const present = lc?.me.presence === 'present';
@@ -53,9 +55,20 @@ export function Home() {
   const rank = (id: string) => { const r = results.get(id); return !r ? 3 : r.present ? 0 : left.has(id) ? 1 : 2; };
   const sorted = [...friends.friends].sort((a, b) => rank(a.userId) - rank(b.userId));
 
+  // 「YO！」：自分も相手もキャンパスにいるとき、相手に「わたしもキャンパスにいるよ」と知らせる（よっ友の「よっ」）。
+  // 相手には通知と、アプリの中の知らせ（src/phone/GreetingCard.tsx）が届き、在校確認をすすめる
+  const canGreet = fresh && present;
+  const greet = (userId: string, name: string) => run('YO！', async () => {
+    const r = await api.greet(userId);
+    showToast(r.status === 'sent' ? `${name}さんにYO！しました` : `${name}さんには、さっきYO！したところです`);
+  });
+
+
+
   return (
     <>
       <InstallCard />
+      <NewsCard />
 
       <div className="card check-card">
         <div className="check-head">
@@ -101,6 +114,10 @@ export function Home() {
               <div className="fbody">
                 <div className="fname">{f.displayName}{f.best === 'best' && <span className="star">ベスト</span>}</div>
                 <div className={`fmeta${r?.present ? ' live' : ''}`}>{meta}</div>
+                {canGreet && r?.present && (
+                  <button className="share-btn" aria-label={`${f.displayName}さんにYO！する（わたしもキャンパスにいると知らせる）`}
+                    onClick={() => void greet(f.userId, f.displayName)}><Icon.Greet />YO！</button>
+                )}
               </div>
               {chip}
             </div>
@@ -108,7 +125,7 @@ export function Home() {
         })}
       </div>
 
-      {liveCount > 0 && <p className="footnote tap-hint">上のスライムを連打すると、そのフレンドに「つんつん」が届きます</p>}
+      {liveCount > 0 && <p className="footnote tap-hint">上のスライムを連打すると、そのフレンドに「つんつん」が届きます。{canGreet && '「YO！」で、あなたもキャンパスにいることをそのフレンドに知らせられます'}</p>}
       </Section>
 
       <div className="sec"><h3>今日の獲得</h3></div>

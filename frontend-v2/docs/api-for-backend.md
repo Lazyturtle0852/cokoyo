@@ -20,16 +20,19 @@
 | メソッド・パス | 内容 |
 |---|---|
 | `GET /me` | `{userId, displayName, email, shareKey, hidden, macs}` |
-| `PATCH /me` | `{displayName?, hidden?, discoverable?}`。更新した `Me` を返す |
+| `PATCH /me` | `{displayName?, hidden?, discoverable?, color?}`。`color` は `SLIME_COLORS` の鍵、`null` で未選択に戻す。更新した `Me` を返す |
 | `PUT /me/avatar` | `{image}`。縮小済み JPEG・PNG・WebP の data URL を登録し、更新した `Me` を返す |
 | `DELETE /me/avatar` | 画像を削除し、更新した `Me` を返す |
 | `GET /me/macs` | `{macs, limit: 5}` |
 | `POST /me/macs` | `{mac, label}`。201 と登録端末 |
 | `PATCH /me/macs/:id` | `{mac?, label?}`。MAC を省略すると名前だけ変更 |
 | `DELETE /me/macs/:id` | 204。最後の 1 台は削除不可 |
+| `GET /push/key` | `{publicKey}`。プッシュ通知の購読に使う VAPID 公開鍵（base64url）。`null` なら通知は使えない |
+| `POST /push/subscriptions` | `PushSubscription.toJSON()` の `{endpoint, keys: {p256dh, auth}}`。204。宛先は既知の通知サーバー（FCM・Apple・Mozilla・Windows）の https だけ受け付け、1 人 10 端末まで |
+| `DELETE /push/subscriptions` | `{endpoint}`。204。`POST /auth/logout-all` でもその人の宛先をすべて消す |
 
 MAC は 12 桁の 16 進数または `:` / `-` 区切り。アカウント間で一意。返すのは `id`、`label`、`macMasked`、`registeredAt` で原文は返さない。上限は 5 台。MAC の所有は本人申告。
-`Me` とフレンドなどの `UserRef` には、登録済みの場合 `avatar` が付く。Google の写真を取得できたときは初期値にする。利用者が画像を変更・削除した後は、再ログインしても Google の写真で上書きしない。画像の data URL は 120KB 以下。公開 DB 表には画像の原文を出さず、大きさだけを表示する。
+`Me` とフレンドなどの `UserRef` には、登録済みの場合 `avatar` が付き、色を選んだ人には `color` が付く。Google の写真を取得できたときは初期値にする。利用者が画像を変更・削除した後は、再ログインしても Google の写真で上書きしない。画像の data URL は 120KB 以下。公開 DB 表には画像の原文を出さず、大きさだけを表示する。
 
 ## 在校・交友
 
@@ -45,6 +48,9 @@ MAC は 12 桁の 16 進数または `:` / `-` 区切り。アカウント間で
 | `POST` / `DELETE /friends/:userId/best` | ベストフレンド申請・解除 |
 | `POST` / `DELETE /friends/:userId/block` | ブロック・解除 |
 | `POST /friends/:userId/reactions` | `{count, sendId?}`。スライムへのリアクション。同じ `sendId` の送り直しは足さない |
+| `POST /friends/:userId/greet` | YO！（わたしもキャンパスにいるよ）。202 と `{userId, status: "sent"\|"already"}`。今日来校の記録が無ければ 409。同じ相手へは 30 分に 1 回だけ保存・通知（それ以内は `already`）。かくれんぼ中でも送れる。ブロックされていれば黙って捨てる |
+| `GET /greetings` | 届いている YO！ `{greetings: [{userId, at}]}`（新しい順、3 時間以内、フレンドのみ） |
+| `DELETE /greetings` | 見たので消す。204 |
 | `GET /debug/db` | `/explain/` 用の公開全行表示。秘密列は除外またはマスク |
 
 `checks.me.presence` は `present` / `absent` / `unknown`。1 台でも在校なら `present`。建物が食い違う、または別の MAC が判定不能なら建物は返さない。在校が確定しない `unknown` では本人にポイントを付けない。フレンドの不明、かくれんぼ、ブロックは理由を示さず `present:false`。建物は相互ベストフレンドにだけ返す。

@@ -771,3 +771,25 @@ table.admin-users .rel { margin-right: 4px; }
 .ssid-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 6px; }
 .ssid-chips span { font: 600 12px/1 "SF Mono", Menlo, monospace; padding: 7px 10px; border-radius: 999px; background: var(--brand-tint); color: var(--brand, #EA580C); }
 .ssid-note { margin: 0 0 12px; }
+
+/* スライムの色（設定） */
+.slime-colors { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.slime-colors .k { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.slime-color-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 8px; }
+.slime-color { display: grid; place-items: center; height: 48px; border-radius: 12px; border: 2px solid transparent;
+               background: var(--line-soft); cursor: pointer; padding: 0; }
+.slime-color svg { width: 36px; height: auto; }
+.slime-color svg .eyes-closed { display: none; }
+.slime-color.on { border-color: var(--brand); background: var(--brand-tint); }
+.push-note { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: var(--brand-tint); color: var(--brand-dark); }
+/* フレンドの在校をシェア（ホーム） */
+.share-btn { display: inline-flex; align-items: center; gap: 3px; margin-top: 4px; flex-shrink: 0; border: 1px solid var(--line);
+             background: var(--card); color: var(--brand-dark); border-radius: 999px; padding: 4px 10px 4px 8px;
+             font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.share-btn:hover:not(:disabled) { border-color: var(--brand); }
+.share-btn:disabled { opacity: .5; }
+/* お知らせ（ホームに一度だけ） */
+.news-card { border: 1px solid var(--brand); background: var(--brand-tint); }
+.news-title { margin: 0 0 6px; font-weight: 800; color: var(--brand-dark); font-size: 14px; }
+.news-list { margin: 0 0 10px; padding-left: 18px; font-size: 13px; color: var(--ink-2); }
+.news-list li + li { margin-top: 4px; }
