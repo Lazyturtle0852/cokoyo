@@ -28,6 +28,16 @@ export const inAppName = (kind: InApp) =>
 const isAndroid = () => /Android/.test(navigator.userAgent);
 
 /**
+ * 「ふだん使っているブラウザ」がどれのことか。分からずに止まる人がいるので、名前で示す。
+ * iPhone は Safari、Android は Chrome（ほかを使っている人もいるので「など」を付ける）。
+ */
+export function usualBrowser(): string {
+  if (isAndroid()) return 'Androidなら「Chrome」など';
+  if (/iPhone|iPad|iPod/.test(navigator.userAgent)) return 'iPhoneなら「Safari」など';
+  return 'iPhoneなら「Safari」、Androidなら「Chrome」など';
+}
+
+/**
  * Android なら、同じURLを Chrome で開き直せる（intent:// でブラウザを指名できる）。
  * iPhone には同じ仕組みが無いので、手で開いてもらう。
  */
