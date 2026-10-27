@@ -9,6 +9,10 @@
 //
 // 同じ端末でも keiomobile2・eduroam・CNS でアドレスが違うので、
 // ふだんつなぐネットワークごとに1つずつ登録してもらう。
+//
+// キャンパスのWiFiをまだ使っていない人もいるので、つなぎ方のタブも置く（2026-10-23）。
+// 手順は湘南藤沢ITC（KIC）の案内をもとに短くまとめ、くわしくは公式のページに案内する。
+// keiomobile2 と eduroam は、同じ Wi-Fi ユーザー名・パスワードで、ネットワーク名が違うだけ。
 
 import { useState, type ReactNode } from 'react';
 
@@ -132,7 +136,96 @@ export const GUIDE: Record<Os, Guide> = {
   },
 };
 
+const KIC = 'https://www.sfc.itc.keio.ac.jp/ja/';
+const ext = (href: string, text: string) => <a href={href} target="_blank" rel="noopener noreferrer">{text}</a>;
+
+/** keiomobile2 のつなぎ方（Wi-Fiユーザー名とパスワードを発行したあと、キャンパスで） */
+const CONNECT: Record<Os, { steps: ReactNode[]; page: string }> = {
+  ios: {
+    steps: [
+      <><b>設定</b>アプリ → <b>Wi-Fi</b> → 一覧のいちばん下の「<b>その他…</b>」</>,
+      <>名前に <b>keiomobile2</b> と入れ、セキュリティは「<b>WPA2エンタープライズ</b>」</>,
+      <>ユーザー名に<b>Wi-Fiユーザー名</b>、パスワードに<b>Wi-Fiパスワード</b>を入れて「<b>接続</b>」</>,
+      <>「証明書」が出たら、数秒待ってから「<b>信頼</b>」を<b>1回だけ</b>押す</>,
+    ],
+    page: `${KIC}net_connect_keiomobile2_peap_ios.html`,
+  },
+  android: {
+    steps: [
+      <><b>設定</b> →「<b>ネットワークとインターネット</b>」→「<b>インターネット</b>」（機種によっては「Wi-Fi」）→ <b>keiomobile2</b> を選ぶ</>,
+      <>EAP方式「<b>PEAP</b>」、フェーズ2認証「<b>MSCHAPV2</b>」、CA証明書「<b>Security Communication RootCA2</b>」（一覧に無いときは、くわしい手順の「ルート証明書のダウンロード」を先に）</>,
+      <>ドメインに <b className="mono">wrcore2.itc.keio.ac.jp</b>、IDに<b>Wi-Fiユーザー名</b>、匿名IDは<b>空欄</b></>,
+      <>パスワードに<b>Wi-Fiパスワード</b>を入れて「<b>接続</b>」</>,
+    ],
+    page: `${KIC}net_connect_keiomobile2_peap_and11.html`,
+  },
+  mac: {
+    steps: [
+      <>Wi-Fiの一覧から <b>keiomobile2</b> を選ぶ</>,
+      <>ユーザー名に<b>Wi-Fiユーザー名</b>、パスワードに<b>Wi-Fiパスワード</b>を入れる</>,
+      <>証明書の確認が出たら、くわしい手順に沿って進める</>,
+    ],
+    page: `${KIC}net_connect_keiomobile2_peap_mac.html`,
+  },
+  windows: {
+    steps: [
+      <>Wi-Fiの一覧から <b>keiomobile2</b> を選ぶ</>,
+      <>ユーザー名に<b>Wi-Fiユーザー名</b>、パスワードに<b>Wi-Fiパスワード</b>を入れる</>,
+      <>証明書の確認が出たら、くわしい手順に沿って進める</>,
+    ],
+    page: `${KIC}net_connect_keiomobile2_peap_win11_2.html`,
+  },
+};
+
+/** キャンパスのWiFiをまだ使っていない人向け：つなぐまで。つながったら「キャンパスにいる」へ */
+function WifiSetup({ os, onDone }: { os: Os; onDone(): void }) {
+  const c = CONNECT[os];
+  return (
+    <div className="wifi-setup">
+      <p className="row-note">
+        キャンパスのWiFiは、<b>慶應のアカウント（keio.jp）で無料</b>で使えます。
+        いちばん始めやすいのは <b>keiomobile2</b> です。
+      </p>
+      <h4 className="ws-h">1. Wi-Fiのユーザー名とパスワードをもらう</h4>
+      <p className="row-note">キャンパスの外でもできます。</p>
+      <ol className="steps">
+        <li><span><b>keio.jp</b> にログインする</span></li>
+        <li><span>「<b>Wi-Fi利用登録</b>」を開く（スマホはメニューのアイコンから、パソコンは「Apps」→「keio.jp関連設定」から）</span></li>
+        <li><span>「<b>利用を開始する</b>」を押す</span></li>
+        <li><span>出てきた<b>Wi-Fiユーザー名</b>と<b>Wi-Fiパスワード</b>を控える</span></li>
+      </ol>
+      <p className="row-note">{ext(`${KIC}net_connect_keiomobile2_peap_init_keiojp.html`, 'くわしい手順（湘南藤沢ITC）')}</p>
+
+      <h4 className="ws-h">2. キャンパスで keiomobile2 につなぐ（{GUIDE[os].label}）</h4>
+      <p className="row-note">keiomobile2 の設定は、キャンパスの中でだけできます。</p>
+      <ol className="steps">{c.steps.map((item, i) => <li key={i}><span>{item}</span></li>)}</ol>
+      <p className="row-note">{ext(c.page, `くわしい手順（湘南藤沢ITC・${GUIDE[os].label}）`)}</p>
+
+      <h4 className="ws-h">3. つながったら、MACアドレスを登録</h4>
+      <button className="btn btn-quiet" onClick={onDone}>「キャンパスにいる」の手順を見る</button>
+
+      <details className="manual ws-more">
+        <summary>eduroam・CNS でつなぎたいとき</summary>
+        <p className="row-note">
+          <b>eduroam</b>：1でもらった同じユーザー名とパスワードを使い、2の手順のネットワーク名を <b>eduroam</b> に読みかえてつなぎます（湘南藤沢ITCの手順は keiomobile2 と eduroam で共通です）。
+          {ext(`${KIC}net_connect_eduroam.html`, 'eduroamについて（湘南藤沢ITC）')}
+        </p>
+        <p className="row-note">
+          <b>CNS</b>：SFCのCNSアカウントと、CNSの無線LANパスワードでつなぎます。
+          {ext('https://secure.itc.keio.ac.jp/c/a/sfc/ja/network_information_wireless_peap.html', 'CNSの手順（湘南藤沢ITC）')}
+        </p>
+        <p className="row-note">COKOYOは、どれにつないでいても判定できます。ふだん使うものを1つ選べば十分です。</p>
+      </details>
+      <p className="row-note muted">
+        手順は湘南藤沢ITCの案内をもとにまとめています。画面が違うときは、くわしい手順のページを見てください。
+        COKOYOは大学の公式サービスではありません。WiFiの設定で困ったときは湘南藤沢ITCへ、COKOYOのことは「設定 → ご意見・問い合わせ」へお願いします。
+      </p>
+    </div>
+  );
+}
+
 const OS_LIST = Object.keys(GUIDE) as Os[];
+type Where = 'here' | 'away' | 'setup';
 
 /** 端末の種類から、最初に入れておく端末の名前 */
 export const deviceLabel = (os: Os) => GUIDE[os].label;
@@ -143,8 +236,12 @@ export const deviceLabel = (os: Os) => GUIDE[os].label;
  */
 export function MacGuide({ onOs }: { onOs?: (os: Os) => void }) {
   const [os, setOs] = useState<Os>('ios');
-  const [away, setAway] = useState(false);
+  const [where, setWhere] = useState<Where>('here');
+  const away = where === 'away';
   const guide = GUIDE[os];
+  const tab = (w: Where, label: string) => (
+    <button role="tab" className={where === w ? 'on' : ''} aria-selected={where === w} onClick={() => setWhere(w)}>{label}</button>
+  );
 
   return (
     <>
@@ -155,9 +252,16 @@ export function MacGuide({ onOs }: { onOs?: (os: Os) => void }) {
         ))}
       </div>
       <div className="seg" role="tablist" aria-label="いまいる場所">
-        <button role="tab" className={away ? '' : 'on'} aria-selected={!away} onClick={() => setAway(false)}>いまキャンパスにいる</button>
-        <button role="tab" className={away ? 'on' : ''} aria-selected={away} onClick={() => setAway(true)}>キャンパスの外にいる</button>
+        {tab('here', 'いまキャンパスにいる')}
+        {tab('away', 'キャンパスの外にいる')}
       </div>
+      <button className={`ws-toggle${where === 'setup' ? ' on' : ''}`} aria-expanded={where === 'setup'}
+        onClick={() => setWhere(where === 'setup' ? 'here' : 'setup')}>
+        <b>キャンパスのWiFiを使っていない方へ</b>
+        <span>{where === 'setup' ? '閉じる' : 'つなぎ方を見る ›'}</span>
+      </button>
+
+      {where === 'setup' ? <WifiSetup os={os} onDone={() => setWhere('here')} /> : <>
 
       <p className="row-note">
         <b>同じ端末でも、keiomobile2・eduroam・CNS でアドレスが違います。</b>
@@ -177,6 +281,7 @@ export function MacGuide({ onOs }: { onOs?: (os: Os) => void }) {
       {guide.sample}
       {away ? guide.awayNote && <p className="row-note">{guide.awayNote}</p>
         : guide.note && <p className="row-note">{guide.note}</p>}
+      </>}
     </>
   );
 }

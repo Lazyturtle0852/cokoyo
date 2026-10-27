@@ -795,3 +795,13 @@ table.admin-users .rel { margin-right: 4px; }
 .news-title { margin: 0 0 6px; font-weight: 800; color: var(--brand-dark); font-size: 14px; }
 .news-list { margin: 0 0 10px; padding-left: 18px; font-size: 13px; color: var(--ink-2); }
 .news-list li + li { margin-top: 4px; }
+
+/* MACの案内：キャンパスのWiFiのつなぎ方 */
+
+.ws-toggle { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; margin: 8px 0 4px; padding: 11px 14px;
+  border: 1px dashed #F0B48C; border-radius: 12px; background: var(--brand-tint); color: var(--brand-dark); font: inherit; font-size: 13px; cursor: pointer; text-align: left; }
+.ws-toggle span { flex-shrink: 0; font-size: 12px; font-weight: 700; }
+.ws-toggle.on { border-style: solid; }
+.ws-h { font-size: 14px; font-weight: 800; color: var(--ink); margin: 18px 0 6px; }
+.wifi-setup .row-note a { color: var(--brand-dark); font-weight: 700; }
+.ws-more { margin-top: 16px; }
