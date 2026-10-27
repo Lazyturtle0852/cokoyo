@@ -9,10 +9,26 @@
 // 開いてくれる（src/config.ts の shareLink）。ほかのアプリにはその仕組みが無いので、
 // 気づいてもらえるように案内を出す。
 
+import { useMockBackend } from '../config';
+
 export type InApp = 'line' | 'instagram' | 'facebook' | 'other';
+
+/**
+ * 練習用（/test/）でだけ、アプリの中のブラウザ・端末の種類を URL で決められる。
+ * 運営者がパソコンから「インスタの中で開いた iPhone の人」の画面を確かめるため（/admin/insights/ のリンク）。
+ *   ?inapp=instagram|line|facebook|other  &os=ios|android
+ */
+const preview = (name: 'inapp' | 'os') => {
+  if (!useMockBackend || typeof window === 'undefined') return null;
+  return new URLSearchParams(window.location.search).get(name);
+};
+const isAndroid = () => (preview('os') ? preview('os') === 'android' : /Android/.test(navigator.userAgent));
+const isIPhone = () => (preview('os') ? preview('os') === 'ios' : /iPhone|iPad|iPod/.test(navigator.userAgent));
 
 /** アプリの中のブラウザなら、その名前。ふつうのブラウザなら null */
 export function inAppBrowser(): InApp | null {
+  const forced = preview('inapp');
+  if (forced === 'line' || forced === 'instagram' || forced === 'facebook' || forced === 'other') return forced;
   const ua = navigator.userAgent;
   if (/\bLine\//i.test(ua)) return 'line';
   if (/Instagram/i.test(ua)) return 'instagram';
@@ -25,7 +41,6 @@ export function inAppBrowser(): InApp | null {
 export const inAppName = (kind: InApp) =>
   ({ line: 'LINE', instagram: 'インスタグラム', facebook: 'Facebook', other: 'ほかのアプリ' }[kind]);
 
-const isAndroid = () => /Android/.test(navigator.userAgent);
 
 /**
  * 「ふだん使っているブラウザ」がどれのことか。分からずに止まる人がいるので、名前で示す。
@@ -33,7 +48,7 @@ const isAndroid = () => /Android/.test(navigator.userAgent);
  */
 export function usualBrowser(): string {
   if (isAndroid()) return 'Androidなら「Chrome」など';
-  if (/iPhone|iPad|iPod/.test(navigator.userAgent)) return 'iPhoneなら「Safari」など';
+  if (isIPhone()) return 'iPhoneなら「Safari」など';
   return 'iPhoneなら「Safari」、Androidなら「Chrome」など';
 }
 

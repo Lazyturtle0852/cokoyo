@@ -796,6 +796,39 @@ table.admin-users .rel { margin-right: 4px; }
 .news-list { margin: 0 0 10px; padding-left: 18px; font-size: 13px; color: var(--ink-2); }
 .news-list li + li { margin-top: 4px; }
 
+/* 分析（/admin/insights/） */
+.ins-link { text-decoration: none; display: inline-flex; align-items: center; }
+.ins-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.ins-kpis .stat { background: var(--card); border-radius: 18px; padding: 16px 18px; box-shadow: var(--shadow-sm); }
+.ins-funnel { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.ins-funnel li { display: grid; grid-template-columns: minmax(160px, 1.3fr) 2fr 60px 48px; gap: 12px; align-items: center; font-size: 13px; }
+.ins-funnel li.worst .ins-f-label::after { content: '← いちばん減っている'; margin-left: 6px; font-size: 11px; color: var(--danger); font-weight: 700; }
+.ins-f-label small { display: block; font-size: 10.5px; color: var(--muted); }
+.ins-f-bar { height: 14px; background: var(--line-soft); border-radius: 7px; overflow: hidden; }
+.ins-f-bar i { display: block; height: 100%; background: var(--brand); border-radius: 7px; }
+.ins-f-num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.ins-f-pct { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ins-scroll { overflow-x: auto; }
+.ins-cohort, .ins-heat, .ins-people { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.ins-cohort th, .ins-cohort td { padding: 6px 10px; text-align: center; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+.ins-cohort td.none { background: transparent; }
+.ins-minis { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+.ins-bars { display: flex; align-items: flex-end; gap: 2px; height: 70px; margin-top: 8px; border-bottom: 1px solid var(--line); }
+.ins-bars i { flex: 1; background: var(--brand); border-radius: 2px 2px 0 0; min-height: 1px; }
+.ins-bars i.we { background: #F4A774; }
+.ins-axis { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--muted); }
+.ins-seg { max-width: 560px; }
+.ins-heat th { font-weight: 600; color: var(--muted); padding: 3px; font-size: 10.5px; }
+.ins-heat td { width: 30px; height: 26px; text-align: center; font-size: 10.5px; border: 1px solid var(--card); background: var(--line-soft); color: var(--ink); }
+.ins-track { background: var(--line-soft); border-radius: 4px; overflow: hidden; }
+.ins-track i { display: block; height: 100%; background: var(--brand); }
+.ins-dl { margin: 14px 0 0; display: grid; gap: 6px; font-size: 12.5px; }
+.ins-dl div { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px dashed var(--line-soft); padding-bottom: 4px; }
+.ins-dl dt { color: var(--ink-2); }
+.ins-dl dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ins-people { margin-top: 10px; width: 100%; }
+.ins-people th, .ins-people td { padding: 6px 8px; border-bottom: 1px solid var(--line-soft); text-align: right; white-space: nowrap; }
+.ins-people th { color: var(--muted); font-weight: 600; font-size: 11px; }
 /* MACの案内：キャンパスのWiFiのつなぎ方 */
 
 .ws-toggle { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; margin: 8px 0 4px; padding: 11px 14px;
@@ -805,3 +838,9 @@ table.admin-users .rel { margin-right: 4px; }
 .ws-h { font-size: 14px; font-weight: 800; color: var(--ink); margin: 18px 0 6px; }
 .wifi-setup .row-note a { color: var(--brand-dark); font-weight: 700; }
 .ws-more { margin-top: 16px; }
+
+.ins-previews { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.ins-preview { display: block; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; text-decoration: none; color: var(--ink); background: var(--card); }
+.ins-preview:hover { border-color: var(--brand); }
+.ins-preview b { display: block; font-size: 13px; }
+.ins-preview span { display: block; margin-top: 4px; font-size: 11.5px; color: var(--muted); }

@@ -52,3 +52,4 @@ assert<Exact<App.PushSubscriptionBody, Fe.PushSubscriptionBody>>(true);
 assert<Exact<App.GreetResponse, Fe.GreetResponse>>(true);
 assert<Exact<App.Greeting, Fe.Greeting>>(true);
 assert<Exact<App.GreetingsResponse, Fe.GreetingsResponse>>(true);
+assert<Exact<App.InsightsResponse, Fe.InsightsResponse>>(true);

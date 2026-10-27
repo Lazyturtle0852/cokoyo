@@ -10,7 +10,7 @@ import { mockBackend } from './mockBackend';
 import { flushNetworkErrors, rememberNetworkError } from './networkReport';
 import type {
   AddFriendResponse, ApiErrorBody, InviteResponse, BestResponse, BlockResponse, CheckResponse,
-  AdminLogsResponse, AdminSessionResponse, AdminStatsResponse, DebugDbResponse, FeedbackResponse, SuggestionsResponse, FriendsResponse, MacAddressView, Me, PointsResponse, GreetResponse, GreetingsResponse, PushKeyResponse, PushSubscriptionBody, ReactionResponse, SlimeColor, UserRef,
+  AdminLogsResponse, AdminSessionResponse, AdminStatsResponse, DebugDbResponse, FeedbackResponse, SuggestionsResponse, FriendsResponse, MacAddressView, Me, PointsResponse, GreetResponse, InsightsResponse, GreetingsResponse, PushKeyResponse, PushSubscriptionBody, ReactionResponse, SlimeColor, UserRef,
 } from './types';
 
 // ---------------------------------------------------------------
@@ -208,4 +208,5 @@ export const api = {
   adminStats: () => request<AdminStatsResponse>('GET', '/v1/admin/stats', undefined, true),
   adminDb: () => request<DebugDbResponse>('GET', '/v1/admin/db', undefined, true),
   adminLogs: () => request<AdminLogsResponse>('GET', '/v1/admin/logs', undefined, true),
+  adminInsights: () => request<InsightsResponse>('GET', '/v1/admin/insights', undefined, true),
 };

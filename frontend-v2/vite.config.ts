@@ -24,7 +24,7 @@ export default defineConfig({
   define: { __BUILD_ID__: JSON.stringify(Date.now().toString(36)) },
   // 入口は2つ。アプリ（index.html）と管理画面（admin/index.html → /admin/）。
   build: {
-    rollupOptions: { input: { main: 'index.html', admin: 'admin/index.html' } },
+    rollupOptions: { input: { main: 'index.html', admin: 'admin/index.html', insights: 'admin/insights/index.html' } },
   },
   // 開発中は /api をローカルのバックエンドへ流す。同一オリジンになるので CORS が要らない。
   //   端末A: cd backend && npm run dev     （http://localhost:8080）
