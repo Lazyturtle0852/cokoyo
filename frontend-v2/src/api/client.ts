@@ -129,6 +129,7 @@ export const api = {
   },
   logout: () => request<null>('POST', '/v1/auth/logout'),
   logoutAll: () => request<null>('POST', '/v1/auth/logout-all'),
+  deleteAccount: () => request<null>('DELETE', '/v1/me'),
   completeOnboarding: (displayName: string, mac: string, label: string) =>
     request<Me>('POST', '/v1/onboarding', { displayName, mac, label }),
   getMe: (silent = false) => request<Me>('GET', '/v1/me', undefined, silent),

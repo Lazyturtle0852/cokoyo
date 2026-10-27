@@ -133,6 +133,16 @@ export function createRepo(db: Db) {
     userByToken: db.prepare(`SELECT ${USER_COLS} FROM users WHERE id = (SELECT user_id FROM sessions WHERE token_hash = ? AND expires_at > ?)`),
     deleteSession: db.prepare("DELETE FROM sessions WHERE token_hash = ?"),
     deleteSessionsOf: db.prepare("DELETE FROM sessions WHERE user_id = ?"),
+    deleteAccessOf: db.prepare("DELETE FROM access_daily WHERE user_id = ?"),
+    // 相手のマッチの記録には名前が文字で入っているので、名前のない書き方に直す（文言は points.ts と揃える）
+    forgetNameInPoints: db.prepare(
+      `UPDATE point_events SET label = CASE kind
+         WHEN 'first' THEN '退会した人とはじめてマッチ'
+         WHEN 'reunion' THEN '退会した人と' || days || '日ぶりにマッチ'
+         ELSE '退会した人とマッチ' END
+       WHERE other_user_id = ?`,
+    ),
+    deleteUser: db.prepare("DELETE FROM users WHERE id = ?"),
     liveSession: db.prepare("SELECT 1 FROM sessions WHERE user_id = ? AND expires_at > ? LIMIT 1"),
     pruneSessions: db.prepare("DELETE FROM sessions WHERE expires_at <= ?"),
     insertFlow: db.prepare("INSERT INTO auth_flows (state_hash, code_verifier, nonce, return_to, expires_at) VALUES (?, ?, ?, ?, ?)"),
@@ -406,6 +416,20 @@ export function createRepo(db: Db) {
     },
     deleteSession: (token: string) => void q.deleteSession.run(hashToken(token)),
     deleteSessionsOf: (userId: number) => void q.deleteSessionsOf.run(userId),
+    /**
+     * 退会。users を消せば、MAC・セッション・フレンド・通知の宛先などは ON DELETE CASCADE で一緒に消える。
+     * access_daily だけは外部キーがないので先に消す。相手側のポイント履歴は残すが、
+     * 文言から名前を抜き、相手の欄は ON DELETE SET NULL で空になる。
+     */
+    deleteUser(userId: number): void {
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        q.deleteAccessOf.run(userId);
+        q.forgetNameInPoints.run(userId);
+        q.deleteUser.run(userId);
+        db.exec("COMMIT");
+      } catch (error) { db.exec("ROLLBACK"); throw error; }
+    },
     /** どこかの端末でログインしたままか（期限の切れていないセッションがあるか） */
     hasLiveSession: (userId: number) => Boolean(q.liveSession.get(userId, new Date().toISOString())),
     createFlow(state: string, verifier: string, nonce: string, returnTo: string): void {
