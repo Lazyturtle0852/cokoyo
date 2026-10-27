@@ -4,7 +4,8 @@ import { config } from "./config.js";
 
 export interface GoogleIdentity { sub: string; email: string; displayName?: string; avatar?: string }
 export interface GoogleProvider {
-  authorizationUrl(verifier: string, state: string, nonce: string): Promise<URL>;
+  /** loginHint は前にログインしたアドレス。渡すと Google がそのアカウントを先に選ぶ */
+  authorizationUrl(verifier: string, state: string, nonce: string, loginHint?: string): Promise<URL>;
   exchange(callbackUrl: URL, verifier: string, state: string, nonce: string): Promise<GoogleIdentity>;
 }
 
@@ -77,7 +78,7 @@ export function createGoogleProvider(): GoogleProvider {
     return configuration;
   };
   return {
-    async authorizationUrl(verifier, state, nonce) {
+    async authorizationUrl(verifier, state, nonce, loginHint) {
       const client = await getConfiguration();
       return oidc.buildAuthorizationUrl(client, {
         redirect_uri: redirectUri,
@@ -86,6 +87,7 @@ export function createGoogleProvider(): GoogleProvider {
         state,
         nonce,
         hd: "keio.jp",
+        ...(loginHint ? { login_hint: loginHint } : {}),
         code_challenge: await oidc.calculatePKCECodeChallenge(verifier),
         code_challenge_method: "S256",
       });

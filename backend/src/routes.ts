@@ -17,7 +17,7 @@ import { maskMac, normalizeMac } from "./lib/mac.js";
 import { jstDate, sleep } from "./lib/time.js";
 import { awardPoints, isRainy, type VisibleFriend } from "./points.js";
 import type { PushSender } from "./push.js";
-import { OPS_KEEP, type FriendshipRow, type MacAddress, type OpsInput, type Repo, type User } from "./repo.js";
+import { OPS_KEEP, SESSION_DAYS, type FriendshipRow, type MacAddress, type OpsInput, type Repo, type User } from "./repo.js";
 
 /** 地図に置く場所。APが建物に紐づいていなければ null。 */
 const buildingKeyOf = (lookup: Lookup): BuildingKey | null =>
@@ -120,6 +120,8 @@ function requireUser(c: Parameters<typeof getCookie>[0], repo: Repo, completed =
   if (!token) fail(401, "unauthorized", "Googleでログインしてください");
   const user = repo.findByToken(token);
   if (!user) fail(401, "unauthorized", "Googleでログインしてください");
+  // 使っているあいだはログイン状態を延ばす（Cookie も同じだけ延ばす）
+  if (repo.renewSession(token as string)) setCookie(c, sessionCookie, token as string, { ...cookieOptions, maxAge: SESSION_DAYS * 86400 });
   if (completed && !user.onboarding_completed_at) fail(403, "onboarding_required", "初回登録を完了してください");
   return user;
 }
@@ -329,13 +331,16 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
   app.get("/v1/auth/google", async (c) => {
     if (!google) fail(503, "auth_unavailable", "Googleログインが設定されていません");
     const key = c.req.query("add") ?? "";
+    // 前にログインしたアドレス（ブラウザが覚えている）。Google のアカウント選びを1つ減らす
+    const hint = c.req.query("hint") ?? "";
+    const loginHint = /^[A-Za-z0-9._%+-]{1,64}@keio\.jp$/.test(hint) ? hint : undefined;
     const returnTo = /^sk_[0-9A-Za-z]{4,64}$/.test(key) ? `/?add=${encodeURIComponent(key)}` : "/";
     const state = newSecret();
     const verifier = newSecret();
     const nonce = newSecret();
     repo.createFlow(state, verifier, nonce, returnTo);
     setCookie(c, oauthCookie, state, { ...cookieOptions, maxAge: 600 });
-    return c.redirect((await google.authorizationUrl(verifier, state, nonce)).href, 302);
+    return c.redirect((await google.authorizationUrl(verifier, state, nonce, loginHint)).href, 302);
   });
 
   app.get("/v1/auth/google/callback", async (c) => {
@@ -361,7 +366,7 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
     if (identity.avatar) repo.setGoogleAvatarIfUnset(user.id, identity.avatar);
     const token = newSecret();
     repo.createSession(user.id, token);
-    setCookie(c, sessionCookie, token, { ...cookieOptions, maxAge: 14 * 86400 });
+    setCookie(c, sessionCookie, token, { ...cookieOptions, maxAge: SESSION_DAYS * 86400 });
     return c.redirect(`${config.appOrigin}${flow.return_to}`, 302);
   });
 
