@@ -342,6 +342,9 @@ export function createRepo(db: Db) {
     });
 
   return {
+    /** 分析（src/insights.ts）が自分の表を作って読むためだけに渡す */
+    database: () => db,
+
     // ── users ────────────────────────────────────────────────
     findById: (id: number) => one<User>(q.userById.get(id)),
     findByUserId: (userId: string) => one<User>(q.userByUserId.get(userId)),

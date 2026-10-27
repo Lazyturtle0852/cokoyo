@@ -229,6 +229,65 @@ export interface DebugDbResponse {
   tables: DbTable[];
 }
 
+/**
+ * GET /v1/admin/insights。運営者（千田さん）が見る分析の数字。名前やメールは入れない。
+ * 「分析用に保存」で、この形のままJSONファイルにする。
+ */
+export interface InsightsResponse {
+  generatedAt: string;
+  today: string;
+  /** 在校確認の回数を記録し始めた日（それより前は「キャンパスで確認できた」記録から数える） */
+  checkLogSince: string | null;
+  /** 登録から使い続けるまでの段階。上から順に、その段階まで進んだ人数 */
+  funnel: Array<{ key: string; label: string; count: number; note?: string }>;
+  /** 登録した週ごとに、その後の各週にアプリを開いた人数（weeks[0] が登録した週） */
+  retention: Array<{ cohort: string; size: number; weeks: number[] }>;
+  /** 直近30日、古い順 */
+  daily: Array<{ date: string; active: number; visitors: number; checks: number; greets: number; newUsers: number }>;
+  /** 曜日（0=日）× 時（0〜23、日本時間）の回数 */
+  heat: {
+    /** 在校確認を押した回数（記録を始めてから） */
+    checks: number[][];
+    /** その日はじめてキャンパスで確認できた時刻（これまでの全期間） */
+    firstVisits: number[][];
+  };
+  network: {
+    users: number;
+    zeroFriends: number;
+    avgFriends: number;
+    histogram: Array<{ label: string; users: number }>;
+    friendPairs: number;
+    bestPairs: number;
+    pendingRequests: number;
+    /** 申請（承認待ち＋成立）のうち成立した割合。0〜1 */
+    acceptRate: number | null;
+    /** 直近7日、同じ日にキャンパスにいたフレンドの組（マッチ）の数 */
+    matches7d: number;
+  };
+  features: {
+    users: number;
+    pushUsers: number;
+    colorUsers: number;
+    hiddenUsers: number;
+    notDiscoverableUsers: number;
+    greets7d: number;
+    reactions7d: number;
+  };
+  /** 1人1行。名前・メール・IDは入れず、連番にする */
+  people: Array<{
+    n: number;
+    signedUp: string;
+    onboarded: boolean;
+    friends: number;
+    visitDays: number;
+    visitDays30: number;
+    activeDays30: number;
+    checks30: number;
+    lastActive: string | null;
+    push: boolean;
+  }>;
+}
+
 /** GET /v1/admin/session。管理用パスワードで入っているか。 */
 export interface AdminSessionResponse {
   admin: boolean;

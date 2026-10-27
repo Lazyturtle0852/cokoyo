@@ -5,7 +5,7 @@ import { routePath } from "hono/route";
 import type {
   AddFriendResponse, AdminLogsResponse, AdminSessionResponse, AdminStatsResponse, BestResponse, BestState, BlockResponse, BuildingKey, CheckResponse,
   DebugDbResponse, FeedbackResponse, InviteResponse, Suggestion, SuggestionsResponse, FriendsResponse, Me, PointItem, PointsResponse, Reaction, ReactionResponse,
-  GreetResponse, GreetingsResponse, MacAddressView, PushKeyResponse, SlimeColor, UserRef,
+  GreetResponse, GreetingsResponse, InsightsResponse, MacAddressView, PushKeyResponse, SlimeColor, UserRef,
 } from "../../shared/app-types.js";
 import { BUILDING_LABELS, SLIME_COLORS } from "../../shared/app-types.js";
 import { config } from "./config.js";
@@ -17,6 +17,7 @@ import { maskMac, normalizeMac } from "./lib/mac.js";
 import { jstDate, sleep } from "./lib/time.js";
 import { awardPoints, isRainy, type VisibleFriend } from "./points.js";
 import type { PushSender } from "./push.js";
+import { createInsights } from "./insights.js";
 import { OPS_KEEP, type FriendshipRow, type MacAddress, type OpsInput, type Repo, type User } from "./repo.js";
 
 /** 地図に置く場所。APが建物に紐づいていなければ null。 */
@@ -271,6 +272,7 @@ function toClientOps(input: unknown, routeOf: (method: string, path: string) => 
 /** /v1 の下に生やす。フロントは apiBaseUrl + "/v1/..." で叩く。 */
 export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider | null, admin: AdminAuth, push: PushSender) {
   const app = new Hono();
+  const insights = createInsights(repo.database());
 
   const requireAdmin = (c: Parameters<typeof getCookie>[0]) => {
     if (!admin.enabled) fail(503, "admin_unavailable", "管理用パスワードが設定されていません");
@@ -544,6 +546,8 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
         reactions.push({ userId: f.user.user_id, count: r.count });
       }
     });
+
+    insights.recordCheck(me.id, mine?.status === "present");
 
     const response: CheckResponse = {
       checkedAt: new Date().toISOString(),
@@ -831,6 +835,7 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
     if (sendKey) reactionSendIds.set(sendKey, now + REACTION_SEND_ID_TTL_MS);
 
     if (!repeated && !repo.isBlocking(other.id, me.id)) repo.addReaction(me.id, other.id, count as number, REACTION.MAX);
+    if (!repeated) insights.count("reaction");
     const response: ReactionResponse = { userId: other.user_id, count: count as number };
     return c.json(response, 202);
   });
@@ -853,6 +858,7 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
     const recent = last !== null && Date.now() - new Date(last).getTime() < GREET.QUIET_MS;
     if (!recent && !repo.isBlocking(other.id, me.id)) {
       repo.saveGreeting(me.id, other.id);
+      insights.count("greet");
       void push.send(other.id, {
         title: "YO！されました",
         body: `${me.display_name ? `${me.display_name}さん` : "フレンド"}もキャンパスにいるようです。`,
@@ -972,6 +978,13 @@ export function createRoutes(repo: Repo, dtc: DtcClient, google: GoogleProvider 
   app.get("/v1/admin/stats", (c) => {
     requireAdmin(c);
     const response: AdminStatsResponse = repo.adminStats();
+    return c.json(response);
+  });
+
+  /** 運営者向けの分析（/admin/insights/）。名前・メール・IDは入らない */
+  app.get("/v1/admin/insights", (c) => {
+    requireAdmin(c);
+    const response: InsightsResponse = insights.report();
     return c.json(response);
   });
 
