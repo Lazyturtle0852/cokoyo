@@ -838,3 +838,9 @@ table.admin-users .rel { margin-right: 4px; }
 .ws-h { font-size: 14px; font-weight: 800; color: var(--ink); margin: 18px 0 6px; }
 .wifi-setup .row-note a { color: var(--brand-dark); font-weight: 700; }
 .ws-more { margin-top: 16px; }
+
+.ins-previews { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.ins-preview { display: block; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; text-decoration: none; color: var(--ink); background: var(--card); }
+.ins-preview:hover { border-color: var(--brand); }
+.ins-preview b { display: block; font-size: 13px; }
+.ins-preview span { display: block; margin-top: 4px; font-size: 11.5px; color: var(--muted); }

@@ -9,6 +9,7 @@
 
 import type { BestState, BuildingKey, PointItem, PointKind, Reaction, SlimeColor } from './types';
 import { BUILDING_KEYS, BUILDING_LABELS, SLIME_COLORS } from './types';
+import { useMockBackend } from '../config';
 
 // Google アカウントと複数MACの形に変わったため、旧デモの保存は使わない。
 const STORE_KEY = 'cokoyo-mock-backend:v6'; // 「知り合いかも」用のつながりを足したので作り直す
@@ -175,6 +176,30 @@ const setSession = (uid: string | null) => {
   sessionUid = uid;
   try { localStorage.setItem(SESSION_KEY, uid ?? ''); } catch { /* 保存できない環境 */ }
 };
+
+// ---------------------------------------------------------------
+// 運営者が「はじめて使う人の画面」を確かめる（/admin/insights/ のリンクから開く）
+//
+// ?preview=signup で開くと、練習用のデータを最初に戻し、ログインしていない状態から始める。
+// 次に「Googleでログイン」を押すと、まだ登録していない新しい人として、登録の画面に進む。
+// 同じ端末で見たことがある案内（ホーム画面に追加・お知らせ）も、はじめての人と同じく出す。
+// ---------------------------------------------------------------
+const NEXT_LOGIN_NEW_KEY = 'cokoyo-mock-next-login-new:v1';
+if (useMockBackend && typeof window !== 'undefined') {
+  try {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('preview') === 'signup') {
+      db = seed();
+      save();
+      setSession(null);
+      localStorage.setItem(NEXT_LOGIN_NEW_KEY, '1');
+      Object.keys(localStorage).filter((k) => /^cokoyo-(install-skipped|news|push-owner|last-email)/.test(k)).forEach((k) => localStorage.removeItem(k));
+      Object.keys(sessionStorage).filter((k) => k.startsWith('cokoyo-lastcheck:')).forEach((k) => sessionStorage.removeItem(k));
+      url.searchParams.delete('preview');
+      window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    }
+  } catch { /* 保存できない環境では、ふだんのデモのまま */ }
+}
 
 // ---------------------------------------------------------------
 // 関係の判定
@@ -683,6 +708,10 @@ const sim = {
   signedIn() { return !!sessionUid; },
   currentUserId() { return sessionUid; },
   login() {
+    // 「はじめて使う人の画面」を確かめているときは、新しい人として登録から始める
+    try {
+      if (localStorage.getItem(NEXT_LOGIN_NEW_KEY)) { localStorage.removeItem(NEXT_LOGIN_NEW_KEY); this.startNewAccount(); return; }
+    } catch { /* 保存できない環境 */ }
     // 退会したあとにログインし直したら、Google ログイン直後と同じく初回登録から始める
     if (!db.users.u_me) {
       const now = new Date().toISOString();

@@ -66,6 +66,7 @@ export function Insights() {
         </div>
         <People d={data} />
       </>}
+      <Preview />
     </div>
   );
 }
@@ -255,6 +256,32 @@ function Features({ d }: { d: InsightsResponse }) {
       <dl className="ins-dl">
         {rows.map(([label, v, ofUsers]) => <div key={label}><dt>{label}</dt><dd>{fmt(v)}{ofUsers ? `人（${pct(v, f.users)}）` : '回'}</dd></div>)}
       </dl>
+    </section>
+  );
+}
+
+// ── はじめて使う人の画面を確かめる ───────────────────────────────
+// 練習用（/test/）を、ログインしていない新しい人の状態から開く。画面の作りは本番と同じで、データは練習用。
+const PREVIEWS: Array<{ title: string; note: string; query: string }> = [
+  { title: '招待リンクから開いた人', note: 'フレンドの招待リンクを開いて、ログイン → 登録 → 申請の確認まで', query: 'preview=signup&add=sk_s3nv7kpa' },
+  { title: 'アプリのページから開いた人', note: '招待なしで開いて、ログイン → 登録まで', query: 'preview=signup' },
+  { title: 'インスタの中のブラウザ（iPhone）', note: '「ふだん使っているブラウザで開いて」の案内', query: 'preview=signup&inapp=instagram&os=ios' },
+  { title: 'インスタの中のブラウザ（Android）', note: '「Chromeで開く」ボタンが出る案内', query: 'preview=signup&inapp=instagram&os=android' },
+  { title: 'LINEの中のブラウザ（iPhone）', note: 'LINE で開いたときの案内', query: 'preview=signup&inapp=line&os=ios' },
+];
+
+function Preview() {
+  return (
+    <section className="panel">
+      <h2>はじめて使う人の画面を確かめる</h2>
+      <p className="desc">押すと新しいタブで、まだ登録していない人の状態から開きます（練習用のデータで動く画面。本番のデータには触れません）。</p>
+      <div className="ins-previews">
+        {PREVIEWS.map((p) => (
+          <a key={p.query} className="ins-preview" href={`../../test/?${p.query}`} target="_blank" rel="noopener noreferrer">
+            <b>{p.title}</b><span>{p.note}</span>
+          </a>
+        ))}
+      </div>
     </section>
   );
 }
