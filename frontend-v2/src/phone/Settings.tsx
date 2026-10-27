@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../app/AppContext';
-import { api } from '../api/client';
+import { api, rememberLoginEmail } from '../api/client';
 import { disablePush } from '../app/push';
 import { config, useMockBackend } from '../config';
 import { AvatarPicker } from './AvatarPicker';
@@ -47,6 +47,7 @@ export function Settings() {
     await run(label, async () => {
       // ログアウトした端末には、もう通知を送らない（全端末・退会のときは、ほかの端末の分をサーバーが消す）
       await disablePush();
+      rememberLoginEmail(null);
       await call();
       try { [localStorage, sessionStorage].forEach((st) => Object.keys(st).filter((key) => key.startsWith('cokoyo-lastcheck:')).forEach((key) => st.removeItem(key))); } catch { /* 保存できない環境 */ }
       await restart();
@@ -100,7 +101,7 @@ export function Settings() {
     <div className="sec"><h3>アカウント</h3></div>
     <div className="card">
       <div className="kv"><div><div className="k">Googleアカウント</div><div className="v account-email">{me.email}</div></div></div>
-      <p className="row-note">ログイン状態は14日間有効です。</p>
+      <p className="row-note">ログイン状態は、最後に使ってから60日間続きます（使っているあいだは切れません）。</p>
       <button className="btn btn-quiet" onClick={() => void logout(false)}>ログアウト</button>
       <button className="btn btn-quiet" onClick={() => void logout(true)}>すべての端末からログアウト</button>
       {armedLeave ? <div className="confirm" role="alertdialog" aria-label="退会の確認">

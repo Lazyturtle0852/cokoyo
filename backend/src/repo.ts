@@ -19,6 +19,14 @@ export interface OpsInput {
   message?: string | null;
 }
 
+/**
+ * ログイン状態の長さ。最後に使ってから SESSION_DAYS 日たつと切れる（使っているあいだは延びる）。
+ * 前は「ログインしてから14日」で切れていたので、毎日使っている人でも2週間ごとに
+ * keio.jp のログインをやり直すことになっていた（2026-10-27）。
+ */
+export const SESSION_DAYS = 60;
+const SESSION_MS = SESSION_DAYS * 86400000;
+
 /** 運用ログ（ops_events）に残す件数。超えたら古いものから消す */
 export const OPS_KEEP = 5000;
 
@@ -132,6 +140,7 @@ export function createRepo(db: Db) {
     insertSession: db.prepare("INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)"),
     userByToken: db.prepare(`SELECT ${USER_COLS} FROM users WHERE id = (SELECT user_id FROM sessions WHERE token_hash = ? AND expires_at > ?)`),
     deleteSession: db.prepare("DELETE FROM sessions WHERE token_hash = ?"),
+    renewSession: db.prepare("UPDATE sessions SET expires_at = ? WHERE token_hash = ? AND expires_at > ? AND expires_at < ?"),
     deleteSessionsOf: db.prepare("DELETE FROM sessions WHERE user_id = ?"),
     deleteAccessOf: db.prepare("DELETE FROM access_daily WHERE user_id = ?"),
     // 相手のマッチの記録には名前が文字で入っているので、名前のない書き方に直す（文言は points.ts と揃える）
@@ -362,6 +371,16 @@ export function createRepo(db: Db) {
     findByMac: (mac: string) => one<User>(q.userByMac.get(mac)),
     findBySub: (sub: string) => one<User>(q.userBySub.get(sub)),
     findByEmail: (email: string) => one<User>(q.userByEmail.get(email)),
+    /**
+     * 使われたログイン状態の期限を、今から SESSION_DAYS 日先まで延ばす。
+     * 書き込みを減らすため、延ばすのは1日に1回まで（残りが SESSION_DAYS − 1 日を切ったときだけ）。延ばしたら true
+     */
+    renewSession(token: string): boolean {
+      const now = Date.now();
+      const r = q.renewSession.run(new Date(now + SESSION_MS).toISOString(), hashToken(token),
+        new Date(now).toISOString(), new Date(now + SESSION_MS - 86400000).toISOString());
+      return Number(r.changes) > 0;
+    },
     findByToken: (token: string) => one<User>(q.userByToken.get(hashToken(token), new Date().toISOString())),
 
     findOrCreateGoogleUser(sub: string, email: string): User {
@@ -415,7 +434,7 @@ export function createRepo(db: Db) {
     createSession(userId: number, token: string): void {
       const now = new Date();
       q.pruneSessions.run(now.toISOString());
-      q.insertSession.run(hashToken(token), userId, now.toISOString(), new Date(now.getTime() + 14 * 86400000).toISOString());
+      q.insertSession.run(hashToken(token), userId, now.toISOString(), new Date(now.getTime() + SESSION_MS).toISOString());
     },
     deleteSession: (token: string) => void q.deleteSession.run(hashToken(token)),
     deleteSessionsOf: (userId: number) => void q.deleteSessionsOf.run(userId),

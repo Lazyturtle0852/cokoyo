@@ -112,6 +112,18 @@ async function request<T>(method: string, path: string, body?: Record<string, un
 
 const id = encodeURIComponent;
 
+/**
+ * 前にログインした keio.jp のアドレス。ログインし直すときに Google へ渡す（アカウントを選ぶ手間を減らす）。
+ * 自分でログアウトしたら消す（共用の端末で、次の人に前の人のアドレスが出ないように）。
+ */
+const LAST_EMAIL_KEY = 'cokoyo-last-email:v1';
+export function rememberLoginEmail(email: string | null) {
+  try { if (email) localStorage.setItem(LAST_EMAIL_KEY, email); else localStorage.removeItem(LAST_EMAIL_KEY); } catch { /* 保存できない環境 */ }
+}
+function lastLoginEmail(): string {
+  try { return localStorage.getItem(LAST_EMAIL_KEY) ?? ''; } catch { return ''; }
+}
+
 /** 送り直しても同じものだと分かるように、書き込み1回ごとに付ける使い捨ての ID */
 const newSendId = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -123,9 +135,14 @@ export const api = {
   getSession: () => request<{ email: string; displayName: string; status: 'onboarding' | 'ready' }>('GET', '/v1/auth/session'),
   beginLogin: () => {
     if (useMockBackend) { mockBackend.sim.login(); window.location.reload(); return; }
+    const params = new URLSearchParams();
     const invite = pendingInvite();
-    const url = `${config.apiBaseUrl.replace(/\/$/, '')}/v1/auth/google${invite ? `?add=${encodeURIComponent(invite)}` : ''}`;
-    window.location.assign(url);
+    if (invite) params.set('add', invite);
+    // 前にログインしたアドレスを渡すと、Google のアカウント選びが1つ減る
+    const hint = lastLoginEmail();
+    if (hint) params.set('hint', hint);
+    const q = params.toString();
+    window.location.assign(`${config.apiBaseUrl.replace(/\/$/, '')}/v1/auth/google${q ? `?${q}` : ''}`);
   },
   logout: () => request<null>('POST', '/v1/auth/logout'),
   logoutAll: () => request<null>('POST', '/v1/auth/logout-all'),
