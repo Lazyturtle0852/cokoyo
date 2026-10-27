@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { howToOpen, inAppBrowser, inAppName, openInBrowserUrl } from '../app/browser';
+import { howToOpen, inAppBrowser, inAppName, openInBrowserUrl, usualBrowser } from '../app/browser';
 import { pendingInvite } from '../app/invite';
 
 /** Google ログイン前に、アプリ内ブラウザから通常のブラウザへ案内する。 */
@@ -21,7 +21,7 @@ export function InAppNotice() {
   return (
     <div className="inapp">
       <p className="inapp-title">{inAppName(kind)}の中のブラウザで開いています</p>
-      <p className="inapp-body">Googleログインは、ふだん使っているブラウザで開いてから進めてください。</p>
+      <p className="inapp-body">Googleログインは、ふだん使っているブラウザ（<b>{usualBrowser()}</b>）で開いてから進めてください。</p>
       <p className="inapp-body"><b>{howToOpen(kind)}</b></p>
       {intent
         ? <button className="btn btn-primary" onClick={() => { window.location.href = intent; }}>Chromeで開く</button>

@@ -10,7 +10,6 @@ export function Feedback() {
     <>
       <p className="row-note">
         使いにくいところ、動かないところ、ほしい機能があれば教えてください。作っている学生に直接届きます。
-        退会（データの削除）の希望もここから受け付けます。
       </p>
       <a className="btn btn-quiet" href={feedbackFormUrl} target="_blank" rel="noopener noreferrer">
         問い合わせフォームを開く

@@ -19,6 +19,9 @@ export default defineConfig({
   ],
   // 公開用に1ファイルへまとめるとき（tools/build-app-share.js）、相対パスのほうが扱いやすい
   base: './',
+  // ビルドごとの印。サービスワーカーを sw.js?v=<印> で登録し、更新のたびに別のURLにする
+  // （Cloudflare が sw.js を控えていても、新しい版を取りに行かせるため。src/main.tsx）
+  define: { __BUILD_ID__: JSON.stringify(Date.now().toString(36)) },
   // 入口は2つ。アプリ（index.html）と管理画面（admin/index.html → /admin/）。
   build: {
     rollupOptions: { input: { main: 'index.html', admin: 'admin/index.html', insights: 'admin/insights/index.html' } },
