@@ -4,7 +4,7 @@
 // バックエンドとのやりとりは src/api/client.ts の api.* を通す。
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { api, ApiError, callLog } from '../api/client';
+import { api, ApiError, callLog, rememberLoginEmail } from '../api/client';
 import type { CheckResponse, FriendsResponse, Greeting, InviteResponse, Me, PointsResponse } from '../api/types';
 import { createCampusField, setSlimeColors, type CampusField } from '../field/campusField';
 import { clearPendingInvite, pendingInvite, takeInviteFromUrl } from './invite';
@@ -201,6 +201,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     callLog.begin('アプリを開いた');
     try {
       const session = await api.getSession();
+      rememberLoginEmail(session.email);
       if (session.status === 'onboarding') { setInitialDisplayName(session.displayName ?? ''); goOnboarding(); return; }
       const userId = await loadAll();
       setView('app');
