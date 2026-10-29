@@ -357,23 +357,34 @@ const overlay = (rows: string[], ox: number, oy: number, fill: Record<string, st
   rows.map((row, y) => [...row].map((ch, x) => (fill[ch]
     ? `<rect x="${x + ox}" y="${y + oy}" width="1" height="1" fill="${fill[ch]}"/>` : '')).join('')).join('');
 
-/** 頭の左上に刺さったネジ（ドット）。マイナス溝の頭が少し左に傾き、下の段は頭のふちにうまる */
-const BOLT = overlay([
-  '.ooooo..',
-  'owldlmo.',
-  'olldmmo.',
-  '.ooooo..',
-  '..olmdo.',
-  '..odmmo.',
-  '..olmdo.',
-], 0, -6, { o: '#2E2A45', w: '#FFFFFF', l: '#D9DCE2', m: '#A9AEB8', d: '#6F7480' });
+/**
+ * 頭の左上に、左へ27°傾いて刺さったネジ（ドットを回して描く）。マイナス溝の頭に、ネジ山の軸。
+ * 先は (3.6, 3.6) で体にうまり、その下に血が垂れる。ネジのドットは体より小さい（0.64倍）
+ */
+const BOLT = `<g transform="translate(3.6 3.6) rotate(-27) scale(.64) translate(-4 -8)" shape-rendering="geometricPrecision">${overlay([
+  '.oooooo.',
+  'owlldlmo',
+  'ollldmmo',
+  '.oooooo.',
+  '..olmo..',
+  '..odmo..',
+  '..olmo..',
+  '..odmo..',
+], 0, 0, { o: '#2E2A45', w: '#FFFFFF', l: '#D9DCE2', m: '#A9AEB8', d: '#6F7480' })
+  // 回すとドットのあいだに細いすきまが出るので、少しだけ重ねる
+  .replaceAll('width="1" height="1"', 'width="1.04" height="1.04"')}</g>`;
+
+/** ネジの刺さったところから垂れる血 */
+const BLOOD = `<g fill="#E25D55" shape-rendering="geometricPrecision">
+  <rect x="2.6" y="3.45" width="1.05" height="1.1"/><rect x="3.1" y="4" width="1.05" height="1.75"/></g>`;
 
 export const slimeSvg = (color: string, zombie = false) => {
   if (!zombie) return spriteSvg(SLIME, { o: '#2E2A45', b: color, s: shade(color, -0.22), h: shade(color, 0.6), p: '#FF8FA8' });
   const body = mix(color, '#8FBF6A', 0.45);
-  return spriteSvg(SLIME, { o: '#2E2A45', b: body, s: shade(body, -0.25), h: shade(body, 0.45), p: '#A77BB8' })
+  // ネジのところは光らせない（h も体の色）
+  return spriteSvg(SLIME, { o: '#2E2A45', b: body, s: shade(body, -0.25), h: body, p: '#A77BB8' })
     .replace('<svg ', '<svg style="overflow:visible" ')
-    .replace(/<\/svg>$/, `${SCAR}${BOLT}</svg>`);
+    .replace(/<\/svg>$/, `${SCAR}${BLOOD}${BOLT}</svg>`);
 };
 
 // ── ハロウィンのおばけ：魔女の帽子（帯はスライムの色）────────────────────
