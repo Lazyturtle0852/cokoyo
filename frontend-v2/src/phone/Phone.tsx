@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useApp, type Tab } from '../app/AppContext';
 import { AddFriendSheet } from './AddFriendSheet';
 import { GreetingCard } from './GreetingCard';
+import { HalloweenPop } from './HalloweenPop';
 import { InviteConfirm } from './InviteConfirm';
 import { CampusMap } from './CampusMap';
 import { FieldView } from './FieldView';
@@ -114,6 +115,7 @@ export function Phone() {
           <AddFriendSheet />
           <InviteConfirm />
           <GreetingCard />
+          {view === 'app' && <HalloweenPop />}
           {toast && <div className="toast show" key={toast.id} role="status" aria-live="polite">{toast.message}</div>}
         </div>
       </div>

@@ -80,6 +80,58 @@ const grid = (xs: number[], ys: number[], w: number, h: number, fill: string) =>
  */
 export type Season = 'sakura' | 'green' | 'autumn' | 'winter';
 
+/**
+ * ハロウィン（10/31、日本時間）だけ、フィールドとスライムをハロウィン仕様にする。
+ * 確かめるときは URL に ?event=halloween（いつでも出す）／?event=none（出さない）を付ける。
+ */
+export function isHalloween(date = new Date()): boolean {
+  if (typeof window !== 'undefined') {
+    const forced = new URLSearchParams(window.location.search).get('event');
+    if (forced === 'halloween') return true;
+    if (forced === 'none') return false;
+  }
+  const jst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+  return jst.getUTCMonth() === 9 && jst.getUTCDate() === 31;
+}
+
+// ── ハロウィンの飾り（ドット） ────────────────────────────────
+/** かぼちゃのおばけ（9×8マス） */
+const PUMPKIN = [
+  '....g....',
+  '...gg....',
+  '.ooooooo.',
+  'ooyooyooo',
+  'ooooooooo',
+  'oyoyoyoyo',
+  'ooyyyyyoo',
+  '.ooooooo.',
+];
+/** コウモリ（9×4マス） */
+const BAT = [
+  'k.......k',
+  'kk.k.k.kk',
+  '.kkkkkkk.',
+  '...k.k...',
+];
+const pix = (rows: string[], fill: Record<string, string>, x: number, y: number, size: number) =>
+  `<g transform="translate(${x} ${y}) scale(${size})" shape-rendering="crispEdges">${rows.flatMap((row, ry) => [...row].map((ch, rx) =>
+    (fill[ch] ? `<rect x="${rx}" y="${ry}" width="1.02" height="1.02" fill="${fill[ch]}"/>` : ''))).join('')}</g>`;
+const pumpkin = (x: number, y: number, size: number) =>
+  pix(PUMPKIN, { g: '#4E7A3A', o: '#F28A2E', y: '#3A2A1E' }, x, y, size);
+const bat = (x: number, y: number, size: number) => pix(BAT, { k: '#3A2E52' }, x, y, size);
+
+/** 夕暮れの空・月・コウモリ（建物のうしろに敷く） */
+const halloweenSky = `
+  <defs><linearGradient id="hw-sky" x1="0" x2="0" y1="0" y2="1">
+    <stop offset="0" stop-color="#5B4A8C"/><stop offset=".55" stop-color="#C77DA8"/><stop offset="1" stop-color="#F6B67A"/>
+  </linearGradient></defs>
+  <rect x="0" y="0" width="${368}" height="130" fill="url(#hw-sky)"/>
+  ${pix(['.mmm.', 'mmmmm', 'mmmmm', 'mmmmm', '.mmm.'], { m: '#FFE6A8' }, 30, 8, 3.2)}
+  ${bat(96, 16, 2)}${bat(150, 6, 1.6)}${bat(330, 22, 1.8)}`;
+
+/** 芝生の上のかぼちゃ（スライムが歩くまん中はあける） */
+const halloweenLawn = `${pumpkin(122, 116, 2.2)}${pumpkin(300, 120, 2.6)}${pumpkin(338, 150, 2)}${pumpkin(236, 176, 2.2)}${pumpkin(18, 140, 1.8)}`;
+
 export function seasonOf(date = new Date()): Season {
   const month = date.getMonth() + 1;
   if (month === 3 || month === 4) return 'sakura';
@@ -139,7 +191,8 @@ function drum(cx: number, r: number, top: number) {
   <rect x="${cx - r - 1.5}" y="${top - 1}" width="${r * 2 + 3}" height="2.4" rx="1" fill="#CFCBC4"/>`;
 }
 
-const scene = (season: Season) => `<svg class="scene" viewBox="0 0 ${VW} ${VH}" aria-hidden="true" focusable="false">
+export const scene = (season: Season, halloween = false) => `<svg class="scene" viewBox="0 0 ${VW} ${VH}" aria-hidden="true" focusable="false">
+  ${halloween ? halloweenSky : ''}
   <!-- 右奥：円筒のうしろの箱 -->
   <rect x="232" y="68" width="112" height="48" fill="#E9E8E4"/>
   <rect x="232" y="68" width="112" height="3" fill="#D3D0CA"/>
@@ -165,6 +218,7 @@ const scene = (season: Season) => `<svg class="scene" viewBox="0 0 ${VW} ${VH}" 
   <g stroke="#86C666" stroke-width="2" stroke-linecap="round" fill="none">
     <path d="M150 128 l2 -5 l2 5"/><path d="M262 172 l2 -5 l2 5"/><path d="M318 140 l2 -5 l2 5"/><path d="M196 186 l2 -5 l2 5"/>
   </g>
+  ${halloween ? halloweenLawn : ''}
   <!-- 鴨池 -->
   <ellipse cx="70" cy="167" rx="48" ry="14" fill="#62B2D8"/>
   <ellipse cx="70" cy="165" rx="45" ry="11.5" fill="#8BCEEB"/>
@@ -268,8 +322,27 @@ function spriteSvg(rows: string[], fill: Record<string, string>, extraClass = ''
 }
 
 /** スライムのドット絵。地図（src/field/campusMap.ts）でも同じ絵を使う。 */
-export const slimeSvg = (color: string) =>
-  spriteSvg(SLIME, { o: '#2E2A45', b: color, s: shade(color, -0.22), h: shade(color, 0.6), p: '#FF8FA8' });
+/** 2つの色を混ぜる（t=0 で a、t=1 で b）。#rrggbb を返す */
+function mix(a: string, b: string, t: number) {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const ch = (sh: number) => Math.round(((pa >> sh) & 255) * (1 - t) + ((pb >> sh) & 255) * t);
+  return `#${[16, 8, 0].map((sh) => ch(sh).toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * ゾンビのスライム（ハロウィンの日だけ）。その人の色は残しつつ緑がかった顔色にし、
+ * おでこに縫い目（z）を入れる。かくれんぼのおばけとは別の見た目にする。
+ */
+const ZOMBIE = SLIME.map((row, y) => [...row].map((ch, x) => (
+  // 横の線に、短い縫い目を2本（縫い合わせた傷あと）
+  (y === 3 && x >= 3 && x <= 7) || ((y === 2 || y === 4) && (x === 4 || x === 6)) ? 'z' : ch
+)).join(''));
+
+export const slimeSvg = (color: string, zombie = false) => {
+  if (!zombie) return spriteSvg(SLIME, { o: '#2E2A45', b: color, s: shade(color, -0.22), h: shade(color, 0.6), p: '#FF8FA8' });
+  const body = mix(color, '#8FBF6A', 0.45);
+  return spriteSvg(ZOMBIE, { o: '#2E2A45', b: body, s: shade(body, -0.25), h: shade(body, 0.45), p: '#A77BB8', z: '#2E2A45' });
+};
 const ghostSvg = () =>
   spriteSvg(GHOST, { o: '#5E5885', b: '#F3F0FF', s: '#D9D3F2', h: '#FFFFFF', p: '#FFB3C4' }, 'ghost-sprite');
 
@@ -311,7 +384,10 @@ const ease = (p: number) => (p < 0.5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2);
 export function createCampusField(): CampusField {
   const el = document.createElement('div');
   el.className = 'field-scene';
-  el.innerHTML = `${scene(seasonOf())}<div class="slimes"></div><div class="rain" aria-hidden="true">${
+  // ハロウィン（10/31）は、開いたときに決める（日をまたいで開きっぱなしでも、そのまま）
+  const halloween = isHalloween();
+  if (halloween) el.classList.add('halloween');
+  el.innerHTML = `${scene(seasonOf(), halloween)}<div class="slimes"></div><div class="rain" aria-hidden="true">${
     // 雨は天気が雨のときだけ出す（CSSで降らせるので、動かしても軽い）
     Array.from({ length: 20 }, (_, i) => `<i style="--x:${(i * 23 + 7) % 100}%;--d:${(i % 5) * 0.18}s;--s:${0.8 + (i % 3) * 0.18}"></i>`).join('')
   }</div>`;
@@ -332,7 +408,7 @@ export function createCampusField(): CampusField {
   }
 
   function drawBody(s: Slime) {
-    s.body.innerHTML = (s.ghost ? ghostSvg() : slimeSvg(s.color)) + (s.self ? '<span class="self-mark"></span>' : '');
+    s.body.innerHTML = (s.ghost ? ghostSvg() : slimeSvg(s.color, halloween)) + (s.self ? '<span class="self-mark"></span>' : '');
     s.node.classList.toggle('is-ghost', s.ghost);
   }
 
