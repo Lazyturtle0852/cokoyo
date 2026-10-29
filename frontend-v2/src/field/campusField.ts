@@ -345,22 +345,63 @@ function mix(a: string, b: string, t: number) {
  * ゾンビのスライム（ハロウィンの日だけ）。その人の色は残しつつ緑がかった顔色にし、
  * おでこに縫い目（z）を入れる。かくれんぼのおばけとは別の見た目にする。
  */
-const ZOMBIE = SLIME.map((row, y) => [...row].map((ch, x) => (
-  // 横の線に、短い縫い目を2本（縫い合わせた傷あと）
-  (y === 3 && x >= 3 && x <= 7) || ((y === 2 || y === 4) && (x === 4 || x === 6)) ? 'z' : ch
-)).join(''));
+// ── ハロウィンのスライム（フランケン風）──────────────────────────
+// 体はドットのまま、ほっぺの下の縫い目と頭のネジだけ線で描く（ドットより細かく見せたいところ）
+
+/** 左のほっぺの下の縫い目（横線1本に、短い縦線3本） */
+const SCAR = `<path d="M4.75 7.6H7.8M5.4 6.95V8.25M6.2 6.95V8.25M7.05 6.95V8.25" stroke="#1E1B2E" stroke-width=".15"
+  stroke-linecap="butt" fill="none" shape-rendering="geometricPrecision"/>`;
+
+/** 左上から斜めに刺さったネジ。先は体にうまっている。はみ出すぶんは svg の外に描く */
+const BOLT = `<defs>
+    <linearGradient id="bolt-metal" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" stop-color="#8E939C"/><stop offset=".35" stop-color="#FFFFFF"/><stop offset=".6" stop-color="#D5D8DE"/><stop offset="1" stop-color="#7D828B"/>
+    </linearGradient>
+    <linearGradient id="bolt-top" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#C9CCD2"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(3.6 2.4) rotate(-32) scale(1.7)" shape-rendering="geometricPrecision">
+    <ellipse cx="0" cy=".05" rx=".42" ry=".14" fill="#1E1B2E" opacity=".35"/>
+    <rect x="-.33" y="-1.95" width=".66" height="1.95" fill="url(#bolt-metal)"/>
+    <path d="M-.33 -.12L.33 -.3M-.33 -.34L.33 -.52M-.33 -.56L.33 -.74M-.33 -.78L.33 -.96"
+      stroke="#6F747D" stroke-width=".06" fill="none"/>
+    <rect x="-.68" y="-2.45" width="1.36" height=".55" rx=".12" fill="url(#bolt-metal)"/>
+    <ellipse cx="0" cy="-2.45" rx=".68" ry=".24" fill="url(#bolt-top)" stroke="#A9ADB5" stroke-width=".04"/>
+    <path d="M-.46 -2.45H.46" stroke="#7D828B" stroke-width=".12" stroke-linecap="round"/>
+  </g>`;
 
 export const slimeSvg = (color: string, zombie = false) => {
   if (!zombie) return spriteSvg(SLIME, { o: '#2E2A45', b: color, s: shade(color, -0.22), h: shade(color, 0.6), p: '#FF8FA8' });
   const body = mix(color, '#8FBF6A', 0.45);
-  // 右のほっぺの下に、細い線の縫い目をもう1つ（ドットではなく線で、薄めに）
-  const scar = `<path d="M9.5 7.75H11.9M10.1 7.4V8.1M10.7 7.4V8.1M11.3 7.4V8.1" stroke="#2E2A45" stroke-width=".2"
-    stroke-linecap="round" opacity=".5" fill="none" shape-rendering="geometricPrecision"/>`;
-  return spriteSvg(ZOMBIE, { o: '#2E2A45', b: body, s: shade(body, -0.25), h: shade(body, 0.45), p: '#A77BB8', z: '#2E2A45' })
-    .replace(/<\/svg>$/, `${scar}</svg>`);
+  return spriteSvg(SLIME, { o: '#2E2A45', b: body, s: shade(body, -0.25), h: shade(body, 0.45), p: '#A77BB8' })
+    .replace('<svg ', '<svg style="overflow:visible" ')
+    .replace(/<\/svg>$/, `${SCAR}${BOLT}</svg>`);
 };
-const ghostSvg = () =>
-  spriteSvg(GHOST, { o: '#5E5885', b: '#F3F0FF', s: '#D9D3F2', h: '#FFFFFF', p: '#FFB3C4' }, 'ghost-sprite');
+
+// ── ハロウィンのおばけ：魔女の帽子（帯はスライムの色）────────────────────
+// 帽子は頭の上にはみ出すので、y がマイナスの行に描く（下の行が y=0、頭のふちの上にかぶせる）
+const HAT = [
+  '...kk.........',
+  '....kk........',
+  '.....kkk......',
+  '.....kkkl.....',
+  '....kkkkkl....',
+  '....kkkkkkl...',
+  '...cccccccc...',
+  'kkkkkkkkkkkkkk',
+];
+const hatSvg = (band: string) => HAT.map((row, i) => [...row].map((ch, x) => {
+  if (ch === '.') return '';
+  const fill = ch === 'c' ? band : ch === 'l' ? '#5A4238' : '#3A2A24';
+  return `<rect x="${x}" y="${i - HAT.length + 1}" width="1" height="1" fill="${fill}"/>`;
+}).join('')).join('');
+
+export const ghostSvg = (hatBand?: string) => {
+  const svg = spriteSvg(GHOST, { o: '#5E5885', b: '#F3F0FF', s: '#D9D3F2', h: '#FFFFFF', p: '#FFB3C4' }, 'ghost-sprite');
+  if (!hatBand) return svg;
+  return svg.replace('<svg ', '<svg style="overflow:visible" ').replace(/<\/svg>$/, `${hatSvg(hatBand)}</svg>`);
+};
 
 const escapeHtml = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 
@@ -424,7 +465,7 @@ export function createCampusField(): CampusField {
   }
 
   function drawBody(s: Slime) {
-    s.body.innerHTML = (s.ghost ? ghostSvg() : slimeSvg(s.color, halloween)) + (s.self ? '<span class="self-mark"></span>' : '');
+    s.body.innerHTML = (s.ghost ? ghostSvg(halloween ? s.color : undefined) : slimeSvg(s.color, halloween)) + (s.self ? '<span class="self-mark"></span>' : '');
     s.node.classList.toggle('is-ghost', s.ghost);
   }
 
