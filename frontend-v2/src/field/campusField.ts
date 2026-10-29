@@ -353,7 +353,11 @@ const ZOMBIE = SLIME.map((row, y) => [...row].map((ch, x) => (
 export const slimeSvg = (color: string, zombie = false) => {
   if (!zombie) return spriteSvg(SLIME, { o: '#2E2A45', b: color, s: shade(color, -0.22), h: shade(color, 0.6), p: '#FF8FA8' });
   const body = mix(color, '#8FBF6A', 0.45);
-  return spriteSvg(ZOMBIE, { o: '#2E2A45', b: body, s: shade(body, -0.25), h: shade(body, 0.45), p: '#A77BB8', z: '#2E2A45' });
+  // 右のほっぺの下に、細い線の縫い目をもう1つ（ドットではなく線で、薄めに）
+  const scar = `<path d="M9.5 7.75H11.9M10.1 7.4V8.1M10.7 7.4V8.1M11.3 7.4V8.1" stroke="#2E2A45" stroke-width=".2"
+    stroke-linecap="round" opacity=".5" fill="none" shape-rendering="geometricPrecision"/>`;
+  return spriteSvg(ZOMBIE, { o: '#2E2A45', b: body, s: shade(body, -0.25), h: shade(body, 0.45), p: '#A77BB8', z: '#2E2A45' })
+    .replace(/<\/svg>$/, `${scar}</svg>`);
 };
 const ghostSvg = () =>
   spriteSvg(GHOST, { o: '#5E5885', b: '#F3F0FF', s: '#D9D3F2', h: '#FFFFFF', p: '#FFB3C4' }, 'ghost-sprite');
