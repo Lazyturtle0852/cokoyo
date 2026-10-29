@@ -18,3 +18,16 @@ export function isWeekend(date: string): boolean {
 }
 
 export const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * 今日（土日なら直前の金曜）からさかのぼった平日 n 日。古い順。
+ * キャンパスは平日に使われるので、管理画面・分析ページの「直近」は平日で数える。
+ */
+export function recentWeekdays(today: string, n: number): string[] {
+  const days: string[] = [];
+  for (let d = today; days.length < n; d = shiftDate(d, -1)) if (!isWeekend(d)) days.unshift(d);
+  return days;
+}
+
+/** SQL で日付の列が平日か（列名を渡す） */
+export const weekdaySql = (col = "date") => `strftime('%w', ${col}) NOT IN ('0', '6')`;

@@ -114,8 +114,8 @@ function Kpis({ stats }: { stats: AdminStatsResponse }) {
       <div className="kpis">
         <Stat label="利用者数" value={t.users} note="初回登録まで終えた人" hero />
         <Stat label="今日使った人" value={active.today} note={`API 呼び出し ${fmt(today?.hits ?? 0)} 回`} />
-        <Stat label="直近7日" value={active.week} note="1回でも使った人" />
-        <Stat label="直近30日" value={active.month} note="1回でも使った人" />
+        <Stat label="直近の平日5日" value={active.week} note="1回でも使った人（土日は数えない）" />
+        <Stat label="直近の平日20日" value={active.month} note="1回でも使った人（土日は数えない）" />
         <Stat label="今日来校" value={today?.visitors ?? 0} note="在校と判定された人" />
       </div>
       <dl className="kpi-sub">
@@ -149,9 +149,9 @@ const SERIES: Array<{ key: keyof Omit<Daily, 'date'>; title: string; unit: strin
 function DailyCharts({ daily }: { daily: Daily[] }) {
   return (
     <section className="panel">
-      <h2>日ごとの推移（直近{daily.length}日）</h2>
+      <h2>日ごとの推移（直近の平日{daily.length}日）</h2>
       <p className="desc">
-        API 呼び出しには、ログインしていない呼び出しも入ります（棒にかざすと内訳）。ページを開いただけでは数えません。
+        土日は除いています。API 呼び出しには、ログインしていない呼び出しも入ります（棒にかざすと内訳）。ページを開いただけでは数えません。
       </p>
       <div className="charts">
         {SERIES.map((s) => <BarChart key={s.key} daily={daily} field={s.key} title={s.title} unit={s.unit} />)}
@@ -200,7 +200,7 @@ function BarChart({ daily, field, title, unit }: {
     <figure className="chart">
       <figcaption>
         <span className="chart-title">{title}</span>
-        <span className="chart-total">30日計 {fmt(total)}{unit}・最大 {fmt(max)}{unit}</span>
+        <span className="chart-total">{daily.length}日計 {fmt(total)}{unit}・最大 {fmt(max)}{unit}</span>
       </figcaption>
       <div className="chart-body">
         <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${title}の日ごとの推移`} onMouseLeave={() => setHover(null)}>
@@ -245,7 +245,7 @@ function Routes({ routes }: { routes: AdminStatsResponse['routes'] }) {
   const max = Math.max(1, ...routes.map((r) => r.hits));
   return (
     <section className="panel">
-      <h2>よく呼ばれている API（直近7日）</h2>
+      <h2>よく呼ばれている API（直近の平日5日）</h2>
       <p className="desc">どの機能が使われているかの目安。URL の中の値は入れずに、ルートの形で数えています。</p>
       {routes.length === 0 && <p className="empty">まだありません。</p>}
       <ul className="hbars">
@@ -289,7 +289,7 @@ function Feedback({ items }: { items: AdminStatsResponse['feedback'] }) {
 // ── 利用者一覧 ────────────────────────────────────────────────
 type SortKey = 'lastSeen' | 'createdAt' | 'recentHits' | 'points' | 'friends' | 'visitDays';
 const SORTS: Array<[SortKey, string]> = [
-  ['lastSeen', '最後に使った日'], ['createdAt', '登録日'], ['recentHits', '30日の呼び出し'],
+  ['lastSeen', '最後に使った日'], ['createdAt', '登録日'], ['recentHits', '平日20日の呼び出し'],
   ['points', 'ポイント'], ['friends', 'フレンド'], ['visitDays', '来校日数'],
 ];
 
@@ -324,7 +324,7 @@ function Users({ users }: { users: AdminStatsResponse['users'] }) {
           <thead>
             <tr>
               <th>表示名</th><th>メール</th><th>状態</th><th>登録</th><th>最後に使った日</th>
-              <th>30日の呼び出し</th><th>端末</th><th>フレンド</th><th>来校日数</th><th>ポイント</th>
+              <th>平日20日の呼び出し</th><th>端末</th><th>フレンド</th><th>来校日数</th><th>ポイント</th>
             </tr>
           </thead>
           <tbody>

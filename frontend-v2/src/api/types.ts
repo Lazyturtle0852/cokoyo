@@ -232,7 +232,7 @@ export interface InsightsResponse {
   funnel: Array<{ key: string; label: string; count: number; note?: string }>;
   /** 登録した週ごとに、その後の各週にアプリを開いた人数（weeks[0] が登録した週） */
   retention: Array<{ cohort: string; size: number; weeks: number[] }>;
-  /** 直近30日、古い順 */
+  /** 直近の平日20日（4週間）、古い順。土日は入れない */
   daily: Array<{ date: string; active: number; visitors: number; checks: number; greets: number; newUsers: number }>;
   /** 曜日（0=日）× 時（0〜23、日本時間）の回数 */
   heat: {
@@ -251,8 +251,8 @@ export interface InsightsResponse {
     pendingRequests: number;
     /** 申請（承認待ち＋成立）のうち成立した割合。0〜1 */
     acceptRate: number | null;
-    /** 直近7日、同じ日にキャンパスにいたフレンドの組（マッチ）の数 */
-    matches7d: number;
+    /** 直近の平日5日、同じ日にキャンパスにいたフレンドの組（マッチ）の数 */
+    matches5d: number;
   };
   features: {
     users: number;
@@ -260,8 +260,9 @@ export interface InsightsResponse {
     colorUsers: number;
     hiddenUsers: number;
     notDiscoverableUsers: number;
-    greets7d: number;
-    reactions7d: number;
+    /** 直近の平日5日の回数 */
+    greets5d: number;
+    reactions5d: number;
   };
   /** 1人1行。名前・メール・IDは入れず、連番にする */
   people: Array<{
@@ -270,9 +271,11 @@ export interface InsightsResponse {
     onboarded: boolean;
     friends: number;
     visitDays: number;
-    visitDays30: number;
-    activeDays30: number;
-    checks30: number;
+    /** ここから3つは直近の平日20日、activeDays5 は平日5日 */
+    visitDays20: number;
+    activeDays20: number;
+    activeDays5: number;
+    checks20: number;
     lastActive: string | null;
     push: boolean;
   }>;
@@ -301,9 +304,9 @@ export interface AdminStatsResponse {
     feedback: number;
     points: number;
   };
-  /** API を1回でも呼んだ人数（今日・直近7日・直近30日） */
+  /** API を1回でも呼んだ人数（今日・直近の平日5日・平日20日） */
   active: { today: number; week: number; month: number };
-  /** 直近30日、古い順 */
+  /** 直近の平日20日（4週間）、古い順。土日は入れない */
   daily: Array<{
     date: string;
     signups: number;
@@ -314,7 +317,7 @@ export interface AdminStatsResponse {
     /** 在校と判定された人数（visits） */
     visitors: number;
   }>;
-  /** 直近7日の、ルートごとの呼び出し回数。多い順 */
+  /** 直近の平日5日の、ルートごとの呼び出し回数。多い順 */
   routes: Array<{ method: string; route: string; hits: number }>;
   users: Array<{
     userId: string;
@@ -329,7 +332,7 @@ export interface AdminStatsResponse {
     visitDays: number;
     /** 最後に API を呼んだ日 */
     lastSeen: string | null;
-    /** 直近30日の呼び出し回数 */
+    /** 直近の平日20日の呼び出し回数 */
     recentHits: number;
   }>;
   /** 新しい順 */
