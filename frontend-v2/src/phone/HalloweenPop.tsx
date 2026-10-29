@@ -1,14 +1,15 @@
-// ハロウィン（10/31）にはじめて開いたとき、「Happy Halloween!」をクラッカーと紙吹雪で一瞬だけ出す。
+// ハロウィン仕様の日（10/31。土日の年は直前の金曜も）にはじめて開いたとき、「Happy Halloween!」をクラッカーと紙吹雪で一瞬だけ出す。
 // 1台につき、その日1回だけ。押せばすぐ消える。動きを減らす設定の人には、紙吹雪を出さない。
 
 import { useEffect, useState } from 'react';
-import { isHalloween } from '../field/campusField';
+import { halloweenDay } from '../field/campusField';
 
-const KEY = 'cokoyo-halloween-pop:2026';
+/** 日ごとに1回（前の金曜と当日、それぞれで出す） */
+const key = () => `cokoyo-halloween-pop:${new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)}`;
 const SHOW_MS = 2600;
 const COLORS = ['#FF8A3D', '#7C5CC4', '#2E2A45', '#8FBF6A', '#FFD15A'];
 
-const seen = () => { try { return localStorage.getItem(KEY) === '1'; } catch { return true; } };
+const seen = () => { try { return localStorage.getItem(key()) === '1'; } catch { return true; } };
 
 /** かぼちゃのおばけ（フィールドと同じドット） */
 const PUMPKIN = ['....g....', '...gg....', '.ooooooo.', 'ooyooyooo', 'ooooooooo', 'oyoyoyoyo', 'ooyyyyyoo', '.ooooooo.'];
@@ -20,11 +21,12 @@ const Pumpkin = () => (
 );
 
 export function HalloweenPop() {
-  const [show, setShow] = useState(() => isHalloween() && !seen());
+  const [day] = useState(() => halloweenDay());
+  const [show, setShow] = useState(() => day !== null && !seen());
 
   useEffect(() => {
     if (!show) return;
-    try { localStorage.setItem(KEY, '1'); } catch { /* 保存できない環境 */ }
+    try { localStorage.setItem(key(), '1'); } catch { /* 保存できない環境 */ }
     const t = window.setTimeout(() => setShow(false), SHOW_MS);
     return () => clearTimeout(t);
   }, [show]);
@@ -45,7 +47,7 @@ export function HalloweenPop() {
       <div className="hw-card">
         <Pumpkin />
         <p>Happy Halloween!</p>
-        <small>今日のCOKOYOは、ハロウィン仕様</small>
+        <small>{day === 'eve' ? 'ひと足早く、今日のCOKOYOはハロウィン仕様' : '今日のCOKOYOは、ハロウィン仕様'}</small>
       </div>
     </div>
   );

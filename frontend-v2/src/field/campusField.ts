@@ -84,15 +84,27 @@ export type Season = 'sakura' | 'green' | 'autumn' | 'winter';
  * ハロウィン（10/31、日本時間）だけ、フィールドとスライムをハロウィン仕様にする。
  * 確かめるときは URL に ?event=halloween（いつでも出す）／?event=none（出さない）を付ける。
  */
-export function isHalloween(date = new Date()): boolean {
+/**
+ * ハロウィン仕様の日。'day' は10/31。キャンパスは平日に使われるので、
+ * 10/31が土日の年は直前の金曜も 'eve'（ひと足早いハロウィン）にする。
+ * 確認用に ?event=halloween（当日）・?event=halloween-eve（前の金曜）・?event=none で切り替えられる。
+ */
+export function halloweenDay(date = new Date()): 'day' | 'eve' | null {
   if (typeof window !== 'undefined') {
     const forced = new URLSearchParams(window.location.search).get('event');
-    if (forced === 'halloween') return true;
-    if (forced === 'none') return false;
+    if (forced === 'halloween') return 'day';
+    if (forced === 'halloween-eve') return 'eve';
+    if (forced === 'none') return null;
   }
   const jst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
-  return jst.getUTCMonth() === 9 && jst.getUTCDate() === 31;
+  if (jst.getUTCMonth() !== 9) return null;
+  if (jst.getUTCDate() === 31) return 'day';
+  const dow31 = new Date(Date.UTC(jst.getUTCFullYear(), 9, 31)).getUTCDay();
+  const friday = dow31 === 6 ? 30 : dow31 === 0 ? 29 : null;
+  return jst.getUTCDate() === friday ? 'eve' : null;
 }
+
+export const isHalloween = (date = new Date()): boolean => halloweenDay(date) !== null;
 
 // ── ハロウィンの飾り（ドット） ────────────────────────────────
 /** かぼちゃのおばけ（9×8マス） */
