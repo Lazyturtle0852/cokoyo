@@ -73,14 +73,15 @@ export function Insights() {
 
 function Summary({ d }: { d: InsightsResponse }) {
   const users = d.features.users;
-  const from7 = d.daily.slice(-7);
-  const active7 = d.people.filter((p) => p.lastActive && p.lastActive >= from7[0]!.date).length;
-  const avgDau7 = Math.round(from7.reduce((s, x) => s + x.active, 0) / 7 * 10) / 10;
-  const active30 = d.people.filter((p) => p.activeDays30 > 0).length;
+  // キャンパスは平日に使われるので、土日を除いた平日5日（1週間分）で見る
+  const week = d.daily.slice(-5);
+  const active5 = d.people.filter((p) => p.activeDays5 > 0).length;
+  const avgDau5 = Math.round(week.reduce((s, x) => s + x.active, 0) / week.length * 10) / 10;
+  const active20 = d.people.filter((p) => p.activeDays20 > 0).length;
   const items: Array<[string, string, string]> = [
     ['登録した人', fmt(users), 'MACアドレスの登録まで終えた人'],
-    ['直近7日に開いた人', fmt(active7), `登録した人の ${pct(active7, users)}`],
-    ['1日に開く人（7日平均）', String(avgDau7), `直近30日に開いた人（${active30}人）の ${pct(avgDau7, active30)}（毎日どれだけ戻ってくるか）`],
+    ['直近の平日5日に開いた人', fmt(active5), `登録した人の ${pct(active5, users)}`],
+    ['1日に開く人（平日5日の平均）', String(avgDau5), `直近の平日20日に開いた人（${active20}人）の ${pct(avgDau5, active20)}（毎日どれだけ戻ってくるか）`],
     ['フレンド0人の人', fmt(d.network.zeroFriends), `登録した人の ${pct(d.network.zeroFriends, users)}`],
   ];
   return (
@@ -160,8 +161,8 @@ const SERIES: Array<{ key: 'active' | 'visitors' | 'checks' | 'greets' | 'newUse
 function Daily({ d }: { d: InsightsResponse }) {
   return (
     <section className="panel">
-      <h2>日ごとの推移（直近30日）</h2>
-      <p className="desc">在校確認の回数・YO！の回数は、記録を始めた日（{d.checkLogSince ? md(d.checkLogSince) : 'これから'}）から。</p>
+      <h2>日ごとの推移（直近の平日20日）</h2>
+      <p className="desc">土日は除いています（平日だけの4週間）。在校確認の回数・YO！の回数は、記録を始めた日（{d.checkLogSince ? md(d.checkLogSince) : 'これから'}）から。</p>
       <div className="ins-minis">
         {SERIES.map((s) => {
           const vals = d.daily.map((x) => x[s.key]);
@@ -169,10 +170,10 @@ function Daily({ d }: { d: InsightsResponse }) {
           const total = vals.reduce((a, b) => a + b, 0);
           return (
             <div className="ins-mini" key={s.key}>
-              <p className="stat-label">{s.title}<span className="muted">　30日で {fmt(total)}{s.unit}・最大 {fmt(max === 1 && total === 0 ? 0 : max)}{s.unit}</span></p>
+              <p className="stat-label">{s.title}<span className="muted">　20日で {fmt(total)}{s.unit}・最大 {fmt(max === 1 && total === 0 ? 0 : max)}{s.unit}</span></p>
               <div className="ins-bars" role="img" aria-label={`${s.title}の日ごとの推移`}>
                 {d.daily.map((x) => (
-                  <i key={x.date} className={[0, 6].includes(new Date(`${x.date}T00:00:00Z`).getUTCDay()) ? 'we' : ''}
+                  <i key={x.date} className={new Date(`${x.date}T00:00:00Z`).getUTCDay() === 1 ? 'mon' : ''}
                     style={{ height: `${(x[s.key] / max) * 100}%` }} title={`${md(x.date)}：${x[s.key]}${s.unit}`} />
                 ))}
               </div>
@@ -190,7 +191,7 @@ function Heat({ d }: { d: InsightsResponse }) {
   const weekOfChecks = !!d.checkLogSince && Date.parse(d.today) - Date.parse(d.checkLogSince) >= 7 * 86400000;
   const [mode, setMode] = useState<'checks' | 'firstVisits'>(weekOfChecks ? 'checks' : 'firstVisits');
   const grid = d.heat[mode];
-  const max = Math.max(1, ...grid.flat());
+  const max = Math.max(1, ...grid.slice(1, 6).flat());
   const hours = Array.from({ length: 24 }, (_, h) => h).filter((h) => h >= 6); // 夜中は省く
   return (
     <section className="panel">
@@ -199,12 +200,12 @@ function Heat({ d }: { d: InsightsResponse }) {
         <button role="tab" className={mode === 'checks' ? 'on' : ''} aria-selected={mode === 'checks'} onClick={() => setMode('checks')}>在校確認を押した回数</button>
         <button role="tab" className={mode === 'firstVisits' ? 'on' : ''} aria-selected={mode === 'firstVisits'} onClick={() => setMode('firstVisits')}>その日はじめてキャンパスで確認できた時刻</button>
       </div>
-      <p className="desc">{mode === 'checks' ? '押した回数を、曜日×時間（6時〜23時）で数えたもの。記録を始めてからの分。' : 'その日はじめて「キャンパスにいる」と判定された時刻。これまでの全期間。'}</p>
+      <p className="desc">{mode === 'checks' ? '押した回数を、曜日×時間（6時〜23時）で数えたもの。記録を始めてからの分。土日は出していません。' : 'その日はじめて「キャンパスにいる」と判定された時刻。これまでの全期間。土日は出していません。'}</p>
       <div className="ins-scroll">
         <table className="ins-heat">
           <thead><tr><th />{hours.map((h) => <th key={h}>{h}</th>)}</tr></thead>
           <tbody>
-            {[1, 2, 3, 4, 5, 6, 0].map((wd) => (
+            {[1, 2, 3, 4, 5].map((wd) => (
               <tr key={wd}><th>{WD[wd]}</th>{hours.map((h) => {
                 const v = grid[wd]![h]!;
                 return <td key={h} style={{ background: v ? `rgba(234,88,12,${0.12 + (v / max) * 0.88})` : undefined }} title={`${WD[wd]} ${h}時：${v}`}>{v || ''}</td>;
@@ -236,7 +237,7 @@ function Network({ d }: { d: InsightsResponse }) {
         <div><dt>ベストフレンドの組</dt><dd>{fmt(n.bestPairs)}（フレンドの {pct(n.bestPairs, n.friendPairs)}）</dd></div>
         <div><dt>承認待ちの申請</dt><dd>{fmt(n.pendingRequests)}</dd></div>
         <div><dt>申請が成立した割合</dt><dd>{n.acceptRate === null ? '—' : `${Math.round(n.acceptRate * 100)}%`}</dd></div>
-        <div><dt>直近7日のマッチ（同じ日にいたフレンドの組）</dt><dd>{fmt(n.matches7d)}</dd></div>
+        <div><dt>直近の平日5日のマッチ（同じ日にいたフレンドの組）</dt><dd>{fmt(n.matches5d)}</dd></div>
       </dl>
     </section>
   );
@@ -247,7 +248,7 @@ function Features({ d }: { d: InsightsResponse }) {
   const rows: Array<[string, number, boolean]> = [
     ['通知をオンにしている', f.pushUsers, true], ['スライムの色を選んだ', f.colorUsers, true],
     ['かくれんぼ中', f.hiddenUsers, true], ['「知り合いかも」をオフ', f.notDiscoverableUsers, true],
-    ['YO！（直近7日・回）', f.greets7d, false], ['つんつん（直近7日・回）', f.reactions7d, false],
+    ['YO！（直近の平日5日・回）', f.greets5d, false], ['つんつん（直近の平日5日・回）', f.reactions5d, false],
   ];
   return (
     <section className="panel">
@@ -287,7 +288,7 @@ function Preview() {
 }
 
 // ── 1人ずつ（名前は出さない） ─────────────────────────────────
-type SortKey = 'n' | 'friends' | 'visitDays' | 'activeDays30' | 'lastActive';
+type SortKey = 'n' | 'friends' | 'visitDays' | 'activeDays20' | 'lastActive';
 function People({ d }: { d: InsightsResponse }) {
   const [sort, setSort] = useState<SortKey>('n');
   const rows = useMemo(() => [...d.people].sort((a, b) => (sort === 'n' ? a.n - b.n
@@ -295,21 +296,21 @@ function People({ d }: { d: InsightsResponse }) {
   return (
     <section className="panel">
       <h2>1人ずつ（{d.people.length}人・名前は出しません）</h2>
-      <p className="desc">番号は登録した順。直近30日の数字。</p>
+      <p className="desc">番号は登録した順。「20日」は直近の平日20日（土日を除く4週間）の数字。</p>
       <label className="muted">並び{' '}
         <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
           <option value="n">登録した順</option><option value="friends">フレンドが多い順</option><option value="visitDays">来校日数が多い順</option>
-          <option value="activeDays30">開いた日数が多い順</option><option value="lastActive">最近開いた順</option>
+          <option value="activeDays20">開いた日数が多い順</option><option value="lastActive">最近開いた順</option>
         </select>
       </label>
       <div className="ins-scroll">
         <table className="ins-people">
-          <thead><tr><th>番号</th><th>ログイン日</th><th>登録</th><th>フレンド</th><th>来校日数（全期間）</th><th>来校日数（30日）</th><th>開いた日数（30日）</th><th>在校確認（30日）</th><th>最後に開いた日</th><th>通知</th></tr></thead>
+          <thead><tr><th>番号</th><th>ログイン日</th><th>登録</th><th>フレンド</th><th>来校日数（全期間）</th><th>来校日数（平日20日）</th><th>開いた日数（平日20日）</th><th>在校確認（平日20日）</th><th>最後に開いた日</th><th>通知</th></tr></thead>
           <tbody>
             {rows.map((p) => (
               <tr key={p.n} className={p.onboarded ? '' : 'muted'}>
                 <td>{p.n}</td><td>{md(p.signedUp)}</td><td>{p.onboarded ? '済' : '途中'}</td><td>{p.friends}</td><td>{p.visitDays}</td>
-                <td>{p.visitDays30}</td><td>{p.activeDays30}</td><td>{p.checks30}</td><td>{p.lastActive ? md(p.lastActive) : '—'}</td><td>{p.push ? 'オン' : ''}</td>
+                <td>{p.visitDays20}</td><td>{p.activeDays20}</td><td>{p.checks20}</td><td>{p.lastActive ? md(p.lastActive) : '—'}</td><td>{p.push ? 'オン' : ''}</td>
               </tr>
             ))}
           </tbody>

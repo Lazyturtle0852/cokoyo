@@ -2,7 +2,7 @@ import type { AdminStatsResponse, DbTable, OpsEvent } from "../../shared/app-typ
 import type { Db } from "./db.js";
 import { hashToken, newRequestId, newShareKey, newUserId } from "./lib/ids.js";
 import { maskMac } from "./lib/mac.js";
-import { jstDate, shiftDate } from "./lib/time.js";
+import { jstDate, recentWeekdays, shiftDate, weekdaySql } from "./lib/time.js";
 
 /** 運用ログに書く1件。at を省くと今の時刻 */
 export interface OpsInput {
@@ -307,7 +307,8 @@ export function createRepo(db: Db) {
       (SELECT COUNT(*) FROM blocks) AS blocks,
       (SELECT COUNT(*) FROM feedback) AS feedback,
       (SELECT COALESCE(SUM(pts), 0) FROM point_events) AS points`),
-    activeSince: db.prepare("SELECT COUNT(DISTINCT user_id) AS n FROM access_daily WHERE user_id > 0 AND date >= ?"),
+    activeOn: db.prepare("SELECT COUNT(DISTINCT user_id) AS n FROM access_daily WHERE user_id > 0 AND date = ?"),
+    activeSince: db.prepare(`SELECT COUNT(DISTINCT user_id) AS n FROM access_daily WHERE user_id > 0 AND date >= ? AND ${weekdaySql()}`),
     signups: db.prepare(
       `SELECT date(created_at, '+9 hours') AS date, COUNT(*) AS n FROM users
        WHERE date(created_at, '+9 hours') >= ? GROUP BY 1`,
@@ -320,7 +321,7 @@ export function createRepo(db: Db) {
     visits: db.prepare("SELECT date, COUNT(*) AS n FROM visits WHERE date >= ? GROUP BY date"),
     routes: db.prepare(
       `SELECT method, route, SUM(hits) AS hits FROM access_routes
-       WHERE date >= ? GROUP BY method, route ORDER BY hits DESC`,
+       WHERE date >= ? AND ${weekdaySql()} GROUP BY method, route ORDER BY hits DESC`,
     ),
     users: db.prepare(`SELECT u.user_id, u.display_name, u.email, u.created_at,
         u.onboarding_completed_at IS NOT NULL AS onboarded, u.hidden,
@@ -329,7 +330,7 @@ export function createRepo(db: Db) {
         (SELECT COALESCE(SUM(pts), 0) FROM point_events p WHERE p.user_id = u.id) AS points,
         (SELECT COUNT(*) FROM visits v WHERE v.user_id = u.id) AS visitDays,
         (SELECT MAX(date) FROM access_daily a WHERE a.user_id = u.id) AS lastSeen,
-        (SELECT COALESCE(SUM(hits), 0) FROM access_daily a WHERE a.user_id = u.id AND a.date >= ?) AS recentHits
+        (SELECT COALESCE(SUM(hits), 0) FROM access_daily a WHERE a.user_id = u.id AND a.date >= ? AND ${weekdaySql("a.date")}) AS recentHits
       FROM users u ORDER BY u.id`),
     feedback: db.prepare(`SELECT f.id, f.created_at, u.user_id, u.display_name, u.email, f.message
       FROM feedback f JOIN users u ON u.id = f.user_id ORDER BY f.id DESC`),
@@ -648,10 +649,12 @@ export function createRepo(db: Db) {
       }));
     },
 
-    /** 管理画面の数字。daily は今日を含む直近 days 日。 */
-    adminStats(days = 30): AdminStatsResponse {
+    /** 管理画面の数字。「直近」は平日で数える（週＝平日5日、daily と月＝平日20日）。 */
+    adminStats(): AdminStatsResponse {
       const today = jstDate();
-      const from = shiftDate(today, -(days - 1));
+      const days = recentWeekdays(today, 20);
+      const from = days[0]!;
+      const from5 = days[15]!;
       const num = (v: unknown) => Number(v ?? 0);
       const byDate = (rows: unknown[]) =>
         new Map((rows as Array<Record<string, unknown>>).map((r) => [String(r.date), r]));
@@ -670,9 +673,8 @@ export function createRepo(db: Db) {
           pendingRequests: num(totals.pendingRequests), blocks: num(totals.blocks),
           feedback: num(totals.feedback), points: num(totals.points),
         },
-        active: { today: active(today), week: active(shiftDate(today, -6)), month: active(from) },
-        daily: Array.from({ length: days }, (_, i) => {
-          const date = shiftDate(from, i);
+        active: { today: num((statsQ.activeOn.get(today) as { n: number }).n), week: active(from5), month: active(from) },
+        daily: days.map((date) => {
           const a = access.get(date);
           return {
             date,
@@ -683,7 +685,7 @@ export function createRepo(db: Db) {
             visitors: num(visits.get(date)?.n),
           };
         }),
-        routes: (statsQ.routes.all(shiftDate(today, -6)) as Array<Record<string, unknown>>).map((r) => ({
+        routes: (statsQ.routes.all(from5) as Array<Record<string, unknown>>).map((r) => ({
           method: String(r.method), route: String(r.route), hits: num(r.hits),
         })),
         users: (statsQ.users.all(from) as Array<Record<string, unknown>>).map((r) => ({

@@ -9,9 +9,14 @@
 
 import type { InsightsResponse } from "../../shared/app-types.js";
 import type { Db } from "./db.js";
-import { jstDate, shiftDate } from "./lib/time.js";
+import { jstDate, recentWeekdays, shiftDate, weekdaySql } from "./lib/time.js";
 
 const JST_MS = 9 * 60 * 60 * 1000;
+
+/** 「直近」は平日で数える。週の数字は平日5日、日ごとの推移は平日20日（4週間） */
+const WEEK = 5;
+const DAYS = 20;
+const WD = weekdaySql();
 
 export type UsageKind = "check" | "greet" | "reaction";
 
@@ -65,8 +70,9 @@ export function createInsights(db: Db) {
 
     report(): InsightsResponse {
       const today = jstDate();
-      const from30 = shiftDate(today, -29);
-      const from7 = shiftDate(today, -6);
+      const days = recentWeekdays(today, DAYS);
+      const from20 = days[0]!;
+      const from5 = days[DAYS - WEEK]!;
       const onboarded = "onboarding_completed_at IS NOT NULL";
       const checkLogSince = (get("SELECT MIN(date) AS d FROM check_daily").d as string | null) ?? null;
 
@@ -120,14 +126,13 @@ export function createInsights(db: Db) {
 
       // ── いつ：日ごと・曜日×時間 ──────────────────────────
       const byDate = (rows: Array<Record<string, unknown>>, key = "n") => new Map(rows.map((r) => [String(r.date), num(r[key])]));
-      const actives = byDate(all("SELECT date, COUNT(*) AS n FROM access_daily WHERE user_id > 0 AND date >= ? GROUP BY date", from30));
-      const visitors = byDate(all("SELECT date, COUNT(*) AS n FROM visits WHERE date >= ? GROUP BY date", from30));
-      const checks = byDate(all("SELECT date, SUM(count) AS n FROM usage_hourly WHERE kind = 'check' AND date >= ? GROUP BY date", from30));
-      const greets = byDate(all("SELECT date, SUM(count) AS n FROM usage_hourly WHERE kind = 'greet' AND date >= ? GROUP BY date", from30));
+      const actives = byDate(all("SELECT date, COUNT(*) AS n FROM access_daily WHERE user_id > 0 AND date >= ? GROUP BY date", from20));
+      const visitors = byDate(all("SELECT date, COUNT(*) AS n FROM visits WHERE date >= ? GROUP BY date", from20));
+      const checks = byDate(all("SELECT date, SUM(count) AS n FROM usage_hourly WHERE kind = 'check' AND date >= ? GROUP BY date", from20));
+      const greets = byDate(all("SELECT date, SUM(count) AS n FROM usage_hourly WHERE kind = 'greet' AND date >= ? GROUP BY date", from20));
       const signups = byDate(all(`SELECT date(onboarding_completed_at, '+9 hours') AS date, COUNT(*) AS n FROM users
-        WHERE ${onboarded} AND date(onboarding_completed_at, '+9 hours') >= ? GROUP BY 1`, from30));
-      const daily = Array.from({ length: 30 }, (_, i) => {
-        const date = shiftDate(from30, i);
+        WHERE ${onboarded} AND date(onboarding_completed_at, '+9 hours') >= ? GROUP BY 1`, from20));
+      const daily = days.map((date) => {
         return {
           date, active: actives.get(date) ?? 0, visitors: visitors.get(date) ?? 0,
           checks: checks.get(date) ?? 0, greets: greets.get(date) ?? 0, newUsers: signups.get(date) ?? 0,
@@ -158,10 +163,10 @@ export function createInsights(db: Db) {
       const friendPairs = num(pairs.friends);
       const pending = num(pairs.pending);
       // マッチは相手ごとに両側に記録されるので、組の数は半分
-      const matches7d = Math.round(num(get("SELECT COUNT(*) AS n FROM point_events WHERE kind IN ('match', 'reunion', 'first') AND date >= ?", from7).n) / 2);
+      const matches5d = Math.round(num(get(`SELECT COUNT(*) AS n FROM point_events WHERE kind IN ('match', 'reunion', 'first') AND date >= ? AND ${WD}`, from5).n) / 2);
 
       // ── 機能 ──────────────────────────────────────────
-      const usage7d = (kind: UsageKind) => num(get("SELECT SUM(count) AS n FROM usage_hourly WHERE kind = ? AND date >= ?", kind, from7).n);
+      const usage5d = (kind: UsageKind) => num(get(`SELECT SUM(count) AS n FROM usage_hourly WHERE kind = ? AND date >= ? AND ${WD}`, kind, from5).n);
       const f = get(`SELECT COUNT(*) AS users,
           SUM(slime_color IS NOT NULL) AS color, SUM(hidden = 1) AS hidden, SUM(discoverable = 0) AS notDiscoverable,
           SUM(EXISTS (SELECT 1 FROM push_subscriptions p WHERE p.user_id = users.id)) AS push
@@ -170,20 +175,22 @@ export function createInsights(db: Db) {
       // ── 1人1行（連番） ────────────────────────────────────
       const people = all(`SELECT u.id, date(u.created_at, '+9 hours') AS signedUp, u.${onboarded} AS onboarded,
           (SELECT COUNT(*) FROM visits v WHERE v.user_id = u.id) AS visitDays,
-          (SELECT COUNT(*) FROM visits v WHERE v.user_id = u.id AND v.date >= ?) AS visitDays30,
-          (SELECT COUNT(*) FROM access_daily a WHERE a.user_id = u.id AND a.date >= ?) AS activeDays30,
-          (SELECT COALESCE(SUM(checks), 0) FROM check_daily c WHERE c.user_id = u.id AND c.date >= ?) AS checks30,
+          (SELECT COUNT(*) FROM visits v WHERE v.user_id = u.id AND v.date >= ? AND ${weekdaySql("v.date")}) AS visitDays20,
+          (SELECT COUNT(*) FROM access_daily a WHERE a.user_id = u.id AND a.date >= ? AND ${weekdaySql("a.date")}) AS activeDays20,
+          (SELECT COUNT(*) FROM access_daily a WHERE a.user_id = u.id AND a.date >= ? AND ${weekdaySql("a.date")}) AS activeDays5,
+          (SELECT COALESCE(SUM(checks), 0) FROM check_daily c WHERE c.user_id = u.id AND c.date >= ? AND ${weekdaySql("c.date")}) AS checks20,
           (SELECT MAX(date) FROM access_daily a WHERE a.user_id = u.id) AS lastActive,
           EXISTS (SELECT 1 FROM push_subscriptions p WHERE p.user_id = u.id) AS push
-        FROM users u ORDER BY u.created_at`, from30, from30, from30).map((r, i) => ({
+        FROM users u ORDER BY u.created_at`, from20, from20, from5, from20).map((r, i) => ({
         n: i + 1,
         signedUp: String(r.signedUp),
         onboarded: num(r.onboarded) === 1,
         friends: friendCount.get(num(r.id)) ?? 0,
         visitDays: num(r.visitDays),
-        visitDays30: num(r.visitDays30),
-        activeDays30: num(r.activeDays30),
-        checks30: num(r.checks30),
+        visitDays20: num(r.visitDays20),
+        activeDays20: num(r.activeDays20),
+        activeDays5: num(r.activeDays5),
+        checks20: num(r.checks20),
         lastActive: (r.lastActive as string | null) ?? null,
         push: num(r.push) === 1,
       }));
@@ -209,7 +216,7 @@ export function createInsights(db: Db) {
           bestPairs: num(pairs.best),
           pendingRequests: pending,
           acceptRate: friendPairs + pending ? friendPairs / (friendPairs + pending) : null,
-          matches7d,
+          matches5d,
         },
         features: {
           users: num(f.users),
@@ -217,8 +224,8 @@ export function createInsights(db: Db) {
           colorUsers: num(f.color),
           hiddenUsers: num(f.hidden),
           notDiscoverableUsers: num(f.notDiscoverable),
-          greets7d: usage7d("greet"),
-          reactions7d: usage7d("reaction"),
+          greets5d: usage5d("greet"),
+          reactions5d: usage5d("reaction"),
         },
         people,
       };

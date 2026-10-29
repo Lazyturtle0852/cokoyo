@@ -1,16 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AdminSessionResponse, AdminStatsResponse, DebugDbResponse } from "../../shared/app-types.js";
 import { createAdminAuth } from "../src/admin.js";
 import { createApp } from "../src/app.js";
 import { openDb } from "../src/db.js";
 import { createRepo } from "../src/repo.js";
-import { jstDate } from "../src/lib/time.js";
+import { jstDate, recentWeekdays } from "../src/lib/time.js";
 import { ADMIN_PASSWORD, createHarness, MAC, StubDtc } from "./helpers.js";
 
 const login = (h: ReturnType<typeof createHarness>, password: string, ip = "203.0.113.1") =>
   h.call("/v1/admin/login", {
     method: "POST", body: JSON.stringify({ password }), headers: { "x-forwarded-for": ip },
   });
+
+afterEach(() => vi.useRealTimers());
 
 describe("管理用パスワード", () => {
   it("正しいパスワードで入れて、Cookie は HttpOnly・SameSite=Strict", async () => {
@@ -75,6 +77,7 @@ describe("/v1/admin/stats", () => {
   });
 
   it("利用者数・アクティブ数・アクセス数を数える", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-10-29T03:00:00Z") }); // 平日（木曜）に固定する。土日は「直近」に入らない
     const h = createHarness();
     const alice = await h.signUp("ゆうき", MAC.alice);
     const bob = await h.signUp("佐藤", MAC.bob);
@@ -92,7 +95,8 @@ describe("/v1/admin/stats", () => {
 
     expect(stats.totals).toMatchObject({ users: 2, onboarding: 1, friendships: 1, feedback: 1 });
     expect(stats.active).toEqual({ today: 1, week: 1, month: 1 });
-    expect(stats.daily).toHaveLength(30);
+    expect(stats.daily).toHaveLength(20);
+    expect(stats.daily.map((d) => d.date)).toEqual(recentWeekdays(jstDate(), 20));
     const today = stats.daily.at(-1);
     expect(today?.date).toBe(jstDate());
     expect(today).toMatchObject({ signups: 3, activeUsers: 1, hits: 5, anonHits: 1 });
