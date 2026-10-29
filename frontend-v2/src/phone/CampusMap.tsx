@@ -12,7 +12,7 @@
 
 import { useState } from 'react';
 import { useApp } from '../app/AppContext';
-import { colorOf, selfColor, shade, slimeSvg } from '../field/campusField';
+import { colorOf, isHalloween, selfColor, shade, slimeSvg } from '../field/campusField';
 import { MAP_BUILDINGS, MAP_H, MAP_SCENE, MAP_W, type MapBuilding } from '../field/campusMap';
 import { Avatar, Icon, when } from './ui';
 
@@ -117,7 +117,7 @@ export function CampusMap() {
                     <span
                       key={p.id}
                       className={`map-slime${p.self ? ' self' : ''}`}
-                      dangerouslySetInnerHTML={{ __html: slimeSvg(p.color) }}
+                      dangerouslySetInnerHTML={{ __html: slimeSvg(p.color, isHalloween()) }}
                     />
                   ))}
                   {pins.length > 3 && <span className="map-more">+{pins.length - 3}</span>}

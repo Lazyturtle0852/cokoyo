@@ -80,6 +80,70 @@ const grid = (xs: number[], ys: number[], w: number, h: number, fill: string) =>
  */
 export type Season = 'sakura' | 'green' | 'autumn' | 'winter';
 
+/**
+ * ハロウィン（10/31、日本時間）だけ、フィールドとスライムをハロウィン仕様にする。
+ * 確かめるときは URL に ?event=halloween（いつでも出す）／?event=none（出さない）を付ける。
+ */
+/**
+ * ハロウィン仕様の日。'day' は10/31。キャンパスは平日に使われるので、
+ * 10/31が土日の年は直前の金曜も 'eve'（ひと足早いハロウィン）にする。
+ * 確認用に ?event=halloween（当日）・?event=halloween-eve（前の金曜）・?event=none で切り替えられる。
+ */
+export function halloweenDay(date = new Date()): 'day' | 'eve' | null {
+  if (typeof window !== 'undefined') {
+    const forced = new URLSearchParams(window.location.search).get('event');
+    if (forced === 'halloween') return 'day';
+    if (forced === 'halloween-eve') return 'eve';
+    if (forced === 'none') return null;
+  }
+  const jst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+  if (jst.getUTCMonth() !== 9) return null;
+  if (jst.getUTCDate() === 31) return 'day';
+  const dow31 = new Date(Date.UTC(jst.getUTCFullYear(), 9, 31)).getUTCDay();
+  const friday = dow31 === 6 ? 30 : dow31 === 0 ? 29 : null;
+  return jst.getUTCDate() === friday ? 'eve' : null;
+}
+
+export const isHalloween = (date = new Date()): boolean => halloweenDay(date) !== null;
+
+// ── ハロウィンの飾り（ドット） ────────────────────────────────
+/** かぼちゃのおばけ（9×8マス） */
+const PUMPKIN = [
+  '....g....',
+  '...gg....',
+  '.ooooooo.',
+  'ooyooyooo',
+  'ooooooooo',
+  'oyoyoyoyo',
+  'ooyyyyyoo',
+  '.ooooooo.',
+];
+/** コウモリ（9×4マス） */
+const BAT = [
+  'k.......k',
+  'kk.k.k.kk',
+  '.kkkkkkk.',
+  '...k.k...',
+];
+const pix = (rows: string[], fill: Record<string, string>, x: number, y: number, size: number) =>
+  `<g transform="translate(${x} ${y}) scale(${size})" shape-rendering="crispEdges">${rows.flatMap((row, ry) => [...row].map((ch, rx) =>
+    (fill[ch] ? `<rect x="${rx}" y="${ry}" width="1.02" height="1.02" fill="${fill[ch]}"/>` : ''))).join('')}</g>`;
+const pumpkin = (x: number, y: number, size: number) =>
+  pix(PUMPKIN, { g: '#4E7A3A', o: '#F28A2E', y: '#3A2A1E' }, x, y, size);
+const bat = (x: number, y: number, size: number) => pix(BAT, { k: '#3A2E52' }, x, y, size);
+
+/** 夕暮れの空・月・コウモリ（建物のうしろに敷く） */
+const halloweenSky = `
+  <defs><linearGradient id="hw-sky" x1="0" x2="0" y1="0" y2="1">
+    <stop offset="0" stop-color="#5B4A8C"/><stop offset=".55" stop-color="#C77DA8"/><stop offset="1" stop-color="#F6B67A"/>
+  </linearGradient></defs>
+  <rect x="0" y="0" width="${368}" height="130" fill="url(#hw-sky)"/>
+  ${pix(['.mmm.', 'mmmmm', 'mmmmm', 'mmmmm', '.mmm.'], { m: '#FFE6A8' }, 30, 8, 3.2)}
+  ${bat(96, 16, 2)}${bat(150, 6, 1.6)}${bat(330, 22, 1.8)}`;
+
+/** 芝生の上のかぼちゃ（スライムが歩くまん中はあける） */
+const halloweenLawn = `${pumpkin(122, 116, 2.2)}${pumpkin(300, 120, 2.6)}${pumpkin(338, 150, 2)}${pumpkin(236, 176, 2.2)}${pumpkin(18, 140, 1.8)}`;
+
 export function seasonOf(date = new Date()): Season {
   const month = date.getMonth() + 1;
   if (month === 3 || month === 4) return 'sakura';
@@ -139,7 +203,8 @@ function drum(cx: number, r: number, top: number) {
   <rect x="${cx - r - 1.5}" y="${top - 1}" width="${r * 2 + 3}" height="2.4" rx="1" fill="#CFCBC4"/>`;
 }
 
-const scene = (season: Season) => `<svg class="scene" viewBox="0 0 ${VW} ${VH}" aria-hidden="true" focusable="false">
+export const scene = (season: Season, halloween = false) => `<svg class="scene" viewBox="0 0 ${VW} ${VH}" aria-hidden="true" focusable="false">
+  ${halloween ? halloweenSky : ''}
   <!-- 右奥：円筒のうしろの箱 -->
   <rect x="232" y="68" width="112" height="48" fill="#E9E8E4"/>
   <rect x="232" y="68" width="112" height="3" fill="#D3D0CA"/>
@@ -165,6 +230,7 @@ const scene = (season: Season) => `<svg class="scene" viewBox="0 0 ${VW} ${VH}" 
   <g stroke="#86C666" stroke-width="2" stroke-linecap="round" fill="none">
     <path d="M150 128 l2 -5 l2 5"/><path d="M262 172 l2 -5 l2 5"/><path d="M318 140 l2 -5 l2 5"/><path d="M196 186 l2 -5 l2 5"/>
   </g>
+  ${halloween ? halloweenLawn : ''}
   <!-- 鴨池 -->
   <ellipse cx="70" cy="167" rx="48" ry="14" fill="#62B2D8"/>
   <ellipse cx="70" cy="165" rx="45" ry="11.5" fill="#8BCEEB"/>
@@ -268,10 +334,82 @@ function spriteSvg(rows: string[], fill: Record<string, string>, extraClass = ''
 }
 
 /** スライムのドット絵。地図（src/field/campusMap.ts）でも同じ絵を使う。 */
-export const slimeSvg = (color: string) =>
-  spriteSvg(SLIME, { o: '#2E2A45', b: color, s: shade(color, -0.22), h: shade(color, 0.6), p: '#FF8FA8' });
-const ghostSvg = () =>
-  spriteSvg(GHOST, { o: '#5E5885', b: '#F3F0FF', s: '#D9D3F2', h: '#FFFFFF', p: '#FFB3C4' }, 'ghost-sprite');
+/** 2つの色を混ぜる（t=0 で a、t=1 で b）。#rrggbb を返す */
+function mix(a: string, b: string, t: number) {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const ch = (sh: number) => Math.round(((pa >> sh) & 255) * (1 - t) + ((pb >> sh) & 255) * t);
+  return `#${[16, 8, 0].map((sh) => ch(sh).toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * ゾンビのスライム（ハロウィンの日だけ）。その人の色は残しつつ緑がかった顔色にし、
+ * おでこに縫い目（z）を入れる。かくれんぼのおばけとは別の見た目にする。
+ */
+// ── ハロウィンのスライム（フランケン風）──────────────────────────
+// 体はドットのまま、ほっぺの下の縫い目と頭のネジだけ線で描く（ドットより細かく見せたいところ）
+
+/** 左のほっぺの下の縫い目（横線1本に、短い縦線3本） */
+const SCAR = `<path d="M4.75 7.6H7.8M5.4 6.95V8.25M6.2 6.95V8.25M7.05 6.95V8.25" stroke="#1E1B2E" stroke-width=".15"
+  stroke-linecap="butt" fill="none" shape-rendering="geometricPrecision"/>`;
+
+/** 決まった位置（ox, oy がマイナスなら svg の外）に、ドットの絵を重ねる */
+const overlay = (rows: string[], ox: number, oy: number, fill: Record<string, string>) =>
+  rows.map((row, y) => [...row].map((ch, x) => (fill[ch]
+    ? `<rect x="${x + ox}" y="${y + oy}" width="1" height="1" fill="${fill[ch]}"/>` : '')).join('')).join('');
+
+/**
+ * 頭の左上に、左へ27°傾いて刺さったネジ（ドットを回して描く）。マイナス溝の頭に、ネジ山の軸。
+ * 先は (3.6, 3.6) で体にうまり、その下に血が垂れる。ネジのドットは体より小さい（0.64倍）
+ */
+const BOLT = `<g transform="translate(3.6 3.6) rotate(-27) scale(.64) translate(-4 -8)" shape-rendering="geometricPrecision">${overlay([
+  '.oooooo.',
+  'owlldlmo',
+  'ollldmmo',
+  '.oooooo.',
+  '..olmo..',
+  '..odmo..',
+  '..olmo..',
+  '..odmo..',
+], 0, 0, { o: '#2E2A45', w: '#FFFFFF', l: '#D9DCE2', m: '#A9AEB8', d: '#6F7480' })
+  // 回すとドットのあいだに細いすきまが出るので、少しだけ重ねる
+  .replaceAll('width="1" height="1"', 'width="1.04" height="1.04"')}</g>`;
+
+/** ネジの刺さったところから垂れる血 */
+const BLOOD = `<g fill="#E25D55" shape-rendering="geometricPrecision">
+  <rect x="2.6" y="3.45" width="1.05" height="1.1"/><rect x="3.1" y="4" width="1.05" height="1.75"/></g>`;
+
+export const slimeSvg = (color: string, zombie = false) => {
+  if (!zombie) return spriteSvg(SLIME, { o: '#2E2A45', b: color, s: shade(color, -0.22), h: shade(color, 0.6), p: '#FF8FA8' });
+  const body = mix(color, '#8FBF6A', 0.45);
+  // ネジのところは光らせない（h も体の色）
+  return spriteSvg(SLIME, { o: '#2E2A45', b: body, s: shade(body, -0.25), h: body, p: '#A77BB8' })
+    .replace('<svg ', '<svg style="overflow:visible" ')
+    .replace(/<\/svg>$/, `${SCAR}${BLOOD}${BOLT}</svg>`);
+};
+
+// ── ハロウィンのおばけ：魔女の帽子（帯はスライムの色）────────────────────
+// 帽子は頭の上にはみ出すので、y がマイナスの行に描く（下の行が y=0、頭のふちの上にかぶせる）
+const HAT = [
+  '..kk..........',
+  '...kk.........',
+  '....kkk.......',
+  '....kkkl......',
+  '....kkkkl.....',
+  '...kkkkkkl....',
+  '...BBBBBBBB...',
+  '...cccccccc...',
+  '.KKkkkkkkkkkk.',
+  'kk..........kk',
+];
+/** 帽子は頭の上にかぶせる（下から2行目のつばが、頭のふちに重なる） */
+const hatSvg = (band: string) => overlay(HAT, 0, -(HAT.length - 2),
+  { k: '#3A2A24', l: '#5A4238', K: '#5A4238', c: band, B: shade(band, 0.35) });
+
+export const ghostSvg = (hatBand?: string) => {
+  const svg = spriteSvg(GHOST, { o: '#5E5885', b: '#F3F0FF', s: '#D9D3F2', h: '#FFFFFF', p: '#FFB3C4' }, 'ghost-sprite');
+  if (!hatBand) return svg;
+  return svg.replace('<svg ', '<svg style="overflow:visible" ').replace(/<\/svg>$/, `${hatSvg(hatBand)}</svg>`);
+};
 
 const escapeHtml = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 
@@ -311,7 +449,10 @@ const ease = (p: number) => (p < 0.5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2);
 export function createCampusField(): CampusField {
   const el = document.createElement('div');
   el.className = 'field-scene';
-  el.innerHTML = `${scene(seasonOf())}<div class="slimes"></div><div class="rain" aria-hidden="true">${
+  // ハロウィン（10/31）は、開いたときに決める（日をまたいで開きっぱなしでも、そのまま）
+  const halloween = isHalloween();
+  if (halloween) el.classList.add('halloween');
+  el.innerHTML = `${scene(seasonOf(), halloween)}<div class="slimes"></div><div class="rain" aria-hidden="true">${
     // 雨は天気が雨のときだけ出す（CSSで降らせるので、動かしても軽い）
     Array.from({ length: 20 }, (_, i) => `<i style="--x:${(i * 23 + 7) % 100}%;--d:${(i % 5) * 0.18}s;--s:${0.8 + (i % 3) * 0.18}"></i>`).join('')
   }</div>`;
@@ -332,7 +473,7 @@ export function createCampusField(): CampusField {
   }
 
   function drawBody(s: Slime) {
-    s.body.innerHTML = (s.ghost ? ghostSvg() : slimeSvg(s.color)) + (s.self ? '<span class="self-mark"></span>' : '');
+    s.body.innerHTML = (s.ghost ? ghostSvg(halloween ? s.color : undefined) : slimeSvg(s.color, halloween)) + (s.self ? '<span class="self-mark"></span>' : '');
     s.node.classList.toggle('is-ghost', s.ghost);
   }
 

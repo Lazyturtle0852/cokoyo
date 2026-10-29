@@ -140,6 +140,7 @@ body.plain .sheet { border-radius: 28px 28px 0 0; padding-bottom: max(22px, env(
               opacity: 0; transition: opacity .15s ease, transform .15s ease; }
 .slime.named .slime-name { opacity: 1; transform: translate(-50%, 0); }
 .slime.is-ghost .slime-body svg { opacity: .88; }
+.halloween .slime.is-ghost .self-mark { top: -42px; } /* 魔女の帽子の上に出す */
 
 /* 自分のスライムの目印 */
 .self-mark { position: absolute; left: 50%; top: -12px; width: 10px; height: 7px; margin-left: -5px; background: var(--brand);
@@ -844,3 +845,21 @@ table.admin-users .rel { margin-right: 4px; }
 .ins-preview:hover { border-color: var(--brand); }
 .ins-preview b { display: block; font-size: 13px; }
 .ins-preview span { display: block; margin-top: 4px; font-size: 11.5px; color: var(--muted); }
+
+/* ハロウィン（10/31）。フィールドの飾りは src/field/campusField.ts、あいさつは src/phone/HalloweenPop.tsx */
+.hw-pop { position: absolute; inset: 0; z-index: 60; display: grid; place-items: center; pointer-events: auto; overflow: hidden;
+  background: rgba(46,42,69,.28); animation: hw-fade 2.6s ease forwards; }
+.hw-card { text-align: center; background: #fff; border-radius: 22px; padding: 18px 26px 16px; box-shadow: 0 18px 40px rgba(46,42,69,.35);
+  animation: hw-pop .5s cubic-bezier(.2,1.6,.4,1) both; }
+.hw-card p { margin: 6px 0 2px; font-size: 24px; font-weight: 900; color: #F2772E; letter-spacing: .01em; }
+.hw-card small { font-size: 12px; font-weight: 700; color: #6B5A8E; }
+.hw-pumpkin { width: 54px; height: auto; display: block; margin: 0 auto; }
+.hw-cracker { position: absolute; bottom: 18%; font-size: 40px; animation: hw-shoot .5s ease-out both; }
+.hw-cracker.left { left: 10%; transform: rotate(-20deg); }
+.hw-cracker.right { right: 10%; transform: scaleX(-1) rotate(-20deg); }
+.hw-confetti i { position: absolute; top: -12px; width: 8px; height: 12px; border-radius: 2px; animation: hw-fall 2.2s ease-in forwards; }
+@keyframes hw-pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes hw-shoot { from { transform: translateY(30px) scale(.5); opacity: 0; } to { opacity: 1; } }
+@keyframes hw-fall { to { transform: translate(var(--x), 105vh) rotate(var(--r)); } }
+@keyframes hw-fade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .hw-confetti { display: none; } .hw-card, .hw-cracker { animation: none; } }
