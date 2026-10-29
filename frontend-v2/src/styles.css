@@ -140,7 +140,7 @@ body.plain .sheet { border-radius: 28px 28px 0 0; padding-bottom: max(22px, env(
               opacity: 0; transition: opacity .15s ease, transform .15s ease; }
 .slime.named .slime-name { opacity: 1; transform: translate(-50%, 0); }
 .slime.is-ghost .slime-body svg { opacity: .88; }
-.halloween .slime.is-ghost .self-mark { top: -34px; } /* 魔女の帽子の上に出す */
+.halloween .slime.is-ghost .self-mark { top: -42px; } /* 魔女の帽子の上に出す */
 
 /* 自分のスライムの目印 */
 .self-mark { position: absolute; left: 50%; top: -12px; width: 10px; height: 7px; margin-left: -5px; background: var(--brand);

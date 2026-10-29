@@ -352,24 +352,21 @@ function mix(a: string, b: string, t: number) {
 const SCAR = `<path d="M4.75 7.6H7.8M5.4 6.95V8.25M6.2 6.95V8.25M7.05 6.95V8.25" stroke="#1E1B2E" stroke-width=".15"
   stroke-linecap="butt" fill="none" shape-rendering="geometricPrecision"/>`;
 
-/** 左上から斜めに刺さったネジ。先は体にうまっている。はみ出すぶんは svg の外に描く */
-const BOLT = `<defs>
-    <linearGradient id="bolt-metal" x1="0" x2="1" y1="0" y2="0">
-      <stop offset="0" stop-color="#8E939C"/><stop offset=".35" stop-color="#FFFFFF"/><stop offset=".6" stop-color="#D5D8DE"/><stop offset="1" stop-color="#7D828B"/>
-    </linearGradient>
-    <linearGradient id="bolt-top" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#C9CCD2"/>
-    </linearGradient>
-  </defs>
-  <g transform="translate(3.6 2.4) rotate(-32) scale(1.7)" shape-rendering="geometricPrecision">
-    <ellipse cx="0" cy=".05" rx=".42" ry=".14" fill="#1E1B2E" opacity=".35"/>
-    <rect x="-.33" y="-1.95" width=".66" height="1.95" fill="url(#bolt-metal)"/>
-    <path d="M-.33 -.12L.33 -.3M-.33 -.34L.33 -.52M-.33 -.56L.33 -.74M-.33 -.78L.33 -.96"
-      stroke="#6F747D" stroke-width=".06" fill="none"/>
-    <rect x="-.68" y="-2.45" width="1.36" height=".55" rx=".12" fill="url(#bolt-metal)"/>
-    <ellipse cx="0" cy="-2.45" rx=".68" ry=".24" fill="url(#bolt-top)" stroke="#A9ADB5" stroke-width=".04"/>
-    <path d="M-.46 -2.45H.46" stroke="#7D828B" stroke-width=".12" stroke-linecap="round"/>
-  </g>`;
+/** 決まった位置（ox, oy がマイナスなら svg の外）に、ドットの絵を重ねる */
+const overlay = (rows: string[], ox: number, oy: number, fill: Record<string, string>) =>
+  rows.map((row, y) => [...row].map((ch, x) => (fill[ch]
+    ? `<rect x="${x + ox}" y="${y + oy}" width="1" height="1" fill="${fill[ch]}"/>` : '')).join('')).join('');
+
+/** 頭の左上に刺さったネジ（ドット）。マイナス溝の頭が少し左に傾き、下の段は頭のふちにうまる */
+const BOLT = overlay([
+  '.ooooo..',
+  'owldlmo.',
+  'olldmmo.',
+  '.ooooo..',
+  '..olmdo.',
+  '..odmmo.',
+  '..olmdo.',
+], 0, -6, { o: '#2E2A45', w: '#FFFFFF', l: '#D9DCE2', m: '#A9AEB8', d: '#6F7480' });
 
 export const slimeSvg = (color: string, zombie = false) => {
   if (!zombie) return spriteSvg(SLIME, { o: '#2E2A45', b: color, s: shade(color, -0.22), h: shade(color, 0.6), p: '#FF8FA8' });
@@ -382,20 +379,20 @@ export const slimeSvg = (color: string, zombie = false) => {
 // ── ハロウィンのおばけ：魔女の帽子（帯はスライムの色）────────────────────
 // 帽子は頭の上にはみ出すので、y がマイナスの行に描く（下の行が y=0、頭のふちの上にかぶせる）
 const HAT = [
+  '..kk..........',
   '...kk.........',
-  '....kk........',
-  '.....kkk......',
-  '.....kkkl.....',
-  '....kkkkkl....',
-  '....kkkkkkl...',
+  '....kkk.......',
+  '....kkkl......',
+  '....kkkkl.....',
+  '...kkkkkkl....',
+  '...BBBBBBBB...',
   '...cccccccc...',
-  'kkkkkkkkkkkkkk',
+  '.KKkkkkkkkkkk.',
+  'kk..........kk',
 ];
-const hatSvg = (band: string) => HAT.map((row, i) => [...row].map((ch, x) => {
-  if (ch === '.') return '';
-  const fill = ch === 'c' ? band : ch === 'l' ? '#5A4238' : '#3A2A24';
-  return `<rect x="${x}" y="${i - HAT.length + 1}" width="1" height="1" fill="${fill}"/>`;
-}).join('')).join('');
+/** 帽子は頭の上にかぶせる（下から2行目のつばが、頭のふちに重なる） */
+const hatSvg = (band: string) => overlay(HAT, 0, -(HAT.length - 2),
+  { k: '#3A2A24', l: '#5A4238', K: '#5A4238', c: band, B: shade(band, 0.35) });
 
 export const ghostSvg = (hatBand?: string) => {
   const svg = spriteSvg(GHOST, { o: '#5E5885', b: '#F3F0FF', s: '#D9D3F2', h: '#FFFFFF', p: '#FFB3C4' }, 'ghost-sprite');
