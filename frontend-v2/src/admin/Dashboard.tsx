@@ -54,6 +54,7 @@ export function Dashboard() {
           <p>{stats ? `${dateTime(stats.generatedAt)} 時点。日付は日本時間。` : '読み込み中…'}</p>
         </div>
         <div className="row">
+          <a className="ghost ins-link" href="insights/">分析へ</a>
           <button type="button" className="ghost" onClick={() => void load()} disabled={loading}>
             {loading ? '更新中…' : '更新'}
           </button>
