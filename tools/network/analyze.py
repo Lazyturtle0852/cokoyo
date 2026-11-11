@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""COKOYO の交友ネットワークを分析して、図と数字を out/ に出す。
+"""COKOYO の交友ネットワークを分析して、図と数字を out/<入力の名前>/ に出す。
 
-  python3 tools/network/analyze.py network.json      # export.mjs の出力を分析
-  python3 tools/network/analyze.py --sample          # 作り物のデータで試す
+  python3 tools/network/analyze.py network_2026-11-11.json   # export.mjs の出力を分析
+  python3 tools/network/analyze.py --sample                  # 作り物のデータで試す
+
+出力先を入力の名前ごとに分けるので、日付を変えて書き出したものを並べて残せる。
 
 入力は export.mjs が出す {"nodes": 人数, "edges": [[a, b, best], ...]}。
 番号は書き出しのたびに振り直したもので、誰かは分からない。図にも番号は出さない
@@ -31,7 +33,7 @@ import networkx as nx
 plt.rcParams["font.family"] = ["Hiragino Sans", "Hiragino Maru Gothic ProN", "sans-serif"]
 plt.rcParams["axes.unicode_minus"] = False
 
-OUT = Path(__file__).parent / "out"
+OUT_ROOT = Path(__file__).parent / "out"
 EDGE = "#b8bcc4"
 BEST = "#e8590c"
 SEED = 7  # 図の配置を毎回同じにする
@@ -96,9 +98,11 @@ def main() -> None:
     ap.add_argument("--sample", action="store_true")
     args = ap.parse_args()
     if not args.sample and not args.file:
-        ap.error("network.json を渡すか、--sample を付けてください")
+        ap.error("network_日付.json を渡すか、--sample を付けてください")
     g = sample() if args.sample else load(args.file)
-    OUT.mkdir(exist_ok=True)
+    name = "sample" if args.sample else Path(args.file).stem
+    OUT = OUT_ROOT / name
+    OUT.mkdir(parents=True, exist_ok=True)
 
     n, m = g.number_of_nodes(), g.number_of_edges()
     if m == 0:
@@ -110,7 +114,7 @@ def main() -> None:
     best_pairs = sum(1 for *_, d in g.edges(data=True) if d.get("best"))
 
     lines = [
-        "# COKOYO 交友ネットワーク" + ("（作り物のデータ）" if args.sample else ""),
+        "# COKOYO 交友ネットワーク（" + ("作り物のデータ" if args.sample else name) + "）",
         "",
         "## 規模",
         f"- 人数 N = {n}、フレンドの組 M = {m}（うち相互ベストフレンド {best_pairs}）",

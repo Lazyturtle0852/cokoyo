@@ -2,7 +2,7 @@
 //
 // 本番(VPS)で、コンテナの中の Node に標準入力から渡して動かす。DB は読むだけ。
 //   docker compose -f deploy/docker-compose.yml exec -T api \
-//     node --input-type=module - < tools/network/export.mjs > network.json
+//     node --input-type=module - < tools/network/export.mjs > "network_$(TZ=Asia/Tokyo date +%F).json"
 //
 // 出すのは「番号と番号がつながっている」だけ。
 //   - 名前・メール・Google ID・アイコン・色・MAC・共有キーは読まない。

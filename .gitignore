@@ -17,5 +17,5 @@ frontend-dist/
 /artifacts/
 
 # ネットワーク分析の入力と出力（匿名にしてあるが、交友関係そのものなので載せない）
-network.json
+network*.json
 tools/network/out/
