@@ -5,52 +5,239 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#F0EDE8">
 <meta name="description" content="COKOYOは、フレンドがキャンパスにいるかをボタンひとつで確かめられる、慶應義塾大学の学生向けの試作アプリです。">
+<!-- LINE や X にこのページを送ったときの見え方（../index.html と同じ理由で、画像は本番のURL） -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="COKOYO">
+<meta property="og:title" content="COKOYO — フレンドがキャンパスにいるか、ボタンひとつで分かる">
+<meta property="og:description" content="位置情報は使いません。同じ日にフレンドとキャンパスにいると、ポイントがたまります。慶應義塾大学の学生向けの試作アプリです。">
+<meta property="og:url" content="https://cokoyo.lazyta-toru.net/about/">
+<meta property="og:image" content="https://cokoyo.lazyta-toru.net/icon-512.png">
+<meta name="twitter:card" content="summary">
 <link rel="icon" href="../icon-192.png" type="image/png">
 <link rel="stylesheet" href="../legal.css">
-<title>COKOYOについて</title>
+<link rel="stylesheet" href="./about.css">
+<title>COKOYO — フレンドがキャンパスにいるか、ボタンひとつで分かる</title>
 </head>
-<body>
+<body class="lp">
+<!-- スライムのドット絵（src/field/campusField.ts の SLIME と同じ絵）。色は使う側の color で決まる -->
+<svg class="sprite" aria-hidden="true">
+  <symbol id="slime" viewBox="0 0 14 11">
+    <path fill="currentColor" d="M4 1h6v1h-6zM2 2h10v2h-10zM1 4h12v5h-12zM2 9h10v1h-10z"/>
+    <path fill="#000" opacity=".22" d="M2 8h2v1h-2zM11 8h2v1h-2zM2 9h10v1h-10z"/>
+    <path fill="#fff" opacity=".6" d="M3 2h2v1h-2zM3 3h1v1h-1z"/>
+    <path fill="#FF8FA8" opacity=".75" d="M7 6h1v1h-1zM10 6h1v1h-1z"/>
+    <path fill="#2E2A45" d="M4 0h6v1h-6zM2 1h2v1h-2zM10 1h2v1h-2zM1 2h1v2h-1zM12 2h1v2h-1zM0 4h1v5h-1zM13 4h1v5h-1zM8 4h1v2h-1zM11 4h1v2h-1zM1 9h1v1h-1zM12 9h1v1h-1zM2 10h10v1h-10z"/>
+  </symbol>
+</svg>
+
 <header class="top">
   <a class="wordmark" href="../">COK<span>O</span>YO</a>
-  <a class="back" href="../">アプリに戻る</a>
+  <a class="back" href="../">アプリをひらく</a>
 </header>
 
 <main>
-  <h1>COKOYOについて</h1>
-  <p class="meta">COKOYOは、学生が個人で作っている試作アプリです。</p>
+  <section class="hero">
+    <div class="wrap hero-in">
+      <div class="hero-copy">
+        <p class="hero-tag">慶應義塾大学の学生向け・試作アプリ</p>
+        <h1><span>フレンドが</span><span>キャンパスにいるか、</span><span>ボタンひとつで分かる</span></h1>
+        <p class="hero-lead">今日だれが来ているかを確かめて、同じ日にキャンパスにいたフレンドとポイントをためるアプリです。位置情報は使いません。</p>
+        <div class="cta-row">
+          <a class="cta" href="../">アプリをひらく</a>
+        </div>
+        <p class="hero-note">keio.jp の Google アカウントでログインして使います。</p>
+      </div>
+      <div class="hero-phones" aria-hidden="true">
+        <img class="back" src="./img/map.webp" width="600" height="1249" alt="">
+        <img class="front" src="./img/home.webp" width="600" height="1249" alt="">
+      </div>
+    </div>
+  </section>
 
-  <section class="card">
-    <h2>何ができるか</h2>
-    <p>フレンドがいまキャンパスにいるかを、ボタンひとつで確かめられます。同じ日にフレンドとキャンパスにいると、ポイントがたまります。</p>
-    <ul>
-      <li><b>位置情報は使いません。</b>登録した端末がキャンパスのWiFiにつながっているかだけを見ます。</li>
-      <li><b>見せる範囲は相手ごとに決まります。</b>フレンドには「いる／いない」だけ。おたがいにベストフレンドにした相手にだけ、いる建物まで見せます。</li>
-      <li><b>いつでも隠れられます。</b>かくれんぼ中は、フレンド全員から「いません」に見えます。ブロックした相手からは、あなたが見えません。</li>
+  <div class="wrap">
+    <ul class="promise">
+      <li>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 8.8a15 15 0 0 1 20 0"/><path d="M5.5 12.4a10 10 0 0 1 13 0"/><path d="M9 16a5 5 0 0 1 6 0"/><circle cx="12" cy="19.2" r=".9" fill="currentColor"/></svg>
+        <span><b>位置情報は使いません</b>登録した端末がキャンパスのWiFiにつながっているかだけを見ます。</span>
+      </li>
+      <li>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16.5 5.2a3.2 3.2 0 0 1 0 5.9M18 19a5.4 5.4 0 0 0-2.2-4.3"/></svg>
+        <span><b>見せる範囲は相手ごと</b>フレンドには「いる／いない」だけ。建物まで見せるのは、ベストフレンドだけです。</span>
+      </li>
+      <li>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.2a9.6 9.6 0 0 1 10.4 6.8 12 12 0 0 1-2.4 3.9M6.2 6.7A11.6 11.6 0 0 0 3 12a9.6 9.6 0 0 0 12.8 5.4"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
+        <span><b>いつでも隠れられます</b>かくれんぼ中は、フレンド全員から「いません」に見えます。</span>
+      </li>
     </ul>
-  </section>
 
-  <section class="card">
-    <h2>しくみ</h2>
-    <p>慶應義塾大学の Google アカウント（<span class="mono">keio.jp</span>）でログインし、キャンパスのWiFiで使う端末の <b>MACアドレス</b> を登録します（最大5台）。</p>
-    <p>在校確認のボタンを押すと、COKOYO のサーバーが、キャンパスのWiFiの接続状況を公開している外部の API（<span class="mono">api.dtc.wide.ad.jp</span>）に、登録された MAC アドレスがいま接続しているかを問い合わせます。問い合わせるのは最新の1件だけで、移動の履歴は取りに行きません。</p>
-    <p>MAC アドレスは端末を見分ける番号です。扱いについては<a href="../privacy/">プライバシーポリシー</a>に詳しく書いています。</p>
-  </section>
+    <div class="sec-head">
+      <div class="slimes" aria-hidden="true">
+        <svg class="slime" style="color:#FFD15A"><use href="#slime"/></svg>
+        <svg class="slime" style="color:#FF8A3D"><use href="#slime"/></svg>
+        <svg class="slime" style="color:#7FA6FF"><use href="#slime"/></svg>
+      </div>
+      <h2>COKOYOでできること</h2>
+    </div>
 
-  <section class="card warn">
-    <h2>試作品であること</h2>
-    <p>COKOYO は、キャンパスのWiFiの接続情報を使ったサービスが成り立つかを確かめる<b>実験を兼ねた試作品</b>です。</p>
-    <ul>
-      <li>慶應義塾大学や、API の提供元が運営する公式のサービスではありません。</li>
-      <li>在校の判定がまちがっていたり、止まっていたりすることがあります。</li>
-      <li>機能や見た目は予告なく変わります。サービスそのものも、予告なく終わることがあります。</li>
-    </ul>
-    <p>使う前に<a href="../terms/">利用規約</a>と<a href="../privacy/">プライバシーポリシー</a>を読んでください。</p>
-  </section>
+    <section class="feat">
+      <div class="feat-shot"><img src="./img/home.webp" width="600" height="1249" loading="lazy" alt="ホームの画面。キャンパスの絵の上にスライムが3匹いて、その下に「キャンパスにいます」と在校確認のボタンがある"></div>
+      <div class="feat-body">
+        <p class="point">POINT <b>01</b></p>
+        <h3>ボタンひとつで、だれが来ているか分かる</h3>
+        <ul class="checks">
+          <li>「ポイント獲得（在校確認）」を押すと、あなたとフレンドがいまキャンパスにいるかが分かります。</li>
+          <li>キャンパスにいるフレンドは、スライムになってホームに出てきます。</li>
+          <li>キャンパスの外からでも、フレンドの様子は確かめられます。</li>
+        </ul>
+      </div>
+    </section>
 
-  <section class="card">
-    <h2>問い合わせ</h2>
-    <p><a href="https://forms.gle/7kGjMCf6GCTB4bWU6">問い合わせフォーム</a>（Google フォーム）から送ってください。アプリの「設定 → ご意見・問い合わせ」からも開けます。退会はアプリの「設定 → アカウント → 退会する」からできます。</p>
-    <p>ソースコードは <a href="https://github.com/Lazyturtle0852/cokoyo">GitHub</a> で公開しています。</p>
+    <section class="feat">
+      <div class="feat-shot bottom"><img src="./img/points.webp" width="600" height="1249" loading="lazy" alt="今日の獲得の画面。来校ベース、連続の来校、フレンドとのマッチのポイントが並んでいる"></div>
+      <div class="feat-body">
+        <p class="point">POINT <b>02</b></p>
+        <h3>同じ日にキャンパスにいると、ポイントがたまる</h3>
+        <ul class="checks">
+          <li>キャンパスで在校確認を押すと、その日の来校のポイントが入ります。</li>
+          <li>フレンドも同じ日に来ていれば、そのフレンドとのマッチのポイントが加わります。</li>
+          <li>はじめてのマッチ、ひさしぶりのマッチ、連続の来校、雨の日にはボーナスがあります。</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="feat">
+      <div class="feat-shot low"><img src="./img/yo.webp" width="600" height="1249" loading="lazy" alt="フレンドから「YO！されました」という知らせが届いた画面"></div>
+      <div class="feat-body">
+        <p class="point">POINT <b>03</b></p>
+        <h3>「YO！」で、わたしも来てるよと知らせる</h3>
+        <ul class="checks">
+          <li>あなたもフレンドもキャンパスにいるとき、そのフレンドに「YO！」を送れます。</li>
+          <li>通知をオンにしておくと、YO！されたときにプッシュ通知が届きます。<small>iPhone は、ホーム画面に追加したアプリでだけ届きます。</small></li>
+          <li>ホームのスライムを連打すると、そのフレンドに「つんつん」が届きます。</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="feat">
+      <div class="feat-shot"><img src="./img/map.webp" width="600" height="1249" loading="lazy" alt="キャンパスの地図の画面。ベストフレンドのスライムが、いる建物の上に出ている"></div>
+      <div class="feat-body">
+        <p class="point">POINT <b>04</b></p>
+        <h3>ベストフレンドとは、いる建物まで</h3>
+        <ul class="checks">
+          <li>おたがいにベストフレンドにした相手とだけ、いる建物を見せ合います。</li>
+          <li>キャンパスの地図では、ベストフレンドのスライムが建物の上に出ます。</li>
+          <li>それ以外のフレンドに見えるのは「いる／いない」だけです。</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="feat">
+      <div class="feat-shot"><img src="./img/friends.webp" width="600" height="1249" loading="lazy" alt="フレンドの画面。いちばん上にかくれんぼの切り替えがあり、その下に届いている申請とフレンドの一覧がある"></div>
+      <div class="feat-body">
+        <p class="point">POINT <b>05</b></p>
+        <h3>見せたくない日は、かくれんぼ</h3>
+        <ul class="checks">
+          <li>かくれんぼをオンにすると、フレンド全員から「いません」に見えます。</li>
+          <li>かくれんぼ中も、来校のポイントは入ります。<small>フレンドとのマッチのポイントは入りません。</small></li>
+          <li>ブロックは相手に知らされず、相手からは「いません」に見えます。</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="feat">
+      <div class="feat-shot bottom"><img src="./img/add.webp" width="600" height="1249" loading="lazy" alt="フレンドを追加の画面。自分のQRコードと「QRを読み込む」ボタンがある"></div>
+      <div class="feat-body">
+        <p class="point">POINT <b>06</b></p>
+        <h3>フレンドの追加は、QRかリンクで</h3>
+        <ul class="checks">
+          <li>目の前の相手とは、QRをカメラで読み取ると、すぐにフレンドになります。</li>
+          <li>離れた相手には、招待リンクか共有キーを送ります。</li>
+          <li>リンクやキーから来るのは申請です。承認するまで、フレンドにはなりません。</li>
+        </ul>
+      </div>
+    </section>
+
+    <div class="more">
+      <div>
+        <div class="palette" aria-hidden="true">
+          <svg class="slime" style="color:#FF8A3D"><use href="#slime"/></svg>
+          <svg class="slime" style="color:#5CD2E6"><use href="#slime"/></svg>
+          <svg class="slime" style="color:#6CD47A"><use href="#slime"/></svg>
+          <svg class="slime" style="color:#F26B5E"><use href="#slime"/></svg>
+          <svg class="slime" style="color:#C6A0F2"><use href="#slime"/></svg>
+          <svg class="slime" style="color:#FFD15A"><use href="#slime"/></svg>
+          <svg class="slime" style="color:#FF9CC6"><use href="#slime"/></svg>
+          <svg class="slime" style="color:#4FC3A1"><use href="#slime"/></svg>
+          <svg class="slime" style="color:#7FA6FF"><use href="#slime"/></svg>
+        </div>
+        <h3>スライムの色は9色から</h3>
+        <p>選んだ色は、フレンドの画面のスライムとアイコンにも出ます。プロフィールの写真も設定できます。</p>
+      </div>
+      <div>
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2.5" width="12" height="19" rx="2.6"/><path d="M12 8.5v6M9 11.5h6"/></svg>
+        <h3>ホーム画面に追加できます</h3>
+        <p>ストアからのインストールは要りません。ホーム画面に追加すると、アプリと同じように全画面で開けます。</p>
+      </div>
+      <div>
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="13" height="9.5" rx="1.6"/><path d="M1.5 17.5h15"/><rect x="17" y="8" width="5.5" height="10.5" rx="1.4"/></svg>
+        <h3>端末は5台まで</h3>
+        <p>スマホとパソコンなど、5台まで登録できます。どれか1台がキャンパスのWiFiにつながっていれば、在校と判定します。</p>
+      </div>
+    </div>
+
+    <div class="sec-head">
+      <h2>はじめかた</h2>
+    </div>
+    <ol class="steps">
+      <li><b>keio.jp でログイン</b><span>慶應義塾大学の Google アカウント（keio.jp）でログインします。</span></li>
+      <li><b>端末を登録</b><span>キャンパスのWiFiで使う端末の MAC アドレスを登録します。調べ方は、登録の画面で機種ごとに案内します。</span></li>
+      <li><b>フレンドを追加して、押す</b><span>QRかリンクでフレンドを追加したら、キャンパスで「ポイント獲得（在校確認）」を押します。</span></li>
+    </ol>
+
+    <div class="sec-head">
+      <h2>しくみと、知っておいてほしいこと</h2>
+    </div>
+  </div>
+
+  <div class="docs">
+    <section class="card">
+      <h2>しくみ</h2>
+      <p>慶應義塾大学の Google アカウント（<span class="mono">keio.jp</span>）でログインし、キャンパスのWiFiで使う端末の <b>MACアドレス</b> を登録します（最大5台）。</p>
+      <p>在校確認のボタンを押すと、COKOYO のサーバーが、キャンパスのWiFiの接続状況を公開している外部の API（<span class="mono">api.dtc.wide.ad.jp</span>）に、登録された MAC アドレスがいま接続しているかを問い合わせます。問い合わせるのは最新の1件だけで、移動の履歴は取りに行きません。</p>
+      <p>MAC アドレスは端末を見分ける番号です。扱いについては<a href="../privacy/">プライバシーポリシー</a>に詳しく書いています。</p>
+    </section>
+
+    <section class="card warn">
+      <h2>試作品であること</h2>
+      <p>COKOYO は、学生が個人で作っている、キャンパスのWiFiの接続情報を使ったサービスが成り立つかを確かめる<b>実験を兼ねた試作品</b>です。</p>
+      <ul>
+        <li>慶應義塾大学や、API の提供元が運営する公式のサービスではありません。</li>
+        <li>在校の判定がまちがっていたり、止まっていたりすることがあります。</li>
+        <li>機能や見た目は予告なく変わります。サービスそのものも、予告なく終わることがあります。</li>
+      </ul>
+      <p>使う前に<a href="../terms/">利用規約</a>と<a href="../privacy/">プライバシーポリシー</a>を読んでください。</p>
+    </section>
+
+    <section class="card">
+      <h2>問い合わせ</h2>
+      <p><a href="https://forms.gle/7kGjMCf6GCTB4bWU6">問い合わせフォーム</a>（Google フォーム）から送ってください。アプリの「設定 → ご意見・問い合わせ」からも開けます。退会はアプリの「設定 → アカウント → 退会する」からできます。</p>
+      <p>ソースコードは <a href="https://github.com/Lazyturtle0852/cokoyo">GitHub</a> で公開しています。</p>
+    </section>
+  </div>
+
+  <section class="closing">
+    <div class="wrap">
+      <div class="slimes" aria-hidden="true">
+        <svg class="slime" style="color:#FF9CC6"><use href="#slime"/></svg>
+        <svg class="slime" style="color:#FFD15A"><use href="#slime"/></svg>
+        <svg class="slime" style="color:#5CD2E6"><use href="#slime"/></svg>
+      </div>
+      <h2>今日、だれがキャンパスにいる？</h2>
+      <p>キャンパスに着いたら、ボタンを押してみてください。</p>
+      <div class="cta-row">
+        <a class="cta" href="../">アプリをひらく</a>
+      </div>
+    </div>
   </section>
 </main>
 
