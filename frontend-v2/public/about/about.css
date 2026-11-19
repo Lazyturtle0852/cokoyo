@@ -1,0 +1,146 @@
+/* /about/ の紹介ページ（ランディングページ）の見た目。
+   色・ヘッダー・フッター・下のほうの説明カードは ../legal.css のものを使い、
+   ここには帯（ヒーロー）と機能のカードだけを書く。JS は使わない。
+   端末の画面（img/*.webp）は模擬データのアプリを撮ったもの。 */
+:root {
+  --brand-dark: #C2410C;
+  --brand-tint: #FFF4ED;
+  --blob: #FFE6D3;
+}
+body.lp { padding: 0; }
+.lp main { max-width: none; }
+.lp .top { max-width: 1040px; padding-left: 20px; padding-right: 20px; }
+.lp footer { padding: 0 20px 48px; }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+.sprite { position: absolute; width: 0; height: 0; }
+/* 見出しは、1文字だけ次の行に落ちないようにする（対応していないブラウザではふつうに折り返す） */
+.lp h1, .lp h2, .lp h3 { text-wrap: balance; word-break: auto-phrase; }
+.slime { display: inline-block; width: 42px; height: 33px; shape-rendering: crispEdges; }
+
+/* ---------- 帯（ヒーロー） ---------- */
+.hero { position: relative; overflow: hidden; color: #fff;
+  background:
+    radial-gradient(circle at 88% 12%, rgba(255,255,255,.13) 0 150px, transparent 151px),
+    radial-gradient(circle at 6% 96%, rgba(255,255,255,.09) 0 110px, transparent 111px),
+    linear-gradient(150deg, #CC470C 0%, #B5390A 100%); }
+.hero-in { display: grid; gap: 28px; padding-top: 36px; }
+.hero-tag { display: inline-block; margin: 0 0 14px; padding: 3px 12px; border: 1px solid rgba(255,255,255,.55);
+  border-radius: 999px; font-size: 12px; font-weight: 600; color: #fff; }
+.hero h1 { margin: 0 0 14px; font-size: clamp(25px, 7.6vw, 46px); line-height: 1.35; letter-spacing: .01em; color: #fff; }
+.hero h1 span { display: block; }
+.hero-lead { margin: 0 0 22px; font-size: 15px; line-height: 1.85; color: #fff; max-width: 30em; }
+.cta-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.cta { display: inline-flex; align-items: center; justify-content: center; min-height: 52px; padding: 0 34px;
+  border-radius: 999px; font-size: 15.5px; font-weight: 700; text-decoration: none;
+  background: #fff; color: var(--brand-dark); border: 2px solid #fff; box-shadow: 0 6px 18px rgba(60,20,0,.22); }
+.cta:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+.hero-note { margin: 12px 0 0; font-size: 12.5px; color: #fff; opacity: .92; }
+
+/* 端末2台。下は帯の端で切る */
+.hero-phones { position: relative; height: 330px; }
+.hero-phones img { position: absolute; top: 0; height: auto; filter: drop-shadow(0 14px 28px rgba(50,15,0,.35)); }
+.hero-phones .back { width: 190px; left: 50%; margin-left: 8px; top: 34px; transform: rotate(6deg); }
+.hero-phones .front { width: 214px; left: 50%; margin-left: -186px; transform: rotate(-3deg); }
+
+/* ---------- 3つの約束 ---------- */
+.promise { display: grid; gap: 10px; margin: 22px auto 0; padding: 0; list-style: none; }
+.promise li { display: flex; gap: 12px; align-items: flex-start; margin: 0; padding: 14px 16px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px; font-size: 13.5px; line-height: 1.7; }
+.promise b { display: block; font-size: 14.5px; }
+.promise svg { flex: none; width: 36px; height: 36px; padding: 8px; border-radius: 10px;
+  background: var(--brand-tint); color: var(--brand); }
+
+/* ---------- 見出し ---------- */
+.sec-head { text-align: center; margin: 56px 0 26px; }
+.sec-head .slimes { display: flex; justify-content: center; gap: 10px; margin: 0 0 6px; }
+.sec-head h2 { margin: 0; font-size: clamp(20px, 5.4vw, 28px); line-height: 1.5; color: var(--brand-dark); }
+.sec-head h2::after { content: ""; display: block; width: 44px; height: 4px; margin: 12px auto 0; border-radius: 2px; background: var(--brand); }
+.sec-head p { margin: 12px 0 0; font-size: 14px; }
+
+@keyframes hop { 0%, 60%, 100% { transform: translateY(0) scale(1, 1); } 70% { transform: translateY(0) scale(1.08, .9); }
+  82% { transform: translateY(-9px) scale(.96, 1.06); } 94% { transform: translateY(0) scale(1.06, .94); } }
+.slimes .slime { animation: hop 2.6s infinite; transform-origin: 50% 100%; }
+.slimes .slime:nth-child(2) { animation-delay: .35s; }
+.slimes .slime:nth-child(3) { animation-delay: .7s; }
+@media (prefers-reduced-motion: reduce) { .slimes .slime { animation: none; } }
+
+/* ---------- 機能のカード（Point 01〜） ---------- */
+.feat { display: grid; background: var(--card); border: 1px solid var(--line); border-radius: 22px;
+  margin: 0 0 18px; overflow: hidden; }
+.feat-shot { display: flex; justify-content: center; padding: 26px 0 0; height: 372px; overflow: hidden;
+  background: radial-gradient(circle at 50% 62%, var(--blob) 0 150px, transparent 151px); }
+.feat-shot img { width: 236px; height: auto; align-self: flex-start; filter: drop-shadow(0 10px 22px rgba(28,25,23,.2)); }
+/* 見せたいところが画面の下のほうにあるカードは、端末を上にずらす（.low）か、下端にそろえる（.bottom） */
+.feat-shot.low img { margin-top: -56px; }
+.feat-shot.bottom { align-items: flex-end; padding: 0 0 26px; }
+.feat-shot.bottom img { align-self: flex-end; }
+.feat-body { padding: 20px 20px 16px; }
+.point { display: flex; align-items: baseline; gap: 6px; margin: 0 0 2px; color: var(--brand); font-weight: 800;
+  font-size: 13px; letter-spacing: .14em; }
+.point b { font-size: 34px; line-height: 1; letter-spacing: 0; color: var(--brand); font-family: ui-rounded, "SF Pro Rounded", -apple-system, sans-serif; }
+.feat h3 { margin: 4px 0 12px; font-size: 19px; line-height: 1.5; }
+.checks { list-style: none; margin: 0; padding: 0; }
+.checks li { position: relative; margin: 0 0 9px; padding-left: 28px; font-size: 14.5px; line-height: 1.75; }
+.checks li::before { content: ""; position: absolute; left: 0; top: .28em; width: 19px; height: 19px; border-radius: 50%;
+  background: var(--brand) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 12.5l4 4L18 8'/%3E%3C/svg%3E") center / 13px no-repeat; }
+.checks small { display: block; font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+
+/* ---------- ほかにも ---------- */
+.more { display: grid; gap: 12px; margin: 26px 0 0; }
+.more > div { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px 18px 10px; }
+.more h3 { margin: 0 0 6px; font-size: 15.5px; }
+.more p { font-size: 13.5px; line-height: 1.75; }
+.palette { display: grid; grid-template-columns: repeat(9, 1fr); gap: 5px; max-width: 300px; margin: 0 0 12px; }
+.palette .slime { width: 100%; height: auto; aspect-ratio: 14 / 11; }
+.more .ico { width: 36px; height: 36px; padding: 8px; margin: 0 0 8px; border-radius: 10px; background: var(--brand-tint); color: var(--brand); }
+
+/* ---------- はじめかた ---------- */
+.steps { list-style: none; counter-reset: step; display: grid; gap: 12px; margin: 0; padding: 0; }
+.steps li { counter-increment: step; position: relative; margin: 0; padding: 18px 18px 12px 66px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px; }
+.steps li::before { content: counter(step); position: absolute; left: 16px; top: 18px; width: 36px; height: 36px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--brand); color: #fff; font-weight: 800; font-size: 17px; }
+.steps b { display: block; font-size: 15.5px; margin: 0 0 2px; }
+.steps span { font-size: 13.5px; line-height: 1.75; color: var(--ink-2); }
+
+/* ---------- しくみ・試作品・問い合わせ（これまでの説明カード） ---------- */
+.docs { max-width: 720px; margin: 0 auto; padding: 0 20px; }
+
+/* ---------- 最後の帯 ---------- */
+.closing { margin: 56px 0 0; padding: 44px 0 48px; text-align: center; color: #fff;
+  background: linear-gradient(150deg, #CC470C 0%, #B5390A 100%); }
+.closing h2 { margin: 0 0 8px; font-size: clamp(21px, 6vw, 30px); line-height: 1.5; color: #fff; }
+.closing p { margin: 0 0 22px; font-size: 14px; color: #fff; }
+.closing .cta-row { justify-content: center; }
+.closing .slimes { display: flex; justify-content: center; gap: 10px; margin: 0 0 10px; }
+
+/* ---------- 広い画面 ---------- */
+@media (min-width: 760px) {
+  .hero-in { grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr); align-items: center; gap: 20px; padding-top: 0; min-height: 500px; }
+  .hero-copy { padding: 48px 0; }
+  .hero-lead { font-size: 16.5px; }
+  .hero-phones { height: 500px; align-self: end; }
+  .hero-phones .front { width: 262px; margin-left: -224px; top: 44px; }
+  .hero-phones .back { width: 232px; margin-left: 10px; top: 92px; }
+
+  .promise { grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: -30px; position: relative; }
+  .promise li { box-shadow: 0 8px 24px rgba(28,25,23,.08); }
+
+  .sec-head { margin: 84px 0 40px; }
+  .feat { grid-template-columns: 1fr 1fr; align-items: center; margin-bottom: 30px; border-radius: 26px; }
+  .feat-shot { height: 470px; padding-top: 34px; background: radial-gradient(circle at 50% 60%, var(--blob) 0 190px, transparent 191px); }
+  .feat-shot img { width: 268px; }
+  .feat-shot.low img { margin-top: -28px; }
+  .feat-shot.bottom { padding: 0 0 34px; }
+  .feat:nth-of-type(even) .feat-shot { order: 2; }
+  .feat-body { padding: 36px 44px; }
+  .feat:nth-of-type(odd) .feat-body { padding-left: 12px; }
+  .feat:nth-of-type(even) .feat-body { padding-right: 12px; }
+  .point b { font-size: 44px; }
+  .feat h3 { font-size: 24px; margin-bottom: 16px; }
+  .checks li { font-size: 15.5px; }
+
+  .more { grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .steps { grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .closing { margin-top: 84px; padding: 64px 0 68px; }
+}
